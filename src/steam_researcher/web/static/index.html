@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Steam Researcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">&#9670;</span>
+      <div>
+        <h1>Steam Researcher</h1>
+        <p>Proven demand + poor execution = high opportunity</p>
+      </div>
+    </div>
+
+    <form id="tag-form" class="search" autocomplete="off">
+      <input id="tag" list="tags" value="Job Simulator" placeholder="Steam tag, e.g. Job Simulator" aria-label="Steam tag" required>
+      <datalist id="tags">
+        <option value="Job Simulator"><option value="Colony Sim"><option value="Management">
+        <option value="Base Building"><option value="Life Sim"><option value="Farming Sim">
+        <option value="Automation"><option value="City Builder"><option value="Crafting">
+      </datalist>
+      <button type="button" id="filters-toggle" class="ghost" aria-expanded="false">Filters</button>
+      <button type="submit" id="run" class="primary">Find opportunities</button>
+
+      <div id="filters" class="popover" hidden>
+        <label>Minimum reviews <input id="min-reviews" type="number" min="1" value="100"></label>
+        <label>% positive from <input id="lo" type="number" min="0" max="100" value="5"></label>
+        <label>% positive to <input id="hi" type="number" min="0" max="100" value="70"></label>
+        <label>Games to analyze <input id="max-games" type="number" min="1" max="50" value="15"></label>
+        <label>Reviews mined per game <input id="reviews" type="number" min="10" max="1000" step="50" value="200"></label>
+      </div>
+    </form>
+
+    <form id="game-form" class="search small" autocomplete="off">
+      <input id="appid" placeholder="AppID or Steam URL" aria-label="AppID or Steam store URL">
+      <button type="submit" class="ghost">Analyze</button>
+    </form>
+  </header>
+
+  <div id="progress" class="progress" hidden>
+    <div class="progress-bar"><span id="progress-fill"></span></div>
+    <span id="progress-text"></span>
+  </div>
+  <div id="error" class="error" hidden></div>
+
+  <main class="layout">
+    <section class="card map-card">
+      <div class="card-head">
+        <h2>Opportunity map</h2>
+        <span id="map-legend" class="muted">x: demand &middot; y: dissatisfaction &middot; z: fixability &middot; size: revenue &middot; color: score</span>
+      </div>
+      <div id="map" class="map">
+        <div id="map-empty" class="empty">Pick a tag and press <b>Find opportunities</b>.<br>Each sphere is a game; drag to orbit, scroll to zoom, click to inspect.</div>
+        <div id="tooltip" class="tooltip" hidden></div>
+      </div>
+    </section>
+
+    <aside id="panel" class="card panel">
+      <div class="empty">Select a game on the map or in the table.</div>
+    </aside>
+
+    <section class="card table-card">
+      <div class="card-head">
+        <h2 id="table-title">Ranking</h2>
+        <a id="download" class="ghost button" hidden>Download report (.md)</a>
+      </div>
+      <p id="table-note" class="muted"></p>
+      <div class="table-wrap">
+        <table id="ranking">
+          <thead>
+            <tr>
+              <th data-key="rank" class="num">#</th>
+              <th data-key="name">Game</th>
+              <th data-key="score" class="num">Score</th>
+              <th data-key="reviews" class="num">Reviews</th>
+              <th data-key="rating" class="num">% Pos</th>
+              <th data-key="gross" class="num">Est. gross</th>
+              <th data-key="complaint">Top complaint</th>
+              <th data-key="risks">Risks</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

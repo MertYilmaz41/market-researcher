@@ -245,24 +245,18 @@ def ui(
     port: int = typer.Option(8501, help="Local port"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the browser"),
 ):
-    """Open the interactive web UI (Streamlit) in your browser."""
-    import subprocess
-    import sys
+    """Open the web UI (3D opportunity map) in your browser."""
     import threading
     import webbrowser
 
-    script = Path(__file__).parent / "ui.py"
+    import uvicorn
+
     url = f"http://localhost:{port}"
-    console.print(f"Starting Steam Researcher UI on {url} (Ctrl+C to stop)")
+    console.print(f"Steam Researcher UI running on {url}  (close this window or press Ctrl+C to stop)")
     if open_browser:
-        threading.Timer(3.0, webbrowser.open, args=[url]).start()
-    # headless: skips Streamlit's first-run email prompt (we open the browser ourselves)
-    subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", str(script), "--server.port", str(port),
-         "--server.headless", "true", "--server.address", "localhost",
-         "--browser.gatherUsageStats", "false"],
-        check=False,
-    )
+        threading.Timer(1.5, webbrowser.open, args=[url]).start()
+    # 127.0.0.1 only: the UI is not reachable from other devices on the network
+    uvicorn.run("steam_researcher.web.server:app", host="127.0.0.1", port=port, log_level="warning")
 
 
 @cache_app.command("clear")

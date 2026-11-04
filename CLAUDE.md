@@ -80,7 +80,7 @@ uv run sr discover --tag "Job Simulator" --min-reviews 100 --rating 5-70 --top 3
 uv run sr discover --tag "Job Simulator" --no-cache
 uv run sr analyze 2336220 --reviews 300     # risks, mining, score for one AppID
 uv run sr report --tag "Job Simulator" --max-games 15 --reviews 200   # writes reports/job-simulator.md
-uv run sr ui                                # Streamlit web UI on http://localhost:8501
+uv run sr ui                                # web UI (3D map) on http://localhost:8501
 uv run sr cache clear
 ```
 
@@ -95,7 +95,12 @@ Scoring (`scoring.py`): 100 × the weighted geometric mean of demand (log of rev
 - Review bombs aren't penalized. Instead, `risk.rating_without_bombs` replaces the rating, so a review-bombed game that's otherwise fine scores 0.
 - Flags in `EXCLUDE_FLAGS` (`not_game`) drop a game from the ranking entirely.
 
-`ui.py` is a Streamlit script, not an importable module: it calls `main()` at import time. `sr ui` launches it with `streamlit run` in headless mode, which skips Streamlit's blocking first-run email prompt, binds it to localhost only, and opens the browser itself. The UI reuses `pipeline.run_tag`, `pipeline.analyze_game` and `report.render`, so keep the logic in those and keep `ui.py` for display only. `tests/test_ui.py` drives it with `streamlit.testing.v1.AppTest` and monkeypatches `pipeline.run_tag`, so the tests need no network.
+Web UI (`web/`): `sr ui` runs uvicorn on `web/server.py`, bound to 127.0.0.1, and opens the browser.
+- **Server:** a FastAPI app that is display-only. `POST /api/tag-runs` starts `pipeline.run_tag` in a background thread; each job builds its own `HttpClient` because SQLite connections are per thread. Jobs live in an in-memory dict, and `GET /api/tag-runs/{id}` is polled for progress and the result. `GET /api/games/{appid}` runs `analyze_game` synchronously.
+- **JSON:** `game_json()` adds `box`, `store_url`, `rating`, etc., so the frontend never re-implements any math.
+- **Frontend:** `web/static/` is plain ES modules with no build step. `app.js` handles data, the table and the panel; `map3d.js` draws the three.js scene (x = demand, y = dissatisfaction, z = fixability, size = revenue, color = score). three.js is pinned to `three@0.170.0` in the import map in `index.html`.
+- **Safety:** put review text into the DOM only via `textContent` (the `el()` helper in `app.js`), never `innerHTML`.
+- **Tests:** `tests/test_web.py` uses FastAPI's `TestClient` with `pipeline.run_tag`/`analyze_game` monkeypatched, so it needs no network. The JS has no tests; check it with `node --check` and a real browser.
 
 `report.py` renders `templates/report.md.j2` with Jinja2. Arbitrary text going into the template must pass through the `md` filter, which escapes pipes and flattens newlines.
 

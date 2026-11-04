@@ -12,7 +12,7 @@ Based on CodeMonkey's Underserved Audience method: look for genres where players
 - **Estimates sales and revenue** with the Box Method (reviews × 30–100).
 - **Flags misleading numbers:** review bombs, streamer spikes, deep discounts, online multiplayer, niche audiences.
 - **Mines reviews:** what players complain about (bugs, controls, UI, content, ...), with real quotes and a design pillar for each, plus the "core fantasy" they loved.
-- **Ranks games** by an opportunity score, in a Markdown report or a web UI.
+- **Ranks games** by an opportunity score, in a Markdown report or a web UI with an interactive 3D opportunity map.
 
 ## Installation
 
@@ -32,11 +32,20 @@ uv run pytest -q
 
 ## Usage
 
-**Web UI (easiest).** This opens http://localhost:8501 in your browser; press Ctrl+C in the terminal to stop it.
+**Easiest (Windows):** double-click **`Steam Researcher.bat`**. It starts the web UI and opens your browser; close the window to stop it.
+
+**Web UI from a terminal.** This opens http://localhost:8501 in your browser; press Ctrl+C in the terminal to stop it.
 
 ```powershell
 uv run sr ui
 ```
+
+In the UI, type a tag (e.g. *Job Simulator*), adjust the **Filters** if you like, and press **Find opportunities**. The first run of a tag takes about 30 seconds.
+
+- **3D opportunity map:** each sphere is a game. Left–right is demand, height is dissatisfaction and depth is fixability; size is estimated revenue and color is the score (red = low, green = high). Drag to orbit, scroll to zoom, and click a sphere to inspect it.
+- **Detail panel:** score breakdown, revenue estimate, what players complain about (with quotes and design pillars), the core fantasy, risk checks and a monthly review chart.
+- **Ranking table:** click a column header to sort, click a row to select a game, and download the Markdown report.
+- **Single game:** paste an AppID or a Steam store link into the box at the top right.
 
 **Command line:**
 
