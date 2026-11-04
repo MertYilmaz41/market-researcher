@@ -1,0 +1,95 @@
+{
+ "2336220": {
+  "success": true,
+  "data": {
+   "type": "game",
+   "name": "Feed the Cups",
+   "steam_appid": 2336220,
+   "is_free": false,
+   "price_overview": {
+    "currency": "USD",
+    "initial": 1599,
+    "final": 1599,
+    "discount_percent": 0,
+    "initial_formatted": "",
+    "final_formatted": "$15.99"
+   },
+   "categories": [
+    {
+     "id": 2,
+     "description": "Single-player"
+    },
+    {
+     "id": 1,
+     "description": "Multi-player"
+    },
+    {
+     "id": 9,
+     "description": "Co-op"
+    },
+    {
+     "id": 38,
+     "description": "Online Co-op"
+    },
+    {
+     "id": 39,
+     "description": "Shared/Split Screen Co-op"
+    },
+    {
+     "id": 24,
+     "description": "Shared/Split Screen"
+    },
+    {
+     "id": 22,
+     "description": "Steam Achievements"
+    },
+    {
+     "id": 28,
+     "description": "Full controller support"
+    },
+    {
+     "id": 29,
+     "description": "Steam Trading Cards"
+    },
+    {
+     "id": 23,
+     "description": "Steam Cloud"
+    },
+    {
+     "id": 15,
+     "description": "Stats"
+    },
+    {
+     "id": 25,
+     "description": "Steam Leaderboards"
+    },
+    {
+     "id": 44,
+     "description": "Remote Play Together"
+    },
+    {
+     "id": 62,
+     "description": "Family Sharing"
+    }
+   ],
+   "release_date": {
+    "coming_soon": false,
+    "date": "Oct 15, 2026"
+   },
+   "genres": [
+    {
+     "id": "4",
+     "description": "Casual"
+    },
+    {
+     "id": "23",
+     "description": "Indie"
+    },
+    {
+     "id": "28",
+     "description": "Simulation"
+    }
+   ]
+  }
+ }
+}

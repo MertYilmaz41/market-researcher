@@ -1,0 +1,70 @@
+# Underserved Audience Report: {{ tag }}
+
+*Generated {{ date }} by steam-researcher.* Filters: >= {{ min_reviews }} reviews, {{ lo }}-{{ hi }}% positive, games only.
+Analyzed the {{ analyses|length }} highest-demand of {{ n_candidates }} candidates (out of {{ n_tag_games }} games in the tag).
+
+> **Proven Demand + Poor Execution = High Opportunity.** The score (0-100) is a weighted geometric mean of
+> demand (review volume), dissatisfaction (how far below 70% positive) and fixability (share of complaints a
+> small team can fix), minus points for risk flags. Review-bombed periods are removed from the rating first.
+
+## Ranking
+
+| # | Game | Score | Reviews | % Pos | Est. gross (x45) | Top complaint | Risks |
+|--:|---|--:|--:|--:|--:|---|---|
+{% for a in ranked -%}
+| {{ loop.index }} | [{{ a.game.name|md }}](#{{ a.game.appid }}) | **{{ a.opportunity.score|round|int }}** | {{ "{:,}".format(a.game.reviews) }} | {{ a.game.rating|round|int }}%{% if a.opportunity.effective_rating|round != a.game.rating|round %} ({{ a.opportunity.effective_rating|round|int }}% adj.){% endif %} | {{ gross(a) }} | {{ top_complaint(a)|md }} | {{ risk_codes(a)|md }} |
+{% endfor %}
+
+{% for a in ranked %}
+---
+
+<a id="{{ a.game.appid }}"></a>
+## {{ loop.index }}. {{ a.game.name|md }} (score {{ a.opportunity.score|round|int }})
+
+[Steam store]({{ a.game.store_url }}) · AppID {{ a.game.appid }}{% if a.details %} · Released {{ a.details.release_date }}{% endif %} · {{ a.game.developer|md }}
+
+- **Demand:** {{ "{:,}".format(a.game.reviews) }} reviews, {{ a.game.owners }} owners (SteamSpy). Box Method: ~{{ "{:,}".format(box(a).units_mid) }} units, {{ money(box(a).gross_low) }} - {{ money(box(a).gross_high) }} gross at ${{ "%.2f"|format(a.game.base_price) }}.
+- **Satisfaction:** {{ a.game.rating|round|int }}% positive{% if a.opportunity.effective_rating|round != a.game.rating|round %}, {{ a.opportunity.effective_rating|round|int }}% with review bombs removed{% endif %}.
+- **Score parts:** demand {{ pct(a.opportunity.demand) }}, dissatisfaction {{ pct(a.opportunity.dissatisfaction) }}, fixability {{ pct(a.opportunity.fixability) }}{% if a.opportunity.penalty %}, penalty -{{ a.opportunity.penalty|int }} ({{ a.opportunity.penalized|join(", ") }}){% endif %}.
+{% if a.game.tags %}- **Tags:** {{ (a.game.tags|list)[:8]|join(", ") }}
+{% endif %}
+{% if a.mining and a.mining.n_negative %}
+### What went wrong ({{ a.mining.n_negative }} negative reviews)
+
+| Complaint | % of neg. | Design pillar |
+|---|--:|---|
+{% for c in a.mining.categories -%}
+| {{ c.label }} | {{ pct(c.share) }} | {{ c.pillar if c.fixable else "*" ~ c.pillar ~ "*" }} |
+{% endfor %}
+{% for c in a.mining.categories[:3] if c.quotes %}
+**{{ c.label }}:**
+{% for q in c.quotes[:2] %}
+> "{{ q|md }}"
+{% endfor %}
+{% endfor %}
+**Great idea, bad execution?** {{ pct(a.mining.idea_praise_share) }} of negative reviews still praise the idea or its potential.
+
+### Core fantasy to keep
+{% if a.mining.core_phrases %}- Common phrases in {{ a.mining.n_positive }} positive reviews: {{ a.mining.core_phrases|map("first")|join(", ") }}
+{% endif %}{% if a.mining.liked %}- Players liked: {{ a.mining.liked|map("first")|join(", ") }}
+{% endif %}
+### Mistakes to avoid
+{% for c in a.mining.categories if c.fixable %}{% if loop.index <= 4 %}- **Don't:** {{ c.label|lower }} (in {{ pct(c.share) }} of negative reviews). **Do:** {{ c.pillar|lower }}.
+{% endif %}{% endfor %}
+{% elif a.review_error %}
+*Review texts unavailable: {{ a.review_error|md }}*
+{% endif %}
+{% if a.flags %}
+### Risk checks
+{% for f in a.flags %}- **{{ f.severity }}** `{{ f.code }}`: {{ f.message|md }}
+{% endfor %}{% endif %}
+{% endfor %}
+{% if not_games or unlisted %}
+---
+
+## Excluded / notes
+{% if not_games %}- Not games: {{ not_games|join(", ")|md }}
+{% endif %}{% if unlisted %}- No store page (delisted or region-locked), analyzed anyway: {{ unlisted|join(", ")|md }}
+{% endif %}{% endif %}
+*Estimates use the undiscounted price, before Steam's cut, regional pricing and discounts. Review mining is
+keyword-based and English-only; read the quotes before trusting the percentages.*
