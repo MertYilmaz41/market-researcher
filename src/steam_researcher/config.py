@@ -19,6 +19,7 @@ BOX_HIGH = 100
 CACHE_DIR = Path.home() / ".cache" / "steam-researcher"
 CACHE_DB = CACHE_DIR / "steam_researcher.sqlite"
 TTL_TAG_LIST = 24 * 3600
+TTL_TAG_NAMES = 7 * 24 * 3600  # the Steam tag catalog rarely changes
 TTL_HISTOGRAM = 24 * 3600
 TTL_APPDETAILS = 7 * 24 * 3600
 TTL_REVIEWS = 24 * 3600

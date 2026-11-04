@@ -1,4 +1,4 @@
-"""Steam store endpoints: appdetails, review histogram, review texts."""
+"""Steam store endpoints: appdetails, review histogram, review texts, tag catalog."""
 
 import json
 
@@ -110,3 +110,17 @@ def reviews(
             break
         cursor = next_cursor
     return out[:limit]
+
+
+TAGS_API = "https://api.steampowered.com/IStoreService/GetTagList/v1/"
+
+
+def parse_tag_list(data: dict) -> list[str]:
+    tags = ((data or {}).get("response") or {}).get("tags") or []
+    names = {t["name"].strip() for t in tags if (t.get("name") or "").strip()}
+    return sorted(names, key=str.casefold)
+
+
+def tag_names(http: HttpClient) -> list[str]:
+    """All Steam user tags (about 450), A-Z. SteamSpy uses the same names."""
+    return parse_tag_list(http.get_json(TAGS_API, {"language": "english"}, ttl=config.TTL_TAG_NAMES))

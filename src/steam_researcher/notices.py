@@ -4,6 +4,7 @@ Every situation where a user might wonder "what happened / what do I do now" get
 so both front ends say the same thing. Add new cases here, not ad hoc in the UI.
 """
 
+import difflib
 import re
 from typing import Literal
 
@@ -250,7 +251,20 @@ def friendly_error(exc: BaseException) -> Notice:
                   hint="Try again. If it keeps happening, run the CLI with SR_DEBUG=1 for details.")
 
 
-def unknown_tag(tag: str) -> Notice:
-    return Notice(level="error", title="Tag not found",
-                  message=f"SteamSpy has no games tagged '{tag}'.",
-                  hint=f"Check the spelling. Examples: {TAG_EXAMPLES}.")
+def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
+    by_fold = {k.casefold(): k for k in known}
+    close = difflib.get_close_matches(tag.casefold(), list(by_fold), n=3, cutoff=0.6)
+    names = [by_fold[c] for c in close]
+    hint = (f"Did you mean {' or '.join([', '.join(names[:-1]), names[-1]] if len(names) > 1 else names)}?" if close
+            else f"Check the spelling. Examples: {TAG_EXAMPLES}.")
+    return Notice(level="error", title="Tag not found", message=f"SteamSpy has no games tagged '{tag}'.", hint=hint)
+
+
+def known_tags(http) -> list[str]:
+    """Steam's tag catalog for suggestions; [] if it can't be fetched (suggestions are optional)."""
+    from .sources import steam_store
+
+    try:
+        return steam_store.tag_names(http)
+    except Exception:
+        return []

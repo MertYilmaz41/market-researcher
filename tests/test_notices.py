@@ -162,6 +162,7 @@ def test_cli_network_error_is_friendly(monkeypatch):
 
 def test_cli_unknown_tag(monkeypatch):
     monkeypatch.setattr("steam_researcher.sources.steamspy.games_by_tag", lambda http, tag: [])
+    monkeypatch.setattr(notices, "known_tags", lambda http: ["Xyz Sim", "Colony Sim"])
     res = CliRunner().invoke(app, ["discover", "--tag", "Xyzzy"])
     assert res.exit_code == 1 and "Tag not found" in res.output
 
@@ -190,3 +191,21 @@ def test_unknown_tag_detected_by_steamspy_fallback():
     assert steamspy.games_by_tag(FakeHttp(), "Qwzzqxnope") == []
     assert [g.name for g in steamspy.games_by_tag(FakeHttp(), "Job Simulator")] == ["Real"]
     assert steamspy.games_by_tag(FakeHttp(), "  ") == []
+
+
+# ---------- tag catalog ----------
+
+def test_parse_tag_list():
+    from steam_researcher.sources.steam_store import parse_tag_list
+
+    data = {"response": {"tags": [{"tagid": 1, "name": "indie"}, {"tagid": 2, "name": "Colony Sim"},
+                                  {"tagid": 3, "name": "Action"}, {"tagid": 4, "name": "Action"}, {"tagid": 5}]}}
+    assert parse_tag_list(data) == ["Action", "Colony Sim", "indie"]
+    assert parse_tag_list({}) == [] and parse_tag_list(None) == []
+
+
+def test_unknown_tag_suggests_close_tags():
+    known = ["Colony Sim", "Farming Sim", "Job Simulator", "Action"]
+    assert notices.unknown_tag("Colny Sim", known).hint.startswith("Did you mean Colony Sim")
+    assert "Examples:" in notices.unknown_tag("Colny Sim").hint
+    assert "Examples:" in notices.unknown_tag("Qwzzqxnope", known).hint

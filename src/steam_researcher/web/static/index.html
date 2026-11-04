@@ -27,12 +27,12 @@
     </div>
 
     <form id="tag-form" class="search" autocomplete="off">
-      <input id="tag" list="tags" value="Job Simulator" placeholder="Steam tag, e.g. Job Simulator" aria-label="Steam tag" required>
-      <datalist id="tags">
-        <option value="Job Simulator"><option value="Colony Sim"><option value="Management">
-        <option value="Base Building"><option value="Life Sim"><option value="Farming Sim">
-        <option value="Automation"><option value="City Builder"><option value="Crafting">
-      </datalist>
+      <div class="combo">
+        <input id="tag" value="Job Simulator" placeholder="Search Steam tags..." aria-label="Steam tag" required
+               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tag-list">
+        <button type="button" id="tag-toggle" class="combo-toggle" tabindex="-1" aria-label="Show all tags">&#9662;</button>
+        <ul id="tag-list" class="combo-list" role="listbox" aria-label="Steam tags" hidden></ul>
+      </div>
       <button type="button" id="filters-toggle" class="ghost" aria-expanded="false">Filters</button>
       <button type="submit" id="run" class="primary">Find opportunities</button>
 

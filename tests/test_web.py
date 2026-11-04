@@ -3,7 +3,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from steam_researcher import pipeline
+from steam_researcher import notices, pipeline
 from steam_researcher.models import HistPoint
 from steam_researcher.pipeline import TagResult
 from steam_researcher.web.server import app
@@ -71,6 +71,7 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
 
 def test_unknown_tag_is_error(client, monkeypatch):
     monkeypatch.setattr(pipeline, "run_tag", lambda *a: None)
+    monkeypatch.setattr(notices, "known_tags", lambda http: [])  # no network in tests
     job = wait(client, client.post("/api/tag-runs", json={"tag": "Nope"}).json()["id"])
     assert job["status"] == "error" and job["error"]["title"] == "Tag not found"
     assert "Job Simulator" in job["error"]["hint"]  # tells the user what to type instead
@@ -132,3 +133,17 @@ def test_game_network_error_is_friendly(client, monkeypatch):
 
 def test_lost_run_message(client):
     assert "restarted" in client.get("/api/tag-runs/nope").json()["detail"]
+
+
+def test_tags_endpoint(client, monkeypatch):
+    from steam_researcher.web import server
+
+    monkeypatch.setattr(server.steam_store, "tag_names", lambda http: ["Colony Sim", "Job Simulator"])
+    assert client.get("/api/tags").json() == {"tags": ["Colony Sim", "Job Simulator"]}
+
+    def down(http):
+        raise RuntimeError("https://api.steampowered.com/x redirected to '/'; endpoint unavailable")
+
+    monkeypatch.setattr(server.steam_store, "tag_names", down)
+    res = client.get("/api/tags")
+    assert res.status_code == 502 and res.json()["notice"]["title"] == "Unexpected answer from api.steampowered.com"

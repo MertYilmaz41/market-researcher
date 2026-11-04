@@ -68,7 +68,7 @@ def _tag_games(http: HttpClient, tag: str):
     with console.status(f"Fetching games tagged {tag!r} from SteamSpy..."):
         games = steamspy.games_by_tag(http, tag)
     if not games:
-        _print_notice(notices.unknown_tag(tag))
+        _print_notice(notices.unknown_tag(tag, notices.known_tags(http)))
         raise typer.Exit(1)
     return games
 
@@ -181,7 +181,7 @@ def report(
 
         result = run_tag(http, tag, min_reviews, lo, hi, max_games, reviews, step)
     if result is None:
-        _print_notice(notices.unknown_tag(tag))
+        _print_notice(notices.unknown_tag(tag, notices.known_tags(http)))
         raise typer.Exit(1)
     post = notices.for_tag_result(tag, min_reviews, lo, hi, max_games, result)
     if not result.candidates:

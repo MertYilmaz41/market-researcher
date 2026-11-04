@@ -55,18 +55,39 @@ a { color: var(--accent-2); }
 
 .search { position: relative; display: flex; gap: 8px; align-items: center; }
 /* direct children only: the Filters popover inputs live inside this form too */
-.search > input {
+.search > input, .combo > input {
   width: 240px; padding: 9px 12px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--bg-2); color: var(--text); font: inherit;
 }
 .search.small > input { width: 180px; }
-.search > input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.search > input:focus, .combo > input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 
 button, .button {
   padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer;
   font: inherit; font-weight: 500; text-decoration: none; display: inline-block;
 }
 .button[hidden] { display: none; }
+
+/* ---------- tag picker (combobox) ---------- */
+.combo { position: relative; display: flex; }
+.combo > input { padding-right: 34px; }
+.combo-toggle {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 13px;
+}
+.combo-toggle:hover { color: var(--text); }
+.combo-toggle[hidden] { display: none; }
+.combo-list {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 35;
+  width: 100%; max-height: 320px; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .6);
+}
+.combo-list[hidden] { display: none; }
+.combo-list li { padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.combo-list li:hover { background: rgba(124, 92, 255, .12); }
+.combo-list li.active { background: rgba(124, 92, 255, .25); }
+.combo-list li.none { color: var(--muted); cursor: default; background: none; }
 button.primary {
   border: 0; color: #fff; background: linear-gradient(135deg, var(--accent), #5b8cff);
   box-shadow: 0 6px 20px -6px rgba(124, 92, 255, .6);
@@ -231,7 +252,7 @@ tbody tr.selected { background: rgba(124, 92, 255, .16); }
   .panel { max-height: none; }
   .map { min-height: 380px; }
   .topbar { padding: 12px 16px; }
-  .search > input { width: 100%; }
+  .search > input, .combo, .combo > input { width: 100%; }
   .search, .search.small { flex: 1 1 100%; }
   .popover { width: min(380px, calc(100vw - 32px)); }
 }

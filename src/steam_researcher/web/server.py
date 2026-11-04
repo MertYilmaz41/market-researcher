@@ -15,6 +15,7 @@ from .. import boxmethod, config, notices, pipeline
 from ..http import HttpClient
 from ..models import Analysis
 from ..report import rank, render, slug
+from ..sources import steam_store
 
 STATIC = Path(__file__).parent / "static"
 
@@ -100,10 +101,11 @@ def _run(job_id: str) -> None:
             job.message, job.done, job.total = message, done, total
 
     try:
-        result = pipeline.run_tag(HttpClient(), r.tag, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
+        http = HttpClient()
+        result = pipeline.run_tag(http, r.tag, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
         with _lock:
             if result is None:
-                job.status, job.error = "error", notices.unknown_tag(r.tag).model_dump()
+                job.status, job.error = "error", notices.unknown_tag(r.tag, notices.known_tags(http)).model_dump()
             else:
                 job.status, job.result = "done", result
     except Exception as e:  # surface any failure to the UI instead of a stuck progress bar
@@ -121,6 +123,15 @@ def _job(job_id: str) -> Job:
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/api/tags")
+def tags():
+    try:
+        return {"tags": steam_store.tag_names(HttpClient())}
+    except Exception as e:
+        notice = notices.friendly_error(e)
+        return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
 
 
 @app.post("/api/tag-runs")

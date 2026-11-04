@@ -127,6 +127,104 @@ function fieldError(input, message, hint = "") {
   toast("error", `Check "${labelOf(input)}"`, message, hint);
 }
 
+// ---------- tag picker: searchable list of all Steam tags ----------
+const tagInput = $("#tag");
+const tagList = $("#tag-list");
+const tagPicker = { tags: [], shown: [], active: -1 };
+
+// Case-insensitive substring match, prefix matches first. Empty query = every tag.
+function matchTags(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return tagPicker.tags;
+  const prefix = [], inside = [];
+  for (const t of tagPicker.tags) {
+    const i = t.toLowerCase().indexOf(q);
+    if (i === 0) prefix.push(t);
+    else if (i > 0) inside.push(t);
+  }
+  return prefix.concat(inside);
+}
+
+const findTag = (text) => tagPicker.tags.find((t) => t.toLowerCase() === text.trim().toLowerCase());
+
+function setActive(i) {
+  const items = tagList.querySelectorAll("li[role=option]");
+  items[tagPicker.active]?.classList.remove("active");
+  items[tagPicker.active]?.setAttribute("aria-selected", "false");
+  tagPicker.active = i;
+  const li = items[i];
+  if (!li) return tagInput.removeAttribute("aria-activedescendant");
+  li.classList.add("active");
+  li.setAttribute("aria-selected", "true");
+  li.scrollIntoView({ block: "nearest" });
+  tagInput.setAttribute("aria-activedescendant", li.id);
+}
+
+// Opening shows every tag (with the current one highlighted); typing filters.
+function openTagList(query = "") {
+  if (!tagPicker.tags.length) return;
+  tagPicker.shown = matchTags(query);
+  tagPicker.active = -1;
+  tagList.replaceChildren(...(tagPicker.shown.length
+    ? tagPicker.shown.map((t, i) => el("li", { role: "option", id: `tag-opt-${i}`, "aria-selected": "false",
+        onclick: () => pickTag(t) }, t))
+    : [el("li", { class: "none" }, `No Steam tag contains "${query.trim()}"`)]));
+  tagList.hidden = false;
+  tagInput.setAttribute("aria-expanded", "true");
+  const current = tagPicker.shown.indexOf(findTag(tagInput.value));
+  setActive(current >= 0 ? current : query.trim() && tagPicker.shown.length ? 0 : -1);
+}
+
+function closeTagList() {
+  tagList.hidden = true;
+  tagInput.setAttribute("aria-expanded", "false");
+  tagInput.removeAttribute("aria-activedescendant");
+}
+
+function pickTag(tag) {
+  tagInput.value = tag;
+  tagInput.classList.remove("invalid");
+  closeTagList();
+}
+
+tagInput.addEventListener("focus", () => { tagInput.select(); openTagList(); });
+tagInput.addEventListener("click", () => { if (tagList.hidden) openTagList(); });
+tagInput.addEventListener("input", () => openTagList(tagInput.value));
+tagInput.addEventListener("blur", closeTagList);
+tagList.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus while clicking/scrolling the list
+$("#tag-toggle").addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  if (!tagList.hidden) return closeTagList();
+  tagInput.focus();
+  openTagList();
+});
+tagInput.addEventListener("keydown", (e) => {
+  if (tagList.hidden) {
+    if (e.key === "ArrowDown") { e.preventDefault(); openTagList(); }
+    return; // Enter with the list closed submits the search as usual
+  }
+  const last = tagPicker.shown.length - 1;
+  if (e.key === "ArrowDown") { e.preventDefault(); setActive(Math.min(last, tagPicker.active + 1)); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); setActive(Math.max(0, tagPicker.active - 1)); }
+  else if (e.key === "Enter" && tagPicker.active >= 0) { e.preventDefault(); pickTag(tagPicker.shown[tagPicker.active]); }
+  else if (e.key === "Escape") closeTagList();
+});
+
+(async function loadTags() {
+  try {
+    const res = await fetch("/api/tags");
+    if (!res.ok) throw await apiError(res);
+    tagPicker.tags = (await res.json()).tags || [];
+    if (document.activeElement === tagInput) openTagList();
+  } catch (err) {
+    $("#tag-toggle").hidden = true;
+    tagInput.placeholder = "Steam tag, e.g. Job Simulator";
+    toast("warning", "Tag list unavailable",
+      err instanceof ApiError ? err.notice.message : "The list of Steam tags couldn't be loaded.",
+      "You can still type a tag by hand, e.g. Job Simulator or Colony Sim.");
+  }
+})();
+
 // Our own English text: the browser's validationMessage follows the OS language.
 function validityText(input) {
   const v = input.validity, { min, max, step } = input;
@@ -166,6 +264,17 @@ $("#tag-form").addEventListener("submit", async (e) => {
     reviews: +$("#reviews").value,
   };
   if (!body.tag) return fieldError($("#tag"), "Enter a Steam tag to search.", "For example Job Simulator or Colony Sim.");
+  if (tagPicker.tags.length) {
+    const tag = findTag(body.tag);
+    if (!tag) {
+      const near = matchTags(body.tag).slice(0, 3);
+      fieldError(tagInput, `"${body.tag.slice(0, 60)}" isn't a Steam tag.`,
+        near.length ? `Did you mean ${near.join(", ")}? Pick one from the list.`
+          : "Pick one from the list. Clear the field to browse all tags.");
+      return openTagList(body.tag);
+    }
+    body.tag = tagInput.value = tag; // Steam's exact spelling
+  }
   if (body.lo > body.hi) {
     $("#lo").classList.add("invalid");
     return fieldError($("#hi"), `'% positive from' (${body.lo}) is higher than '% positive to' (${body.hi}).`,
