@@ -54,12 +54,13 @@ a { color: var(--accent-2); }
 }
 
 .search { position: relative; display: flex; gap: 8px; align-items: center; }
-.search input {
+/* direct children only: the Filters popover inputs live inside this form too */
+.search > input {
   width: 240px; padding: 9px 12px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--bg-2); color: var(--text); font: inherit;
 }
-.search.small input { width: 180px; }
-.search input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.search.small > input { width: 180px; }
+.search > input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 
 button, .button {
   padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer;
@@ -82,9 +83,10 @@ button.primary:disabled { opacity: .5; cursor: progress; }
 .popover[hidden] { display: none; }
 .popover label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .popover input {
-  padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line);
+  width: 100%; min-width: 0; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line);
   background: var(--bg-2); color: var(--text); font: inherit;
 }
+.popover input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 
 /* ---------- progress / error ---------- */
 .progress { display: flex; align-items: center; gap: 12px; padding: 10px 24px; color: var(--muted); font-size: 12.5px; }
@@ -197,7 +199,7 @@ tbody tr.selected { background: rgba(124, 92, 255, .16); }
   .panel { max-height: none; }
   .map { min-height: 380px; }
   .topbar { padding: 12px 16px; }
-  .search input { width: 100%; }
+  .search > input { width: 100%; }
   .search, .search.small { flex: 1 1 100%; }
   .popover { width: min(380px, calc(100vw - 32px)); }
 }

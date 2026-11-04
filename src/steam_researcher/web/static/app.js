@@ -37,6 +37,19 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest("#filters, #filters-toggle")) $("#filters").hidden = true;
 });
 
+// Browser validation cancels submit before our handler runs. The invalid field is usually inside
+// the Filters popover, which the outside-click handler has just hidden, so the browser can't show
+// its message. Re-open the popover and name the field in the error bar so this is never silent.
+$("#tag-form").addEventListener("invalid", (e) => {
+  const input = e.target;
+  if (input.closest("#filters")) {
+    $("#filters").hidden = false;
+    $("#filters-toggle").setAttribute("aria-expanded", "true");
+  }
+  const label = input.closest("label")?.firstChild?.textContent.trim() || input.getAttribute("aria-label") || "Input";
+  showError(`${label}: ${input.validationMessage}`);
+}, true);
+
 $("#tag-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("#filters").hidden = true;
