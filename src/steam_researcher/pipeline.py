@@ -8,6 +8,7 @@ from .http import HttpClient
 from .mining import mine
 from .discover import filter_candidates
 from .models import Analysis, Game
+from .notices import friendly_error
 from .sources import steam_store, steamspy
 
 
@@ -73,6 +74,8 @@ class TagResult:
     analyses: list[Analysis] = field(default_factory=list)
     not_games: list[str] = field(default_factory=list)
     unlisted: list[str] = field(default_factory=list)
+    n_enough_reviews: int = 0  # games with >= min_reviews (explains "0 candidates")
+    failed: list[tuple[str, str]] = field(default_factory=list)  # (game name, friendly reason)
 
 
 def run_tag(
@@ -93,7 +96,11 @@ def run_tag(
     if not games:
         return None
     candidates = filter_candidates(games, min_reviews, lo, hi)
-    result = TagResult(n_tag_games=len(games), candidates=candidates)
+    result = TagResult(
+        n_tag_games=len(games),
+        candidates=candidates,
+        n_enough_reviews=sum(g.reviews >= min_reviews for g in games),
+    )
     by_demand = sorted(candidates, key=lambda g: -g.reviews)
     n_check = min(max_games, len(by_demand))
 
@@ -110,6 +117,11 @@ def run_tag(
     for i, g in enumerate(hits):
         if on_step:
             on_step(f"Analyzing {g.name}", i, len(hits))
-        if (a := analyze_game(http, g.appid, review_limit)) is not None:
+        try:
+            a = analyze_game(http, g.appid, review_limit)
+        except Exception as e:  # one broken game must not sink the whole run
+            result.failed.append((g.name, friendly_error(e).message))
+            continue
+        if a is not None:
             result.analyses.append(a)
     return result

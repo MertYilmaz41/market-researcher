@@ -1,16 +1,19 @@
+import functools
+import os
 from pathlib import Path
 
+import click
 import typer
 from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
 
-from . import boxmethod, config
+from . import boxmethod, config, notices
 from .cache import Cache
 from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
 from .models import Analysis, MiningResult
-from .pipeline import analyze_game, run_tag, verify_games
+from .pipeline import TagResult, analyze_game, run_tag, verify_games
 from .report import money, rank, render, slug
 from .sources import steamspy
 
@@ -20,6 +23,38 @@ app.add_typer(cache_app, name="cache")
 console = Console()
 
 SEVERITY_STYLE = {"high": "bold red", "warn": "yellow", "info": "cyan"}
+NOTICE_STYLE = {"success": ("green", "OK"), "info": ("cyan", "i"), "warning": ("yellow", "!"), "error": ("bold red", "x")}
+
+
+def _print_notice(n: notices.Notice) -> None:
+    style, mark = NOTICE_STYLE[n.level]
+    console.print(f"[{style}][{mark}] {n.title}:[/] {n.message}")
+    if n.hint:
+        console.print(f"    [dim]-> {n.hint}[/]")
+
+
+def _print_notices(items: list[notices.Notice]) -> None:
+    for n in items:
+        _print_notice(n)
+
+
+def _guarded(func):
+    """Show network/service failures as a friendly message instead of a traceback (SR_DEBUG=1 to see it)."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (typer.Exit, click.exceptions.Exit, click.exceptions.ClickException, click.exceptions.Abort,
+                KeyboardInterrupt):
+            raise
+        except Exception as e:
+            if os.environ.get("SR_DEBUG"):
+                raise
+            _print_notice(notices.friendly_error(e))
+            raise typer.Exit(1) from None
+
+    return wrapper
 
 
 def _rating_range(rating: str) -> tuple[float, float]:
@@ -33,7 +68,7 @@ def _tag_games(http: HttpClient, tag: str):
     with console.status(f"Fetching games tagged {tag!r} from SteamSpy..."):
         games = steamspy.games_by_tag(http, tag)
     if not games:
-        console.print(f"[red]No games found for tag {tag!r}.[/] Check the tag spelling, e.g. 'Job Simulator'.")
+        _print_notice(notices.unknown_tag(tag))
         raise typer.Exit(1)
     return games
 
@@ -45,18 +80,25 @@ NO_CACHE_OPT = typer.Option(False, "--no-cache", help="Bypass the cache")
 
 
 @app.command()
+@_guarded
 def discover(
     tag: str = typer.Option(..., "--tag", "-t", help='Steam tag, e.g. "Job Simulator"'),
-    min_reviews: int = typer.Option(config.MIN_REVIEWS, help="Demand filter"),
+    min_reviews: int = typer.Option(config.MIN_REVIEWS, min=1, help="Demand filter"),
     rating: str = RATING_OPT,
-    top: int = typer.Option(30, help="Max rows to show"),
+    top: int = typer.Option(30, min=1, help="Max rows to show"),
     no_cache: bool = NO_CACHE_OPT,
 ):
     """Steps 1-3: list games in a tag with proven demand but weak satisfaction."""
     lo, hi = _rating_range(rating)
+    _print_notices(notices.for_filters(min_reviews, lo, hi, 0, 0))
     http = HttpClient(use_cache=not no_cache)
     games = _tag_games(http, tag)
     candidates = filter_candidates(games, min_reviews, lo, hi)
+    if not candidates:
+        empty = TagResult(n_tag_games=len(games), candidates=[],
+                          n_enough_reviews=sum(g.reviews >= min_reviews for g in games))
+        _print_notices(notices.for_tag_result(tag, min_reviews, lo, hi, top, empty))
+        raise typer.Exit(1)
 
     with console.status("Checking store type (games only)...") as status:
         hits, not_games, unlisted = verify_games(
@@ -95,9 +137,10 @@ def discover(
 
 
 @app.command()
+@_guarded
 def analyze(
-    appid: int = typer.Argument(..., help="Steam AppID (from sr discover)"),
-    reviews: int = typer.Option(300, "--reviews", help="Max negative and max positive reviews to mine"),
+    appid: int = typer.Argument(..., min=1, help="Steam AppID (from sr discover)"),
+    reviews: int = typer.Option(300, "--reviews", min=10, max=1000, help="Max negative and max positive reviews to mine"),
     no_cache: bool = NO_CACHE_OPT,
 ):
     """Step 4 for one game: risk checks, complaint mining, core fantasy, design pillars."""
@@ -105,23 +148,30 @@ def analyze(
     with console.status("Fetching SteamSpy, Steam store data and reviews..."):
         a = analyze_game(http, appid, reviews)
     if a is None:
-        console.print(f"[red]SteamSpy has no data for AppID {appid}.[/]")
+        _print_notice(notices.Notice(
+            level="error", title="Game not found", message=f"SteamSpy has no data for AppID {appid}.",
+            hint="Check the number on the game's Steam store page (store.steampowered.com/app/<AppID>/).",
+        ))
         raise typer.Exit(1)
     _print_analysis(a)
+    console.print()
+    _print_notices(notices.for_game(a))
 
 
 @app.command()
+@_guarded
 def report(
     tag: str = typer.Option(..., "--tag", "-t", help='Steam tag, e.g. "Job Simulator"'),
-    min_reviews: int = typer.Option(config.MIN_REVIEWS, help="Demand filter"),
+    min_reviews: int = typer.Option(config.MIN_REVIEWS, min=1, help="Demand filter"),
     rating: str = RATING_OPT,
-    max_games: int = typer.Option(15, help="Analyze up to N candidates, highest review count first"),
-    reviews: int = typer.Option(200, "--reviews", help="Max negative and max positive reviews per game"),
+    max_games: int = typer.Option(15, min=1, max=50, help="Analyze up to N candidates, highest review count first"),
+    reviews: int = typer.Option(200, "--reviews", min=10, max=1000, help="Max negative and max positive reviews per game"),
     out: Path = typer.Option(None, "--out", "-o", help="Markdown file (default: reports/<tag>.md)"),
     no_cache: bool = NO_CACHE_OPT,
 ):
     """Steps 1-4 for a whole tag: rank games by opportunity and write a Markdown report."""
     lo, hi = _rating_range(rating)
+    _print_notices(notices.for_filters(min_reviews, lo, hi, max_games, reviews))
     http = HttpClient(use_cache=not no_cache)
     with Progress(console=console, transient=True) as progress:
         task = progress.add_task(f"Fetching games tagged {tag!r}", total=None)
@@ -131,10 +181,11 @@ def report(
 
         result = run_tag(http, tag, min_reviews, lo, hi, max_games, reviews, step)
     if result is None:
-        console.print(f"[red]No games found for tag {tag!r}.[/] Check the tag spelling, e.g. 'Job Simulator'.")
+        _print_notice(notices.unknown_tag(tag))
         raise typer.Exit(1)
+    post = notices.for_tag_result(tag, min_reviews, lo, hi, max_games, result)
     if not result.candidates:
-        console.print("[yellow]No games pass the filters; try a lower --min-reviews or wider --rating.[/]")
+        _print_notices(post)
         raise typer.Exit(1)
     analyses = result.analyses
 
@@ -162,6 +213,7 @@ def report(
         )
     console.print(table)
     console.print(f"Report written to [bold]{out}[/]")
+    _print_notices(post)
 
 
 def _print_analysis(a: Analysis) -> None:

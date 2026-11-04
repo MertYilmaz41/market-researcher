@@ -36,8 +36,21 @@ def parse_tag_response(data: dict) -> list[Game]:
     return [parse_game(row) for row in data.values()]
 
 
+def _tag_data(http: HttpClient, tag: str) -> dict:
+    return http.get_json(API, {"request": "tag", "tag": tag}, ttl=config.TTL_TAG_LIST)
+
+
 def games_by_tag(http: HttpClient, tag: str) -> list[Game]:
-    data = http.get_json(API, {"request": "tag", "tag": tag}, ttl=config.TTL_TAG_LIST)
+    """Games with this tag, or [] if SteamSpy doesn't know the tag.
+
+    SteamSpy answers an unknown tag with the same fallback list it returns for an empty tag,
+    so a result identical to the empty-tag result means "no such tag".
+    """
+    if not tag.strip():
+        return []
+    data = _tag_data(http, tag)
+    if data and set(data) == set(_tag_data(http, "") or {}):
+        return []
     return parse_tag_response(data)
 
 

@@ -102,6 +102,8 @@ Web UI (`web/`): `sr ui` runs uvicorn on `web/server.py`, bound to 127.0.0.1, an
 - **Safety:** put review text into the DOM only via `textContent` (the `el()` helper in `app.js`), never `innerHTML`.
 - **Tests:** `tests/test_web.py` uses FastAPI's `TestClient` with `pipeline.run_tag`/`analyze_game` monkeypatched, so it needs no network. The JS has no tests; check it with `node --check` and a real browser.
 
+User-facing messages (validation, info, warnings, friendly errors) come from `notices.py` as `Notice(level, title, message, hint)`. The CLI and the web share them: the CLI prints them in color, and the web shows them as toasts (`toast`/`notify` in `app.js`). Add new cases in `notices.py`, not ad hoc in the UI; only instant field validation lives in JS. `friendly_error(exc)` turns exceptions into plain language. CLI commands are wrapped in `_guarded`, so no traceback is shown unless `SR_DEBUG=1`. `run_tag` records per-game failures in `TagResult.failed` and keeps going.
+
 `report.py` renders `templates/report.md.j2` with Jinja2. Arbitrary text going into the template must pass through the `md` filter, which escapes pipes and flattens newlines.
 
 The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.filter_candidates` (steps 1–3) → `boxmethod.estimate` → output in `cli.py`.

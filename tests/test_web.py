@@ -50,7 +50,9 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
         return fake_result()
 
     monkeypatch.setattr(pipeline, "run_tag", fake_run_tag)
-    run_id = client.post("/api/tag-runs", json={"tag": "Job Simulator", "lo": 10, "hi": 60}).json()["id"]
+    started = client.post("/api/tag-runs", json={"tag": "Job Simulator", "lo": 10, "hi": 60}).json()
+    assert started["notices"] == []  # sensible filters: no pre-run warnings
+    run_id = started["id"]
     job = wait(client, run_id)
     assert job["status"] == "done" and job["error"] is None
     res = job["result"]
@@ -59,6 +61,7 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
     assert g["store_url"].endswith("/app/1/") and g["box"]["gross_mid"] > 0
     assert g["mining"]["categories"][0]["code"] == "bugs" and g["has_histogram"] is True
     assert res["not_games"] == ["Soundtrack (music)"] and res["n_tag_games"] == 50
+    assert any(n["level"] == "success" and "Best Sim" in n["message"] for n in res["notices"])
     assert calls[0][0] == "Job Simulator" and calls[0][1][1:3] == (10, 60)
 
     md = client.get(f"/api/tag-runs/{run_id}/report.md")
@@ -69,7 +72,8 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
 def test_unknown_tag_is_error(client, monkeypatch):
     monkeypatch.setattr(pipeline, "run_tag", lambda *a: None)
     job = wait(client, client.post("/api/tag-runs", json={"tag": "Nope"}).json()["id"])
-    assert job["status"] == "error" and "No games found" in job["error"]
+    assert job["status"] == "error" and job["error"]["title"] == "Tag not found"
+    assert "Job Simulator" in job["error"]["hint"]  # tells the user what to type instead
 
 
 def test_pipeline_exception_is_reported(client, monkeypatch):
@@ -78,7 +82,7 @@ def test_pipeline_exception_is_reported(client, monkeypatch):
 
     monkeypatch.setattr(pipeline, "run_tag", boom)
     job = wait(client, client.post("/api/tag-runs", json={"tag": "X"}).json()["id"])
-    assert job["status"] == "error" and "SteamSpy down" in job["error"]
+    assert job["status"] == "error" and "SteamSpy down" in job["error"]["message"]
 
 
 @pytest.mark.parametrize("body", [{"tag": "X", "lo": 80, "hi": 20}, {"tag": "X", "hi": 101}, {"tag": ""}])
@@ -94,4 +98,37 @@ def test_game_endpoint(client, monkeypatch):
     monkeypatch.setattr(pipeline, "analyze_game", lambda http, appid, n: analysis(42, "Solo", appid=appid) if appid == 5 else None)
     ok = client.get("/api/games/5")
     assert ok.status_code == 200 and ok.json()["game"]["name"] == "Solo"
-    assert client.get("/api/games/6").status_code == 404
+    assert isinstance(ok.json()["notices"], list)
+    missing = client.get("/api/games/6")
+    assert missing.status_code == 404 and missing.json()["notice"]["title"] == "Game not found"
+
+
+def test_pre_run_notices(client, monkeypatch):
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    body = {"tag": "X", "min_reviews": 20, "lo": 0, "hi": 90, "max_games": 50, "reviews": 500}
+    titles = {n["title"] for n in client.post("/api/tag-runs", json=body).json()["notices"]}
+    assert titles == {"Demand not proven", "Above 70% isn't underserved", "Very low ratings included",
+                      "This may take a while"}
+
+
+def test_validation_message_is_readable(client):
+    res = client.post("/api/tag-runs", json={"tag": "X", "lo": 80, "hi": 20})
+    assert res.status_code == 422
+    assert "'% positive from' must not be higher than '% positive to'" in res.json()["detail"]
+    res = client.post("/api/tag-runs", json={"tag": "X", "max_games": 99})
+    assert res.json()["detail"].startswith("Games to analyze:")
+
+
+def test_game_network_error_is_friendly(client, monkeypatch):
+    import httpx
+
+    def down(*a):
+        raise httpx.ConnectError("boom", request=httpx.Request("GET", "https://steamspy.com/api.php"))
+
+    monkeypatch.setattr(pipeline, "analyze_game", down)
+    res = client.get("/api/games/5")
+    assert res.status_code == 502 and res.json()["notice"]["title"] == "Can't reach steamspy.com"
+
+
+def test_lost_run_message(client):
+    assert "restarted" in client.get("/api/tag-runs/nope").json()["detail"]

@@ -90,13 +90,44 @@ button.primary:disabled { opacity: .5; cursor: progress; }
 
 /* ---------- progress / error ---------- */
 .progress { display: flex; align-items: center; gap: 12px; padding: 10px 24px; color: var(--muted); font-size: 12.5px; }
-.progress[hidden], .error[hidden] { display: none; }
+.progress[hidden] { display: none; }
 .progress-bar { flex: 0 0 280px; height: 6px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
 .progress-bar span {
   display: block; height: 100%; width: 0; border-radius: 99px;
   background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .4s ease;
 }
-.error { margin: 10px 24px 0; padding: 10px 14px; border-radius: 10px; background: #3a1720; color: #fecaca; border: 1px solid #7f1d1d; }
+/* ---------- toasts ---------- */
+.toasts {
+  position: fixed; top: 76px; right: 20px; z-index: 50;
+  display: flex; flex-direction: column; gap: 10px; width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  --c: var(--info);
+  pointer-events: auto; display: grid; grid-template-columns: 22px 1fr 20px; gap: 10px; align-items: start;
+  padding: 12px 12px 12px 14px; border-radius: 12px; border: 1px solid var(--line); border-left: 4px solid var(--c);
+  background: rgba(27, 33, 48, .97); box-shadow: 0 16px 40px -12px rgba(0, 0, 0, .7);
+  font-size: 13px; animation: toast-in .25s ease-out;
+}
+.toast.success { --c: var(--good); }
+.toast.warning { --c: var(--warn); }
+.toast.error { --c: var(--bad); }
+.toast.leaving { animation: toast-out .2s ease-in forwards; }
+.toast .icon {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--c); color: #0b0e14; font-weight: 700; font-size: 13px;
+}
+.toast b { display: block; margin-bottom: 2px; }
+.toast p { margin: 0; color: #c9cfdc; }
+.toast .hint { margin-top: 6px; color: var(--muted); font-size: 12.5px; }
+.toast .hint::before { content: "\2192  "; color: var(--c); }
+.toast .close { background: none; border: 0; padding: 0; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.toast .close:hover { color: var(--text); }
+@keyframes toast-in { from { opacity: 0; transform: translateX(16px); } }
+@keyframes toast-out { to { opacity: 0; transform: translateX(16px); } }
+
+input.invalid, .search > input.invalid { outline: 2px solid var(--bad) !important; border-color: transparent !important; }
+button:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ---------- layout ---------- */
 .layout {

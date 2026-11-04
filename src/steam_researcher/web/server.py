@@ -1,16 +1,17 @@
-"""FastAPI backend for the web UI. Display-only: all logic lives in `pipeline`/`report`."""
+"""FastAPI backend for the web UI. Display-only: all logic lives in `pipeline`/`report`/`notices`."""
 
 import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
-from .. import boxmethod, config, pipeline
+from .. import boxmethod, config, notices, pipeline
 from ..http import HttpClient
 from ..models import Analysis
 from ..report import rank, render, slug
@@ -19,6 +20,15 @@ STATIC = Path(__file__).parent / "static"
 
 app = FastAPI(title="Steam Researcher")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+FIELD_LABELS = {
+    "tag": "Steam tag",
+    "min_reviews": "Minimum reviews",
+    "lo": "% positive from",
+    "hi": "% positive to",
+    "max_games": "Games to analyze",
+    "reviews": "Reviews mined per game",
+}
 
 
 class TagRunRequest(BaseModel):
@@ -32,8 +42,21 @@ class TagRunRequest(BaseModel):
     @model_validator(mode="after")
     def _range(self):
         if self.lo > self.hi:
-            raise ValueError("lo must be <= hi")
+            raise ValueError("'% positive from' must not be higher than '% positive to'")
         return self
+
+
+@app.exception_handler(RequestValidationError)
+async def _readable_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Turn pydantic's error list into one sentence a user understands."""
+    parts = []
+    for err in exc.errors():
+        field = next((FIELD_LABELS[p] for p in reversed(err.get("loc", ())) if p in FIELD_LABELS), None)
+        msg = err.get("msg", "invalid value").removeprefix("Value error, ")
+        parts.append(f"{field}: {msg}" if field else msg)
+    notice = notices.Notice(level="error", title="Check the filters", message="; ".join(parts),
+                            hint="Fix the highlighted values and try again.")
+    return JSONResponse(status_code=422, content={"detail": notice.message, "notice": notice.model_dump()})
 
 
 @dataclass
@@ -44,7 +67,7 @@ class Job:
     done: int = 0
     total: int = 0
     result: pipeline.TagResult | None = None
-    error: str | None = None
+    error: dict | None = None  # a Notice dict
 
 
 _jobs: dict[str, Job] = {}
@@ -80,18 +103,18 @@ def _run(job_id: str) -> None:
         result = pipeline.run_tag(HttpClient(), r.tag, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
         with _lock:
             if result is None:
-                job.status, job.error = "error", f"No games found for tag {r.tag!r}. Check the spelling."
+                job.status, job.error = "error", notices.unknown_tag(r.tag).model_dump()
             else:
                 job.status, job.result = "done", result
     except Exception as e:  # surface any failure to the UI instead of a stuck progress bar
         with _lock:
-            job.status, job.error = "error", f"{type(e).__name__}: {e}"
+            job.status, job.error = "error", notices.friendly_error(e).model_dump()
 
 
 def _job(job_id: str) -> Job:
     job = _jobs.get(job_id)
     if job is None:
-        raise HTTPException(404, "Unknown run")
+        raise HTTPException(404, "This run no longer exists (the server was probably restarted).")
     return job
 
 
@@ -106,7 +129,8 @@ def start_tag_run(req: TagRunRequest) -> dict:
     with _lock:
         _jobs[job_id] = Job(request=req)
     threading.Thread(target=_run, args=(job_id,), daemon=True).start()
-    return {"id": job_id}
+    pre = notices.for_filters(req.min_reviews, req.lo, req.hi, req.max_games, req.reviews)
+    return {"id": job_id, "notices": [n.model_dump() for n in pre]}
 
 
 @app.get("/api/tag-runs/{job_id}")
@@ -118,6 +142,7 @@ def tag_run_status(job_id: str) -> dict:
         result = job.result
     if result is not None:
         r = job.request
+        post = notices.for_tag_result(r.tag, r.min_reviews, r.lo, r.hi, r.max_games, result)
         out["result"] = {
             "tag": r.tag, "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
             "n_tag_games": result.n_tag_games,
@@ -125,6 +150,7 @@ def tag_run_status(job_id: str) -> dict:
             "not_games": result.not_games,
             "unlisted": result.unlisted,
             "games": [game_json(a) for a in rank(result.analyses)],
+            "notices": [n.model_dump() for n in post],
         }
     return out
 
@@ -133,7 +159,7 @@ def tag_run_status(job_id: str) -> dict:
 def tag_run_report(job_id: str) -> PlainTextResponse:
     job = _job(job_id)
     if job.result is None:
-        raise HTTPException(409, "Run not finished")
+        raise HTTPException(409, "The run hasn't finished yet.")
     r, res = job.request, job.result
     text = render(tag=r.tag, analyses=res.analyses, n_candidates=len(res.candidates),
                   n_tag_games=res.n_tag_games, min_reviews=r.min_reviews, lo=r.lo, hi=r.hi,
@@ -143,8 +169,22 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
 
 
 @app.get("/api/games/{appid}")
-def game(appid: int, reviews: int = 300) -> dict:
-    a = pipeline.analyze_game(HttpClient(), appid, max(10, min(reviews, 1000)))
+def game(appid: int, reviews: int = 300):
+    if appid <= 0:
+        raise HTTPException(422, "AppID must be a positive number.")
+    try:
+        a = pipeline.analyze_game(HttpClient(), appid, max(10, min(reviews, 1000)))
+    except Exception as e:
+        notice = notices.friendly_error(e)
+        return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
     if a is None:
-        raise HTTPException(404, f"SteamSpy has no data for AppID {appid}")
-    return game_json(a)
+        notice = notices.Notice(
+            level="error", title="Game not found",
+            message=f"SteamSpy has no data for AppID {appid}.",
+            hint="Check the number on the game's Steam store page (store.steampowered.com/app/<AppID>/). "
+                 "Unreleased or very new games may not be listed yet.",
+        )
+        return JSONResponse(status_code=404, content={"detail": notice.message, "notice": notice.model_dump()})
+    data = game_json(a)
+    data["notices"] = [n.model_dump() for n in notices.for_game(a)]
+    return data

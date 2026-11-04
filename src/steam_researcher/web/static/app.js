@@ -1,5 +1,3 @@
-import { createMap } from "/static/map3d.js";
-
 const $ = (sel) => document.querySelector(sel);
 
 // ---------- tiny DOM helper: text is always set via textContent ----------
@@ -23,36 +21,131 @@ const money = (x) => (x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : x >= 1e3 ? `$${Ma
 const pct = (x) => `${Math.round(x * 100)}%`;
 const scoreCss = (s) => `hsl(${(Math.max(0, Math.min(100, s)) / 100) * 140} 75% 55%)`;
 
+// ---------- toasts: every message the user should see goes through here ----------
+const ICONS = { success: "✓", info: "i", warning: "!", error: "×" };
+const LIFETIME = { success: 6000, info: 7000, warning: 12000, error: 0 }; // 0 = stays until closed
+
+function toast(level, title, message = "", hint = "") {
+  const close = el("button", { class: "close", type: "button", "aria-label": "Dismiss" }, "×");
+  const node = el("div", { class: `toast ${level}`, role: level === "error" ? "alert" : "status" },
+    el("span", { class: "icon" }, ICONS[level] || "i"),
+    el("div", {},
+      el("b", {}, title),
+      message ? el("p", {}, message) : null,
+      hint ? el("p", { class: "hint" }, hint) : null,
+    ),
+    close,
+  );
+  const remove = () => {
+    node.classList.add("leaving");
+    setTimeout(() => node.remove(), 200);
+  };
+  close.addEventListener("click", remove);
+  if (LIFETIME[level]) setTimeout(remove, LIFETIME[level]);
+  const box = $("#toasts");
+  box.append(node);
+  while (box.children.length > 5) box.firstElementChild.remove(); // don't bury the screen
+}
+
+const notify = (n) => n && toast(n.level, n.title, n.message, n.hint);
+const notifyAll = (list) => (list || []).forEach(notify);
+
+// Any failure becomes a toast. ApiError carries a server Notice; a TypeError from fetch means
+// the local server isn't reachable at all.
+class ApiError extends Error {
+  constructor(notice) {
+    super(notice.message);
+    this.notice = notice;
+  }
+}
+
+function notifyError(err, fallbackTitle = "Something went wrong") {
+  if (err instanceof ApiError) return notify(err.notice);
+  if (err instanceof TypeError) {
+    return toast("error", "Can't reach the Steam Researcher server",
+      "The page lost its connection to the local server.",
+      "Is the Steam Researcher window still open? Start it again with Steam Researcher.bat, then reload this page.");
+  }
+  toast("error", fallbackTitle, err.message || String(err));
+}
+
+async function apiError(res) {
+  let body = null;
+  try { body = await res.json(); } catch { /* not JSON */ }
+  if (body?.notice) return new ApiError(body.notice);
+  let detail = body?.detail;
+  if (Array.isArray(detail)) detail = detail.map((d) => d.msg).join("; ");
+  return new ApiError({ level: "error", title: `Request failed (HTTP ${res.status})`, message: detail || res.statusText, hint: "" });
+}
+
+// ---------- 3D map (optional: the rest of the UI must work without it) ----------
+let map = { setGames() {}, select() {} };
+try {
+  const { createMap } = await import("/static/map3d.js");
+  map = createMap($("#map"), { onSelect: (appid) => selectGame(appid, { fromMap: true }) });
+} catch (err) {
+  console.error(err);
+  $("#map-empty").textContent = "The 3D map couldn't load. The table and details below still work.";
+  toast("warning", "3D map unavailable",
+    "The map library couldn't be downloaded (no internet, or the CDN is blocked).",
+    "Check your connection and reload the page. The ranking table and game details still work.");
+}
+
 // ---------- state ----------
-const state = { games: [], selected: null, sort: { key: "rank", asc: true }, runId: null };
-const map = createMap($("#map"), { onSelect: (appid) => selectGame(appid, { fromMap: true }) });
+const state = { games: [], selected: null, sort: { key: "rank", asc: true }, runId: null, busy: false };
+
+function setBusy(busy) {
+  state.busy = busy;
+  $("#run").disabled = busy;
+  $("#game-form button").disabled = busy;
+}
+
+function busyGuard() {
+  if (!state.busy) return false;
+  toast("info", "Please wait", "A search is already running.", "Wait for it to finish, then try again.");
+  return true;
+}
 
 // ---------- top bar ----------
-$("#filters-toggle").addEventListener("click", () => {
-  const pop = $("#filters");
-  pop.hidden = !pop.hidden;
-  $("#filters-toggle").setAttribute("aria-expanded", String(!pop.hidden));
-});
+function openFilters(open = true) {
+  $("#filters").hidden = !open;
+  $("#filters-toggle").setAttribute("aria-expanded", String(open));
+}
+$("#filters-toggle").addEventListener("click", () => openFilters($("#filters").hidden));
 document.addEventListener("click", (e) => {
-  if (!e.target.closest("#filters, #filters-toggle")) $("#filters").hidden = true;
+  if (!e.target.closest("#filters, #filters-toggle, #toasts")) openFilters(false);
 });
+document.querySelectorAll("input").forEach((i) => i.addEventListener("input", () => i.classList.remove("invalid")));
 
-// Browser validation cancels submit before our handler runs. The invalid field is usually inside
-// the Filters popover, which the outside-click handler has just hidden, so the browser can't show
-// its message. Re-open the popover and name the field in the error bar so this is never silent.
+const labelOf = (input) =>
+  input.closest("label")?.firstChild?.textContent.trim() || input.getAttribute("aria-label") || "This field";
+
+function fieldError(input, message, hint = "") {
+  input.classList.add("invalid");
+  if (input.closest("#filters")) openFilters(true);
+  input.focus();
+  toast("error", `Check "${labelOf(input)}"`, message, hint);
+}
+
+// The browser's own validation cancels submit before our handler runs. The invalid field is often
+// inside the Filters popover, which the outside-click handler has just hidden, so its bubble can't
+// appear. Re-open the popover and show a toast so this is never silent.
 $("#tag-form").addEventListener("invalid", (e) => {
+  e.preventDefault(); // our toast replaces the browser bubble
   const input = e.target;
-  if (input.closest("#filters")) {
-    $("#filters").hidden = false;
-    $("#filters-toggle").setAttribute("aria-expanded", "true");
-  }
-  const label = input.closest("label")?.firstChild?.textContent.trim() || input.getAttribute("aria-label") || "Input";
-  showError(`${label}: ${input.validationMessage}`);
+  if ($("#tag-form").querySelector(".invalid")) return; // one toast per submit
+  fieldError(input,
+    input.validity.valueMissing ? "This field can't be empty." : input.validationMessage,
+    input.id === "tag" ? "Type a Steam tag, e.g. Job Simulator or Colony Sim." : "");
 }, true);
+
+$("#run").addEventListener("click", () => {
+  document.querySelectorAll("#tag-form .invalid").forEach((i) => i.classList.remove("invalid"));
+});
 
 $("#tag-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  $("#filters").hidden = true;
+  if (busyGuard()) return;
   const body = {
     tag: $("#tag").value.trim(),
     min_reviews: +$("#min-reviews").value,
@@ -61,21 +154,28 @@ $("#tag-form").addEventListener("submit", async (e) => {
     max_games: +$("#max-games").value,
     reviews: +$("#reviews").value,
   };
-  showError(null);
-  $("#run").disabled = true;
-  progress(0, "Fetching games tagged " + body.tag + "...");
+  if (!body.tag) return fieldError($("#tag"), "Enter a Steam tag to search.", "For example Job Simulator or Colony Sim.");
+  if (body.lo > body.hi) {
+    $("#lo").classList.add("invalid");
+    return fieldError($("#hi"), `'% positive from' (${body.lo}) is higher than '% positive to' (${body.hi}).`,
+      "Swap the two values, e.g. 5 to 70.");
+  }
+  openFilters(false);
+  setBusy(true);
+  progress(0, `Fetching games tagged "${body.tag}"...`);
   try {
     const res = await fetch("/api/tag-runs", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(await errorText(res));
-    const { id } = await res.json();
+    if (!res.ok) throw await apiError(res);
+    const { id, notices } = await res.json();
+    notifyAll(notices);
     state.runId = id;
     await poll(id);
   } catch (err) {
-    showError(err.message);
+    notifyError(err, "Search failed");
   } finally {
-    $("#run").disabled = false;
+    setBusy(false);
     progress(null);
   }
 });
@@ -83,9 +183,13 @@ $("#tag-form").addEventListener("submit", async (e) => {
 async function poll(id) {
   for (;;) {
     const res = await fetch(`/api/tag-runs/${id}`);
-    if (!res.ok) throw new Error(await errorText(res));
+    if (res.status === 404) {
+      throw new ApiError({ level: "error", title: "The search was interrupted",
+        message: "The server was restarted, so this run was lost.", hint: "Press Find opportunities again." });
+    }
+    if (!res.ok) throw await apiError(res);
     const job = await res.json();
-    if (job.status === "error") throw new Error(job.error);
+    if (job.status === "error") throw new ApiError(job.error);
     if (job.status === "done") return showResult(job.result, id);
     progress(job.total ? job.done / job.total : 0, job.message);
     await new Promise((r) => setTimeout(r, 1000));
@@ -94,36 +198,42 @@ async function poll(id) {
 
 $("#game-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const raw = $("#appid").value.trim();
+  if (busyGuard()) return;
+  const input = $("#appid");
+  input.classList.remove("invalid");
+  const raw = input.value.trim();
+  if (!raw) {
+    return fieldError(input, "Enter a Steam AppID or store link.",
+      "For example 1330660 or https://store.steampowered.com/app/1330660/");
+  }
   const appid = (raw.match(/\/app\/(\d+)/) || raw.match(/^(\d+)$/) || [])[1];
-  if (!appid) return showError("Enter a Steam AppID (e.g. 1330660) or a store URL.");
-  showError(null);
-  const known = state.games.find((g) => g.game.appid === +appid);
-  if (known) return selectGame(+appid);
-  progress(0.3, "Analyzing AppID " + appid + "... (first time can take ~15s)");
+  if (!appid || +appid <= 0) {
+    return fieldError(input, `"${raw.slice(0, 60)}" isn't an AppID or a Steam store link.`,
+      "Use the number from the store URL, e.g. 1330660 from store.steampowered.com/app/1330660/");
+  }
+  if (state.games.some((g) => g.game.appid === +appid)) return selectGame(+appid);
+
+  setBusy(true);
+  progress(0.3, `Analyzing AppID ${appid}... (the first time can take ~15 s)`);
   try {
-    const res = await fetch(`/api/games/${appid}?reviews=${+$("#reviews").value}`);
-    if (!res.ok) throw new Error(await errorText(res));
+    const res = await fetch(`/api/games/${appid}?reviews=${+$("#reviews").value || 300}`);
+    if (!res.ok) throw await apiError(res);
+    const g = await res.json();
     state.selected = null;
     map.select(null);
     highlightRow();
-    renderPanel(await res.json());
+    renderPanel(g);
+    if (state.games.length) {
+      toast("info", "Shown in the details panel", `${g.game.name} isn't part of the current ranking.`);
+    }
+    notifyAll(g.notices);
   } catch (err) {
-    showError(err.message);
+    notifyError(err, "Analysis failed");
   } finally {
+    setBusy(false);
     progress(null);
   }
 });
-
-async function errorText(res) {
-  try {
-    const j = await res.json();
-    if (Array.isArray(j.detail)) return j.detail.map((d) => d.msg).join("; ");
-    return j.detail || res.statusText;
-  } catch {
-    return res.statusText;
-  }
-}
 
 function progress(frac, text) {
   const box = $("#progress");
@@ -131,11 +241,6 @@ function progress(frac, text) {
   if (frac == null) return;
   $("#progress-fill").style.width = `${Math.round(frac * 100)}%`;
   $("#progress-text").textContent = text || "";
-}
-
-function showError(msg) {
-  $("#error").hidden = !msg;
-  $("#error").textContent = msg || "";
 }
 
 // ---------- results ----------
@@ -154,8 +259,15 @@ function showResult(result, id) {
 
   map.setGames(state.games);
   renderTable();
-  if (state.games.length) selectGame(state.games[0].game.appid);
-  else $("#panel").replaceChildren(el("div", { class: "empty" }, "No games pass these filters. Try a lower minimum or a wider % range."));
+  notifyAll(result.notices);
+  if (state.games.length) {
+    selectGame(state.games[0].game.appid);
+  } else {
+    state.selected = null;
+    const why = (result.notices || []).find((n) => n.level === "warning");
+    $("#panel").replaceChildren(el("div", { class: "empty" },
+      why ? `${why.title}. ${why.hint}` : "No games to show. Try a lower minimum or a wider % range."));
+  }
 }
 
 const sortValue = {
