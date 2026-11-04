@@ -68,7 +68,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## What this is
 
-A Python CLI (`sr`) that automates CodeMonkey's "Underserved Audience" method: find Steam games with proven demand (many reviews) but poor satisfaction (5–70% positive) in a clear genre tag, estimate their revenue, mine their complaints, and rank them as opportunities. The method is described in `Underserved-Auidience.md`. The requirements (in Turkish) are in `requirements-summary.txt`. The full roadmap (milestones 1–5) is in `C:\Users\Mert\.claude\plans\first-read-underserved-auidience-md-and-polished-grove.md`.
+A Python CLI (`sr`) that automates CodeMonkey's "Underserved Audience" method: find Steam games with proven demand (many reviews) but poor satisfaction (5–70% positive) in a clear genre tag, estimate their revenue, mine their complaints, and rank them as opportunities. The method is described in `Underserved-Auidience.md`, and the requirements (in Turkish) are in `requirements-summary.txt`. Both files are local-only and gitignored, so they may be missing in a fresh clone. The full roadmap (milestones 1–5) is in `C:\Users\Mert\.claude\plans\first-read-underserved-auidience-md-and-polished-grove.md`.
 
 ## Commands
 

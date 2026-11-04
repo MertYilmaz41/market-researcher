@@ -5,3 +5,8 @@ __pycache__/
 reports/
 .env
 dist/
+
+# Local-only research notes
+image-*.png.url
+Underserved-Auidience.md
+requirements-summary.txt

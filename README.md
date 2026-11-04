@@ -4,7 +4,7 @@ Find underserved Steam audiences: games people clearly wanted, but that disappoi
 
 > **Proven Demand + Poor Execution = High Opportunity**
 
-Based on CodeMonkey's Underserved Audience method (see [Underserved-Auidience.md](Underserved-Auidience.md)).
+Based on CodeMonkey's Underserved Audience method: look for genres where players bought a game in large numbers but were let down by how it was made, then build the better version.
 
 ## What it does
 
