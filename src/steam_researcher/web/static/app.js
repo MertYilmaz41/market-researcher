@@ -127,6 +127,18 @@ function fieldError(input, message, hint = "") {
   toast("error", `Check "${labelOf(input)}"`, message, hint);
 }
 
+// Our own English text: the browser's validationMessage follows the OS language.
+function validityText(input) {
+  const v = input.validity, { min, max, step } = input;
+  if (v.valueMissing) return "This field can't be empty.";
+  if (v.badInput) return "Enter a number.";
+  if (v.rangeUnderflow || v.rangeOverflow) {
+    return max ? `Enter a number from ${min} to ${max}.` : `Enter a number of at least ${min}.`;
+  }
+  if (v.stepMismatch) return `Use a multiple of ${step}, e.g. ${Math.round(+input.value / +step) * +step || step}.`;
+  return input.validationMessage;
+}
+
 // The browser's own validation cancels submit before our handler runs. The invalid field is often
 // inside the Filters popover, which the outside-click handler has just hidden, so its bubble can't
 // appear. Re-open the popover and show a toast so this is never silent.
@@ -134,8 +146,7 @@ $("#tag-form").addEventListener("invalid", (e) => {
   e.preventDefault(); // our toast replaces the browser bubble
   const input = e.target;
   if ($("#tag-form").querySelector(".invalid")) return; // one toast per submit
-  fieldError(input,
-    input.validity.valueMissing ? "This field can't be empty." : input.validationMessage,
+  fieldError(input, validityText(input),
     input.id === "tag" ? "Type a Steam tag, e.g. Job Simulator or Colony Sim." : "");
 }, true);
 
