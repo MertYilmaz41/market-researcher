@@ -2,7 +2,9 @@
 
 *Generated {{ date }} by steam-researcher.* Filters: >= {{ min_reviews }} reviews, {{ lo }}-{{ hi }}% positive, games only.
 Analyzed the {{ analyses|length }} highest-demand of {{ n_candidates }} candidates (out of {{ n_tag_games }} games in the tag).
-
+{% if market %}
+**Market:** {{ market }}. "Well served" = {{ well_served }}%+ positive; the gap is the share of underserved among those two groups.
+{% endif %}
 > **Proven Demand + Poor Execution = High Opportunity.** The score (0-100) is a weighted geometric mean of
 > demand (review volume), dissatisfaction (how far below 70% positive) and fixability (share of complaints a
 > small team can fix), minus points for risk flags. Review-bombed periods are removed from the rating first.

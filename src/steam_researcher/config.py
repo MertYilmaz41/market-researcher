@@ -38,6 +38,11 @@ IDEAL_REVIEWS = 500
 MIN_RATING = 5.0
 MAX_RATING = 70.0
 
+# Market view (market.py): a demand game at >= this % positive already serves its players well
+WELL_SERVED_RATING = 85
+MARKET_MIN_UNDERSERVED = 3  # fewer underserved games than this: too little to rank a tag on
+LOW_GAP = 0.30  # under 30% of rated demand games underserved: "already well served" notice
+
 # Box Method review -> sales multipliers
 BOX_LOW = 30
 BOX_MID = 45
@@ -46,6 +51,9 @@ BOX_HIGH = 100
 # Cache
 CACHE_DIR = Path.home() / ".cache" / "steam-researcher"
 CACHE_DB = CACHE_DIR / "steam_researcher.sqlite"
+# Saved runs live apart from the cache, so `sr cache clear` keeps them.
+DATA_DIR = Path.home() / ".local" / "share" / "steam-researcher"
+RUNS_DB = DATA_DIR / "runs.sqlite"
 TTL_TAG_LIST = 24 * 3600
 TTL_TAG_NAMES = 7 * 24 * 3600  # the Steam tag catalog rarely changes
 TTL_HISTOGRAM = 24 * 3600

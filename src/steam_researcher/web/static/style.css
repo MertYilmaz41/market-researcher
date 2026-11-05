@@ -205,7 +205,7 @@ li[aria-selected="true"] .check { background: var(--accent); border-color: var(-
 .search-status[hidden] { display: none; }
 .search-status-head { display: flex; justify-content: space-between; gap: var(--s3); }
 .search-status-head b { font-family: var(--font-display); font-weight: 600; }
-#search-status-count { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-2); }
+.search-status-count { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-2); }
 .map, #table-note, .table-wrap { transition: opacity .2s; }
 body.searching .map, body.searching #table-note, body.searching .table-wrap { opacity: .4; }
 
@@ -377,6 +377,53 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ---------- ranking table: scrolls inside its card, header stays ---------- */
 #table-note { flex: none; margin: calc(-1 * var(--s2)) 0 var(--s2); }
+
+/* Games | Markets: two views inside the table card */
+.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view[hidden] { display: none; }
+
+/* The whole tag at a glance, above the ranking */
+.market-strip {
+  flex: none; display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5);
+  margin-bottom: var(--s3); padding: var(--s2) var(--s3);
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.market-strip[hidden] { display: none; }
+.market-strip div { display: flex; flex-direction: column; }
+.market-strip b { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: 500; }
+.market-strip span { color: var(--muted); font-size: var(--fs-xs); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.market-strip .good b { color: var(--accent); }
+.market-strip .verdict { flex: 1 1 220px; justify-content: center; color: var(--text-2); font-size: var(--fs-sm); }
+
+/* Past runs: a list under its button in the table card head */
+.runs-wrap { position: relative; }
+.runs-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: min(380px, 85vw);
+  background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .6);
+}
+.runs-pop[hidden] { display: none; }
+.runs-pop .combo-list { max-height: min(340px, 45vh); }
+.runs-pop li { justify-content: space-between; }
+.runs-pop li.current { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.runs-pop .run-main { display: flex; flex-direction: column; min-width: 0; }
+.runs-pop .run-main b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runs-pop .run-main span { color: var(--muted); font-size: var(--fs-xs); font-family: var(--font-mono); }
+.runs-pop .run-del { flex: none; padding: 2px 8px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font-size: 16px; cursor: pointer; }
+.runs-pop .run-del:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.runs-pop .run-empty { color: var(--muted); cursor: default; }
+.runs-pop .run-empty:hover { background: none; }
+
+/* Score change since the last run with the same tags and filters */
+.delta { margin-left: 6px; font-family: var(--font-mono); font-size: var(--fs-xs); }
+.delta.up { color: var(--good); }
+.delta.down { color: var(--bad); }
+.delta.same { color: var(--muted); }
+.delta.new { padding: 1px 5px; border-radius: 99px; background: color-mix(in srgb, var(--accent-2) 18%, transparent); color: var(--accent-2); text-transform: uppercase; letter-spacing: .05em; }
+
+.markets-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); flex-wrap: wrap; }
+.markets-bar p { margin: 0; flex: 1 1 320px; }
+.markets-bar button { flex: none; }
 .table-wrap { flex: 1; min-height: 0; overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }

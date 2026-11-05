@@ -1,12 +1,14 @@
 """Markdown opportunity report."""
 
+import csv
 import datetime as dt
+import io
 import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from . import boxmethod, risk
+from . import boxmethod, config, risk
 from .models import Analysis
 
 _env = Environment(
@@ -19,6 +21,8 @@ _env = Environment(
 
 
 def money(x: float) -> str:
+    if x >= 1_000_000_000:
+        return f"${x / 1_000_000_000:.1f}B"
     if x >= 1_000_000:
         return f"${x / 1_000_000:.1f}M"
     if x >= 1_000:
@@ -77,6 +81,7 @@ def render(
     hi: float,
     not_games: list[str],
     unlisted: list[str],
+    market: str = "",  # market.summary() of the whole tag
 ) -> str:
     _env.filters["md"] = md
     template = _env.get_template("report.md.j2")
@@ -92,6 +97,8 @@ def render(
         hi=f"{hi:g}",
         not_games=not_games,
         unlisted=unlisted,
+        market=market,
+        well_served=config.WELL_SERVED_RATING,
         money=money,
         pct=pct,
         box=box,
@@ -101,6 +108,25 @@ def render(
         recent_text=recent_text,
     )
     return re.sub(r"\n{3,}", "\n\n", text)  # template whitespace tidy-up
+
+
+def ranking_csv(ranked: list[Analysis], changes: dict[int, float | None] | None = None) -> str:
+    """The ranking as CSV for spreadsheets. changes: appid -> score change (None = new), from runs.changes."""
+    changes = changes or {}
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\n")
+    w.writerow(["rank", "appid", "name", "score", "score_change", "reviews", "pct_positive",
+                "reviews_last_12_months", "est_gross_x45", "top_complaint", "risks", "store_url"])
+    for i, a in enumerate(ranked, 1):
+        change = changes.get(a.game.appid, "")
+        recent, total, _ = risk.recent_activity(a.histogram)
+        w.writerow([
+            i, a.game.appid, a.game.name, round(a.opportunity.score),
+            "new" if a.game.appid in changes and change is None else ("" if change == "" else round(change)),
+            a.game.reviews, round(a.game.rating), recent if total else "",
+            round(box(a).gross_mid) if a.game.base_price else "", top_complaint(a), risk_codes(a), a.game.store_url,
+        ])
+    return out.getvalue()
 
 
 def slug(text: str) -> str:

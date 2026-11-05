@@ -85,17 +85,32 @@
     <section class="card table-card">
       <div class="card-head">
         <h2 id="table-title">Ranking</h2>
-        <a id="download" class="ghost button" hidden>Download report (.md)</a>
+        <div class="map-head-right">
+          <div class="runs-wrap">
+            <button type="button" id="runs-toggle" class="ghost" aria-expanded="false" aria-controls="runs-pop">Past runs</button>
+            <div id="runs-pop" class="runs-pop" hidden>
+              <ul id="runs-list" class="combo-list" aria-label="Saved runs"></ul>
+            </div>
+          </div>
+          <a id="download" class="ghost button" hidden>Report (.md)</a>
+          <a id="download-csv" class="ghost button" hidden>CSV</a>
+          <div id="table-view" class="seg" role="group" aria-label="Table view">
+            <button type="button" data-view="games" aria-pressed="true">Games</button>
+            <button type="button" data-view="markets" aria-pressed="false">Markets</button>
+          </div>
+        </div>
       </div>
+      <div id="games-view" class="view">
       <p id="table-note" class="muted"></p>
       <div id="search-status" class="search-status" role="status" hidden>
         <div class="search-status-head">
-          <b id="search-status-title"></b>
-          <span id="search-status-count"></span>
+          <b class="search-status-title"></b>
+          <span class="search-status-count"></span>
         </div>
-        <div class="progress-bar"><span id="search-status-fill"></span></div>
-        <span id="search-status-text" class="muted"></span>
+        <div class="progress-bar"><span class="search-status-fill"></span></div>
+        <span class="search-status-text muted"></span>
       </div>
+      <div id="market-strip" class="market-strip" hidden></div>
       <div class="table-wrap">
         <table id="ranking">
           <thead>
@@ -113,6 +128,40 @@
           </thead>
           <tbody></tbody>
         </table>
+      </div>
+      </div>
+
+      <div id="markets-view" class="view" hidden>
+        <div class="markets-bar">
+          <p id="markets-note" class="muted">Which audiences are underserved? Rank every Steam tag by its games with demand that players rate poorly. Uses the Filters; the first build takes ~7 minutes, then ~1 day from the cache.</p>
+          <button type="button" id="markets-run" class="primary">Build market ranking</button>
+        </div>
+        <div id="markets-status" class="search-status" role="status" hidden>
+          <div class="search-status-head">
+            <b class="search-status-title"></b>
+            <span class="search-status-count"></span>
+          </div>
+          <div class="progress-bar"><span class="search-status-fill"></span></div>
+          <span class="search-status-text muted"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="markets">
+            <thead>
+              <tr>
+                <th data-key="rank" class="num">#</th>
+                <th data-key="tag">Tag</th>
+                <th data-key="n_games" class="num">Games</th>
+                <th data-key="n_demand" class="num" title="Games with at least the minimum reviews">With demand</th>
+                <th data-key="n_underserved" class="num" title="Games with demand inside the % positive range">Underserved</th>
+                <th data-key="n_well_served" class="num" id="markets-well-head">Well served</th>
+                <th data-key="gap" class="num" title="Underserved / (underserved + well served)">Gap</th>
+                <th data-key="underserved_gross" class="num" title="Box Method (x45) gross of the underserved games">Underserved $</th>
+                <th data-key="median_rating" class="num" title="% positive of the median game with demand">Median % pos</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>

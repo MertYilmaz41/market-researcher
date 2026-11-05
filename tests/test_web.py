@@ -6,9 +6,20 @@ from fastapi.testclient import TestClient
 from steam_researcher import notices, pipeline
 from steam_researcher.models import HistPoint
 from steam_researcher.pipeline import TagResult
+from steam_researcher.runs import RunStore
+from steam_researcher.web import server
 from steam_researcher.web.server import app
 
 from test_m4 import analysis, flag
+
+
+@pytest.fixture(autouse=True)
+def run_store(tmp_path, monkeypatch):
+    """Saved runs go to a temp DB, never the user's real one; jobs start from scratch."""
+    store = RunStore(tmp_path / "runs.sqlite")
+    monkeypatch.setattr(server, "_runs", store)
+    monkeypatch.setattr(server, "_jobs", {})
+    return store
 
 
 @pytest.fixture
@@ -169,3 +180,104 @@ def test_tags_endpoint(client, monkeypatch):
     monkeypatch.setattr(server.steam_store, "tag_names", down)
     res = client.get("/api/tags")
     assert res.status_code == 502 and res.json()["notice"]["title"] == "Unexpected answer from api.steampowered.com"
+
+
+def test_market_run(client, monkeypatch):
+    from steam_researcher.market import MarketStats, TagMarket
+
+    stats = MarketStats(n_games=40, n_demand=10, n_underserved=4, n_well_served=2, median_rating=66,
+                        underserved_gross=1e6, gap=4 / 6)
+
+    def fake(http, min_reviews, lo, hi, step):
+        step("Reading tag Hot", 1, 2)
+        return pipeline.MarketsResult(rows=[TagMarket(tag="Hot", stats=stats)], failed=[("Broken", "down")],
+                                      skipped=["Incremental"])
+
+    monkeypatch.setattr(pipeline, "run_markets", fake)
+    run_id = client.post("/api/market-runs", json={"min_reviews": 200}).json()["id"]
+    for _ in range(100):
+        job = client.get(f"/api/market-runs/{run_id}").json()
+        if job["status"] != "running":
+            break
+        time.sleep(0.02)
+    assert job["status"] == "done", job
+    res = job["result"]
+    assert res["rows"][0]["tag"] == "Hot" and res["rows"][0]["n_underserved"] == 4
+    assert res["skipped"] == ["Incremental"] and res["failed"][0]["tag"] == "Broken"
+    assert res["min_reviews"] == 200
+    assert client.get(f"/api/tag-runs/{run_id}").status_code == 404  # not a tag run
+
+
+def test_tag_run_includes_market_and_recent_reviews(client, monkeypatch):
+    from steam_researcher.market import market_stats
+
+    def fake_run_tag(http, tag, *args):
+        r = fake_result()
+        r.market = market_stats([r.analyses[0].game], 100, 5, 70)
+        return r
+
+    monkeypatch.setattr(pipeline, "run_tag", fake_run_tag)
+    res = wait(client, client.post("/api/tag-runs", json={"tags": ["X"]}).json()["id"])["result"]
+    assert res["market"]["n_games"] == 1 and res["well_served"] == 85
+    best = res["games"][0]
+    assert best["recent_reviews"] == 0 and best["recent_share"] == 0  # its only review month is old
+    assert res["games"][1]["recent_share"] is None  # no histogram
+
+
+# --- saved runs ---------------------------------------------------------------------------------
+
+def test_finished_run_is_saved_and_survives_a_restart(client, monkeypatch, run_store):
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    wait(client, client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"])
+    runs = client.get("/api/runs").json()["runs"]
+    assert [(r["kind"], r["label"], r["n"]) for r in runs] == [("tag", "Job Simulator", 2)]
+    run_id = runs[0]["id"]
+
+    monkeypatch.setattr(server, "_jobs", {})  # "restart": only the saved copy is left
+    job = client.get(f"/api/tag-runs/{run_id}").json()
+    assert job["status"] == "done" and [g["game"]["name"] for g in job["result"]["games"]] == ["Best Sim", "Other"]
+    assert client.get(f"/api/tag-runs/{run_id}/report.md").status_code == 200
+    assert client.get(f"/api/market-runs/{run_id}").status_code == 404  # wrong kind
+
+    assert client.delete(f"/api/runs/{run_id}").status_code == 200
+    assert client.get("/api/runs").json()["runs"] == []
+    assert client.get(f"/api/tag-runs/{run_id}").status_code == 404
+    assert client.delete(f"/api/runs/{run_id}").status_code == 404
+
+
+def test_rerun_shows_score_changes(client, monkeypatch):
+    scores = iter([{1: 60, 2: 20}, {1: 55, 2: 20, 4: 30}])
+
+    def fake_run_tag(http, tags, *args):
+        s = next(scores)
+        return TagResult(n_tag_games=9, candidates=[], analyses=[analysis(v, f"G{k}", appid=k) for k, v in s.items()])
+
+    monkeypatch.setattr(pipeline, "run_tag", fake_run_tag)
+    first = wait(client, client.post("/api/tag-runs", json={"tags": ["A", "B"]}).json()["id"])["result"]
+    assert first["compared"] is False and "score_change" not in first["games"][0]
+    time.sleep(0.01)
+    second = wait(client, client.post("/api/tag-runs", json={"tags": ["b", "A"]}).json()["id"])["result"]
+    by_id = {g["game"]["appid"]: g for g in second["games"]}
+    assert second["compared"] is True
+    assert by_id[1]["score_change"] == -5 and by_id[1]["new"] is False
+    assert by_id[2]["score_change"] == 0
+    assert by_id[4]["new"] is True and by_id[4]["score_change"] is None
+
+
+def test_different_filters_are_not_compared(client, monkeypatch):
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    wait(client, client.post("/api/tag-runs", json={"tags": ["A"]}).json()["id"])
+    other = wait(client, client.post("/api/tag-runs", json={"tags": ["A"], "min_reviews": 500}).json()["id"])
+    assert other["result"]["compared"] is False
+
+
+def test_ranking_csv(client, monkeypatch):
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    run_id = client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"]
+    wait(client, run_id)
+    res = client.get(f"/api/tag-runs/{run_id}/ranking.csv")
+    assert res.status_code == 200 and 'filename="job-simulator.csv"' in res.headers["content-disposition"]
+    lines = res.text.splitlines()
+    assert lines[0].startswith("rank,appid,name,score,score_change,reviews,pct_positive,reviews_last_12_months")
+    assert lines[1].startswith("1,1,Best Sim,60,,1000,40,0,")  # its only histogram month is long ago
+    assert len(lines) == 3  # the DLC is excluded, like in the ranking

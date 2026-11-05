@@ -89,6 +89,15 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
             hint=f"Try a narrower tag, e.g. {TAG_EXAMPLES}.",
         ))
 
+    m = result.market
+    if m and m.n_underserved + m.n_well_served >= 5 and m.gap < config.LOW_GAP:
+        out.append(Notice(
+            level="info", title="Audience already well served",
+            message=f"Only {m.n_underserved:,} of the {m.n_underserved + m.n_well_served:,} rated games with demand "
+                    f"are underserved; {m.n_well_served:,} are {config.WELL_SERVED_RATING}%+ positive.",
+            hint="Players here already have good games. Compare tags in the Markets view (sr markets).",
+        ))
+
     if n_cand == 0:
         if result.n_enough_reviews == 0:
             out.append(Notice(

@@ -1,3 +1,4 @@
+import datetime as dt
 import functools
 import os
 from pathlib import Path
@@ -8,12 +9,12 @@ from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
 
-from . import boxmethod, config, notices
+from . import boxmethod, config, market, notices, runs
 from .cache import Cache
 from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
 from .models import Analysis, MiningResult
-from .pipeline import TagResult, UnknownTag, analyze_game, run_tag, tag_games, tag_label, verify_games
+from .pipeline import TagResult, UnknownTag, analyze_game, run_markets, run_tag, tag_games, tag_label, verify_games
 from .report import money, rank, recent_text, render, slug
 
 app = typer.Typer(help="Find underserved Steam audiences (CodeMonkey's method).", no_args_is_help=True)
@@ -107,10 +108,12 @@ def discover(
     _print_notices(notices.for_filters(min_reviews, lo, hi, 0, 0))
     http = HttpClient(use_cache=not no_cache)
     games = _tag_games(http, tag, label)
+    stats = market.market_stats(games, min_reviews, lo, hi)
+    console.print(f"[bold]Market:[/] {market.summary(stats)}")
     candidates = filter_candidates(games, min_reviews, lo, hi)
     if not candidates:
         empty = TagResult(n_tag_games=len(games), candidates=[],
-                          n_enough_reviews=sum(g.reviews >= min_reviews for g in games))
+                          n_enough_reviews=sum(g.reviews >= min_reviews for g in games), market=stats)
         _print_notices(notices.for_tag_result(label, min_reviews, lo, hi, top, empty))
         raise typer.Exit(1)
 
@@ -208,6 +211,7 @@ def report(
     text = render(
         tag=label, analyses=analyses, n_candidates=len(result.candidates), n_tag_games=result.n_tag_games,
         min_reviews=min_reviews, lo=lo, hi=hi, not_games=result.not_games, unlisted=result.unlisted,
+        market=market.summary(result.market) if result.market else "",
     )
     out = out or Path("reports") / f"{slug(label)}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -228,8 +232,65 @@ def report(
             f"{top.label} ({top.share:.0%})" if top else "-",
         )
     console.print(table)
-    console.print(f"Report written to [bold]{out}[/]")
+    if result.market:
+        console.print(f"[bold]Market:[/] {market.summary(result.market)}")
+    params = dict(tags=tag, min_reviews=min_reviews, lo=lo, hi=hi, max_games=max_games, reviews=reviews)
+    runs.RunStore().save("tag", label, params, result)
+    console.print(f"Report written to [bold]{out}[/] (the run is also saved: sr runs, or Past runs in sr ui)")
     _print_notices(post)
+
+
+@app.command()
+@_guarded
+def markets(
+    min_reviews: int = typer.Option(config.MIN_REVIEWS, min=1, help="Demand filter"),
+    rating: str = RATING_OPT,
+    top: int = typer.Option(30, min=1, help="Max rows to show"),
+    no_cache: bool = NO_CACHE_OPT,
+):
+    """Rank every Steam tag by how underserved its audience is (first run ~7 min, then cached)."""
+    lo, hi = _rating_range(rating)
+    _print_notices(notices.for_filters(min_reviews, lo, hi, 0, 0))
+    http = HttpClient(use_cache=not no_cache)
+    with Progress(console=console, transient=True) as progress:
+        task = progress.add_task("Reading the Steam tag list", total=None)
+        result = run_markets(http, min_reviews, lo, hi,
+                             lambda msg, done, total: progress.update(task, description=msg[:50], completed=done, total=total))
+
+    table = Table(title=f"Markets: tags by underserved games (>={min_reviews} reviews, {lo:g}-{hi:g}% positive)")
+    for col in ["#", "Tag", "Games", "With demand", "Underserved", f"Well served ({config.WELL_SERVED_RATING}%+)",
+                "Gap", "Underserved gross"]:
+        table.add_column(col, justify="left" if col == "Tag" else "right")
+    for i, r in enumerate(result.rows[:top], 1):
+        m = r.stats
+        table.add_row(str(i), r.tag, f"{m.n_games:,}", f"{m.n_demand:,}", f"[bold]{m.n_underserved:,}[/]",
+                      f"{m.n_well_served:,}", f"{m.gap:.0%}", money(m.underserved_gross))
+    console.print(table)
+    console.print("[dim]Gap = underserved / (underserved + well served). High gap + many underserved games = "
+                  "an audience that good games don't reach yet.[/]")
+    if result.skipped:
+        console.print(f"[dim]Skipped {len(result.skipped)} tags SteamSpy can't search (search them one by one "
+                      "with sr discover).[/]")
+    for tag, reason in result.failed:
+        console.print(f"[yellow]Could not read {tag}:[/] {reason}")
+    console.print("[dim]Next: sr report --tag <Tag>[/]")
+
+
+@app.command("runs")
+@_guarded
+def list_runs(limit: int = typer.Option(20, min=1, help="Max rows to show")):
+    """Saved runs from sr report and the web UI (open them in sr ui under Past runs)."""
+    items = runs.RunStore().list(limit)
+    if not items:
+        console.print("No saved runs yet. Run sr report --tag ..., or search in sr ui.")
+        return
+    table = Table(title="Saved runs")
+    for col in ["Date", "Kind", "Search", "Rows", "ID"]:
+        table.add_column(col, justify="right" if col == "Rows" else "left")
+    for r in items:
+        when = dt.datetime.fromtimestamp(r["created"]).strftime("%Y-%m-%d %H:%M")
+        table.add_row(when, "markets" if r["kind"] == "market" else "tag", r["label"], str(r["n"]), r["id"][:8])
+    console.print(table)
 
 
 def _print_analysis(a: Analysis) -> None:

@@ -7,11 +7,12 @@ from dataclasses import dataclass, field
 import httpx
 
 from . import config, risk, scoring
+from .market import MarketStats, TagMarket, market_stats
 from .http import HttpClient, RetryableStatus
 from .mining import mine
 from .discover import filter_candidates
 from .models import Analysis, Game
-from .notices import friendly_error
+from .notices import BROAD_TAG_GAMES, friendly_error
 from .sources import steam_search, steam_store, steamspy
 
 
@@ -130,6 +131,7 @@ class TagResult:
     unlisted: list[str] = field(default_factory=list)
     n_enough_reviews: int = 0  # games with >= min_reviews (explains "0 candidates")
     failed: list[tuple[str, str]] = field(default_factory=list)  # (game name, friendly reason)
+    market: MarketStats | None = None  # the whole tag, not just the analyzed games
 
 
 def run_tag(
@@ -154,6 +156,7 @@ def run_tag(
         n_tag_games=len(games),
         candidates=candidates,
         n_enough_reviews=sum(g.reviews >= min_reviews for g in games),
+        market=market_stats(games, min_reviews, lo, hi),
     )
     by_demand = sorted(candidates, key=lambda g: -g.reviews)
     n_check = min(max_games, len(by_demand))
@@ -186,3 +189,47 @@ def run_tag(
         if a is not None:
             result.analyses.append(a)
     return result
+
+
+@dataclass
+class MarketsResult:
+    rows: list[TagMarket]  # most underserved first
+    failed: list[tuple[str, str]] = field(default_factory=list)  # (tag, friendly reason)
+    skipped: list[str] = field(default_factory=list)  # tags SteamSpy can't search (too slow to sweep)
+
+
+def run_markets(
+    http: HttpClient,
+    min_reviews: int,
+    lo: float,
+    hi: float,
+    on_step: Callable[[str, int, int], None] | None = None,
+) -> MarketsResult:
+    """Market stats for every Steam tag SteamSpy can search: one request per tag (~1/s, cached 24 h).
+
+    Tags only Steam's store search can list take minutes each, so they are skipped here.
+    """
+    names = steam_store.tag_names(http)
+    tags = [t for t in names if t.casefold() not in _UNSEARCHABLE]
+    result = MarketsResult(rows=[], skipped=[t for t in names if t.casefold() in _UNSEARCHABLE])
+    for i, tag in enumerate(tags):
+        if on_step:
+            on_step(f"Reading tag {tag}", i, len(tags))
+        try:
+            games = steamspy.games_by_tag(http, tag)
+        except Exception as e:  # one broken tag must not sink the whole sweep
+            result.failed.append((tag, friendly_error(e).message))
+            continue
+        if games:
+            result.rows.append(TagMarket(tag=tag, stats=market_stats(games, min_reviews, lo, hi)))
+    result.rows.sort(key=market_rank)
+    return result
+
+
+def market_rank(row: TagMarket) -> tuple:
+    """Specific tags with several underserved games first, by gap. Broad tags (Indie, Action...) have
+    the most underserved games only because they are huge, and a tag with 1-2 such games proves little:
+    both go last."""
+    m = row.stats
+    tier = 2 if m.n_underserved < config.MARKET_MIN_UNDERSERVED else 1 if m.n_games > BROAD_TAG_GAMES else 0
+    return tier, -m.gap, -m.n_underserved

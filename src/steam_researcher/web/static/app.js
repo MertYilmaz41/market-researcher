@@ -20,7 +20,7 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-const money = (x) => (x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Math.round(x)}`);
+const money = (x) => (x >= 1e9 ? `$${(x / 1e9).toFixed(1)}B` : x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Math.round(x)}`);
 const pct = (x) => `${Math.round(x * 100)}%`;
 
 // ---------- toasts: every message the user should see goes through here ----------
@@ -413,15 +413,18 @@ $("#tag-form").addEventListener("submit", async (e) => {
   }
 });
 
-// The banner over the (faded) previous results while a search runs; tag null hides it.
+// A progress banner (over the faded previous results while a search runs); title null hides it.
+function statusBox(box, title, frac, count, message) {
+  box.hidden = title == null;
+  if (title == null) return;
+  box.querySelector(".search-status-title").textContent = title;
+  box.querySelector(".search-status-count").textContent = count;
+  box.querySelector(".search-status-fill").style.width = `${Math.round(frac * 100)}%`;
+  box.querySelector(".search-status-text").textContent = message || "";
+}
+
 function searchStatus(tag, frac, count, message) {
-  const box = $("#search-status");
-  box.hidden = tag == null;
-  if (tag == null) return;
-  $("#search-status-title").textContent = `Searching "${tag}"...`;
-  $("#search-status-count").textContent = count;
-  $("#search-status-fill").style.width = `${Math.round(frac * 100)}%`;
-  $("#search-status-text").textContent = message || "";
+  statusBox($("#search-status"), tag == null ? null : `Searching "${tag}"...`, frac, count, message);
 }
 
 async function poll(id, tag) {
@@ -491,15 +494,18 @@ $("#game-form").addEventListener("submit", async (e) => {
 function showResult(result, id) {
   state.games = result.games.map((g, i) => ({ ...g, rank: i + 1 }));
   state.sort = { key: "rank", asc: true };
-  $("#table-title").textContent = `${result.tag}: opportunity ranking`;
+  tableTitles.games = `${result.tag}: opportunity ranking`;
   const notes = [
     `${result.n_candidates} of ${result.n_tag_games} games have ≥ ${result.min_reviews} reviews and ${result.lo}-${result.hi}% positive; analyzed the ${state.games.length} with most reviews.`,
   ];
   if (result.not_games.length) notes.push(`Excluded non-games: ${result.not_games.join(", ")}.`);
+  if (result.compared) notes.push("▲/▼ = score change since your previous run with these tags and filters.");
   $("#table-note").textContent = notes.join(" ");
-  const dl = $("#download");
-  dl.hidden = !state.games.length;
-  dl.href = `/api/tag-runs/${id}/report.md`;
+  renderMarketStrip(result.market, result.well_served);
+  state.runId = id;
+  $("#download").href = `/api/tag-runs/${id}/report.md`;
+  $("#download-csv").href = `/api/tag-runs/${id}/ranking.csv`;
+  setTableView("games");
 
   map.setGames(state.games);
   renderTable();
@@ -516,6 +522,226 @@ function showResult(result, id) {
   }
 }
 
+// The whole tag, not just the analyzed games: is this audience underserved or already well served?
+function renderMarketStrip(m, wellServed) {
+  const strip = $("#market-strip");
+  strip.hidden = !m;
+  if (!m) return;
+  const stat = (value, label, cls = "", title = "") => el("div", { class: cls, title }, el("b", {}, value), el("span", {}, label));
+  const rated = m.n_underserved + m.n_well_served;
+  const verdict = rated < 5 ? "Too few games with demand to judge this market."
+    : m.gap >= 0.5 ? "Many disappointed players and few good games: an underserved audience."
+    : m.gap >= 0.3 ? "A mixed market: some good games already serve these players."
+    : "Mostly well served: players here already have good games.";
+  strip.replaceChildren(
+    stat(m.n_games.toLocaleString("en-US"), "Games in tag"),
+    stat(m.n_demand.toLocaleString("en-US"), "With demand"),
+    stat(m.n_underserved.toLocaleString("en-US"), "Underserved", "good"),
+    stat(m.n_well_served.toLocaleString("en-US"), `Well served (${wellServed}%+)`),
+    stat(pct(m.gap), "Gap", m.gap >= 0.5 ? "good" : "", "Underserved / (underserved + well served)"),
+    stat(money(m.underserved_gross), "Underserved $", "", "Box Method (x45) gross of the underserved games"),
+    el("div", { class: "verdict" }, verdict),
+  );
+}
+
+// ---------- Games | Markets ----------
+const tableTitles = { games: "Ranking", markets: "Markets: which audiences are underserved?" };
+
+function setTableView(view) {
+  for (const b of document.querySelectorAll("#table-view button")) b.setAttribute("aria-pressed", String(b.dataset.view === view));
+  $("#games-view").hidden = view !== "games";
+  $("#markets-view").hidden = view !== "markets";
+  $("#table-title").textContent = tableTitles[view];
+  for (const a of [$("#download"), $("#download-csv")]) a.hidden = view !== "games" || !state.games.length;
+}
+$("#table-view").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-view]");
+  if (b) setTableView(b.dataset.view);
+});
+
+const markets = { rows: [], sort: { key: "rank", asc: true }, running: false };
+
+$("#markets-run").addEventListener("click", async () => {
+  if (markets.running) return stillRunning("The market ranking");
+  const body = { min_reviews: +$("#min-reviews").value, lo: +$("#lo").value, hi: +$("#hi").value };
+  if (body.lo > body.hi) {
+    $("#lo").classList.add("invalid");
+    return fieldError($("#hi"), `'% positive from' (${body.lo}) is higher than '% positive to' (${body.hi}).`,
+      "Swap the two values, e.g. 5 to 70.");
+  }
+  const box = $("#markets-status"), button = $("#markets-run");
+  markets.running = true;
+  setButtonBusy(button, true, "Building...");
+  statusBox(box, "Building the market ranking...", 0, "", "Reading the Steam tag list");
+  try {
+    const res = await fetch("/api/market-runs", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!res.ok) throw await apiError(res);
+    const { id, notices } = await res.json();
+    notifyAll(notices);
+    for (;;) {
+      const r = await fetch(`/api/market-runs/${id}`);
+      if (r.status === 404) {
+        throw new ApiError({ level: "error", title: "The market ranking was interrupted",
+          message: "The server was restarted, so this run was lost.", hint: "Press Build market ranking again." });
+      }
+      if (!r.ok) throw await apiError(r);
+      const job = await r.json();
+      if (job.status === "error") throw new ApiError(job.error);
+      if (job.status === "done") { showMarkets(job.result); break; }
+      statusBox(box, "Building the market ranking...", job.total ? job.done / job.total : 0,
+        job.total ? `${job.done} / ${job.total} tags` : "", job.message);
+      await new Promise((r2) => setTimeout(r2, 1000));
+    }
+  } catch (err) {
+    notifyError(err, "Market ranking failed");
+  } finally {
+    markets.running = false;
+    setButtonBusy(button, false, "Rebuild market ranking");
+    statusBox(box, null);
+  }
+});
+
+function showMarkets(result) {
+  markets.rows = result.rows.map((r, i) => ({ ...r, rank: i + 1 }));
+  markets.sort = { key: "rank", asc: true };
+  $("#markets-well-head").textContent = `Well served (${result.well_served}%+)`;
+  const notes = [`${markets.rows.length} tags, games with ≥ ${result.min_reviews} reviews; underserved = ${result.lo}-${result.hi}% positive. Ranked by gap; broad tags (1,000+ games) and tags with under 3 underserved games come last. Click a tag to search it.`];
+  if (result.skipped.length) notes.push(`${result.skipped.length} tags SteamSpy can't search are left out (search them one by one).`);
+  $("#markets-note").textContent = notes.join(" ");
+  if (result.failed.length) {
+    toast("warning", `${result.failed.length} tags couldn't be read`, result.failed.slice(0, 5).map((f) => f.tag).join(", "),
+      "They are missing from the ranking. Rebuild later to retry them.");
+  }
+  renderMarkets();
+}
+
+function renderMarkets() {
+  const { key, asc } = markets.sort;
+  const val = (r) => (key === "tag" ? r.tag.toLowerCase() : r[key]);
+  const rows = [...markets.rows].sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * (asc ? 1 : -1));
+  for (const th of document.querySelectorAll("#markets th")) {
+    th.classList.toggle("sorted", th.dataset.key === key);
+    th.classList.toggle("asc", th.dataset.key === key && asc);
+  }
+  const n = (x) => x.toLocaleString("en-US");
+  $("#markets tbody").replaceChildren(...rows.map((r) =>
+    el("tr", { onclick: () => searchTag(r.tag), title: `Search ${r.tag}` },
+      el("td", { class: "num" }, r.rank),
+      el("td", {}, r.tag),
+      el("td", { class: "num" }, n(r.n_games)),
+      el("td", { class: "num" }, n(r.n_demand)),
+      el("td", { class: "num" }, el("b", {}, n(r.n_underserved))),
+      el("td", { class: "num" }, n(r.n_well_served)),
+      el("td", { class: "num" }, pct(r.gap)),
+      el("td", { class: "num" }, money(r.underserved_gross)),
+      el("td", { class: "num" }, r.n_demand ? `${Math.round(r.median_rating)}%` : "-"),
+    )));
+}
+
+$("#markets thead").addEventListener("click", (e) => {
+  const key = e.target.closest("th")?.dataset.key;
+  if (!key) return;
+  const s = markets.sort;
+  markets.sort = { key, asc: s.key === key ? !s.asc : key === "tag" || key === "rank" };
+  renderMarkets();
+});
+
+// From the Markets table: search that one tag as a normal games search.
+function searchTag(tag) {
+  if (state.searching) return stillRunning("A search");
+  if (tagPicker.freeText) tagInput.value = tag;
+  else { tagPicker.picked = [tag]; renderChips(); }
+  setTableView("games");
+  $("#tag-form").requestSubmit();
+}
+
+// ---------- Past runs: every finished search and market ranking is saved on the server ----------
+const runsPop = $("#runs-pop");
+
+function closeRuns() {
+  runsPop.hidden = true;
+  $("#runs-toggle").setAttribute("aria-expanded", "false");
+}
+
+async function openRuns() {
+  runsPop.hidden = false;
+  $("#runs-toggle").setAttribute("aria-expanded", "true");
+  const list = $("#runs-list");
+  list.replaceChildren(el("li", { class: "run-empty" }, "Loading..."));
+  try {
+    const res = await fetch("/api/runs");
+    if (!res.ok) throw await apiError(res);
+    const { runs } = await res.json();
+    if (!runs.length) {
+      list.replaceChildren(el("li", { class: "run-empty" }, "No saved runs yet. Finished searches appear here."));
+      return;
+    }
+    const when = (t) => new Date(t * 1000).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+    list.replaceChildren(...runs.map((r) => {
+      const item = el("li", { class: r.id === state.runId ? "current" : "", onclick: () => openRun(r) },
+        el("div", { class: "run-main" },
+          el("b", {}, r.kind === "market" ? "Markets: all tags" : r.label),
+          el("span", {}, `${when(r.created)} · ${r.n} ${r.kind === "market" ? "tags" : r.n === 1 ? "game" : "games"}`)),
+        el("button", { type: "button", class: "run-del", title: "Delete this run", "aria-label": `Delete run ${r.label}`,
+          onclick: (e) => { e.stopPropagation(); deleteRun(r, item); } }, "×"));
+      return item;
+    }));
+  } catch (err) {
+    closeRuns();
+    notifyError(err, "Couldn't load past runs");
+  }
+}
+
+async function deleteRun(r, item) {
+  try {
+    const res = await fetch(`/api/runs/${r.id}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 404) throw await apiError(res);
+    item.remove();
+    if (!$("#runs-list").children.length) {
+      $("#runs-list").replaceChildren(el("li", { class: "run-empty" }, "No saved runs yet. Finished searches appear here."));
+    }
+  } catch (err) {
+    notifyError(err, "Couldn't delete the run");
+  }
+}
+
+async function openRun(r) {
+  if (r.kind === "tag" && state.searching) return stillRunning("A search");
+  closeRuns();
+  try {
+    const res = await fetch(`/api/${r.kind === "market" ? "market" : "tag"}-runs/${r.id}`);
+    if (!res.ok) throw await apiError(res);
+    const job = await res.json();
+    if (job.status !== "done") throw new ApiError({ level: "info", title: "Still running", message: "This run hasn't finished yet." });
+    if (r.kind === "market") {
+      showMarkets(job.result);
+      setTableView("markets");
+      return;
+    }
+    const res2 = job.result;
+    // Put its tags and filters back, so "Find opportunities" reruns exactly this search.
+    if (tagPicker.freeText) tagInput.value = res2.tags.join(", ");
+    else { tagPicker.picked = [...res2.tags]; renderChips(); }
+    $("#min-reviews").value = res2.min_reviews;
+    $("#lo").value = res2.lo;
+    $("#hi").value = res2.hi;
+    state.keepPanel = false;
+    showResult(res2, r.id);
+  } catch (err) {
+    notifyError(err, "Couldn't open the run");
+  }
+}
+
+$("#runs-toggle").addEventListener("click", () => (runsPop.hidden ? openRuns() : closeRuns()));
+document.addEventListener("click", (e) => {
+  if (!runsPop.hidden && !e.target.closest(".runs-wrap, #toasts")) closeRuns();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !runsPop.hidden) closeRuns();
+});
+
 const sortValue = {
   rank: (g) => g.rank,
   name: (g) => g.game.name.toLowerCase(),
@@ -529,6 +755,15 @@ const sortValue = {
 };
 
 const recentText = (g) => g.recent_share == null ? "-" : `${g.recent_reviews.toLocaleString("en-US")} (${pct(g.recent_share)})`;
+
+// Score change since the previous run with the same tags and filters (only present when one exists).
+function delta(g) {
+  if (g.new) return el("span", { class: "delta new", title: "Not in your previous run with these tags" }, "new");
+  if (g.score_change == null) return null;
+  const d = Math.round(g.score_change);
+  return el("span", { class: `delta ${d > 0 ? "up" : d < 0 ? "down" : "same"}`, title: "Change since your previous run with these tags and filters" },
+    d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "=");
+}
 
 const riskCodes = (g) => g.flags.filter((f) => f.severity !== "info").map((f) => f.code);
 
@@ -550,7 +785,7 @@ function renderTable() {
       return el("tr", { "data-appid": g.game.appid, onclick: () => selectGame(g.game.appid) },
         el("td", { class: "num" }, g.rank),
         el("td", {}, g.game.name),
-        el("td", { class: "num" }, el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}` }, Math.round(o.score))),
+        el("td", { class: "num" }, el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}` }, Math.round(o.score)), delta(g)),
         el("td", { class: "num" }, g.reviews.toLocaleString("en-US")),
         el("td", { class: "num" }, `${Math.round(g.rating)}%${adj}`),
         el("td", { class: "num" }, recentText(g)),

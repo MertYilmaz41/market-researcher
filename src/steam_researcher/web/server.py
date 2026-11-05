@@ -12,10 +12,10 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
-from .. import boxmethod, config, notices, pipeline, risk
+from .. import boxmethod, config, market, notices, pipeline, risk, runs
 from ..http import HttpClient
 from ..models import Analysis
-from ..report import rank, render, slug
+from ..report import rank, ranking_csv, render, slug
 from ..sources import steam_store
 
 STATIC = Path(__file__).parent / "static"
@@ -33,19 +33,22 @@ FIELD_LABELS = {
 }
 
 
-class TagRunRequest(BaseModel):
-    tags: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(min_length=1, max_length=config.MAX_TAGS)
+class MarketRunRequest(BaseModel):
     min_reviews: int = Field(config.MIN_REVIEWS, ge=1)
     lo: float = Field(config.MIN_RATING, ge=0, le=100)
     hi: float = Field(config.MAX_RATING, ge=0, le=100)
-    max_games: int = Field(15, ge=1, le=50)
-    reviews: int = Field(200, ge=10, le=1000)
 
     @model_validator(mode="after")
     def _range(self):
         if self.lo > self.hi:
             raise ValueError("'% positive from' must not be higher than '% positive to'")
         return self
+
+
+class TagRunRequest(MarketRunRequest):
+    tags: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(min_length=1, max_length=config.MAX_TAGS)
+    max_games: int = Field(15, ge=1, le=50)
+    reviews: int = Field(200, ge=10, le=1000)
 
 
 @app.exception_handler(RequestValidationError)
@@ -63,16 +66,18 @@ async def _readable_validation(request: Request, exc: RequestValidationError) ->
 
 @dataclass
 class Job:
-    request: TagRunRequest
+    kind: str  # "tag" | "market"
+    request: TagRunRequest | MarketRunRequest
     status: str = "running"  # running | done | error
     message: str = "Starting..."
     done: int = 0
     total: int = 0
-    result: pipeline.TagResult | None = None
+    result: pipeline.TagResult | pipeline.MarketsResult | None = None
     error: dict | None = None  # a Notice dict
 
 
 _jobs: dict[str, Job] = {}
+_runs = runs.RunStore()
 _lock = threading.Lock()
 
 
@@ -106,7 +111,13 @@ def _run(job_id: str) -> None:
 
     try:
         http = HttpClient()
-        result = pipeline.run_tag(http, r.tags, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
+        if job.kind == "market":
+            result = pipeline.run_markets(http, r.min_reviews, r.lo, r.hi, step)
+        else:
+            result = pipeline.run_tag(http, r.tags, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
+        # Saved before it shows as done, so the first result the UI sees can already compare.
+        label = pipeline.tag_label(r.tags) if job.kind == "tag" else "All tags"
+        _runs.save(job.kind, label, r.model_dump(), result, run_id=job_id)
         with _lock:
             job.status, job.result = "done", result
     except pipeline.UnknownTag as e:
@@ -118,10 +129,22 @@ def _run(job_id: str) -> None:
             job.status, job.error = "error", notices.friendly_error(e).model_dump()
 
 
-def _job(job_id: str) -> Job:
+REQUESTS = {"tag": TagRunRequest, "market": MarketRunRequest}
+
+
+def _job(job_id: str, kind: str = "tag") -> Job:
+    """A running job, or a finished one from the saved runs."""
     job = _jobs.get(job_id)
     if job is None:
-        raise HTTPException(404, "This run no longer exists (the server was probably restarted).")
+        saved = _runs.load(job_id)
+        if saved is not None:
+            job = Job(kind=saved["kind"], request=REQUESTS[saved["kind"]](**saved["params"]),
+                      status="done", message="", result=saved["result"])
+            with _lock:
+                _jobs[job_id] = job
+    if job is None or job.kind != kind:
+        raise HTTPException(404, "This run no longer exists. It may have been deleted, or the server "
+                                 "was restarted while it was running.")
     return job
 
 
@@ -139,37 +162,110 @@ def tags():
         return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
 
 
-@app.post("/api/tag-runs")
-def start_tag_run(req: TagRunRequest) -> dict:
+def _start(kind: str, req: TagRunRequest | MarketRunRequest) -> str:
     job_id = uuid.uuid4().hex
     with _lock:
-        _jobs[job_id] = Job(request=req)
+        _jobs[job_id] = Job(kind=kind, request=req)
     threading.Thread(target=_run, args=(job_id,), daemon=True).start()
+    return job_id
+
+
+def _status(job_id: str, job: Job, result_json) -> dict:
+    with _lock:
+        out = {"status": job.status, "message": job.message, "done": job.done, "total": job.total,
+               "error": job.error}
+        result = job.result
+    if result is not None:
+        out["result"] = result_json(job_id, job.request, result)
+    return out
+
+
+def _score_changes(job_id: str, ranked: list[Analysis]) -> dict[int, float | None]:
+    return runs.changes({a.game.appid: a.opportunity.score for a in ranked}, _runs.previous_scores(job_id))
+
+
+def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -> dict:
+    label = pipeline.tag_label(r.tags)
+    post = notices.for_tag_result(label, r.min_reviews, r.lo, r.hi, r.max_games, result)
+    ranked = rank(result.analyses)
+    changes = _score_changes(job_id, ranked)
+    games = []
+    for a in ranked:
+        g = game_json(a)
+        if a.game.appid in changes:  # only when an earlier run with the same tags and filters exists
+            g["score_change"] = changes[a.game.appid]
+            g["new"] = changes[a.game.appid] is None
+        games.append(g)
+    return {
+        "tag": label, "tags": r.tags, "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
+        "n_tag_games": result.n_tag_games,
+        "n_candidates": len(result.candidates),
+        "not_games": result.not_games,
+        "unlisted": result.unlisted,
+        "market": result.market.model_dump() if result.market else None,
+        "well_served": config.WELL_SERVED_RATING,
+        "games": games,
+        "compared": bool(changes),
+        "notices": [n.model_dump() for n in post],
+    }
+
+
+def market_result_json(job_id: str, r: MarketRunRequest, result: pipeline.MarketsResult) -> dict:
+    return {
+        "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
+        "well_served": config.WELL_SERVED_RATING,
+        "rows": [{"tag": row.tag, **row.stats.model_dump()} for row in result.rows],
+        "skipped": result.skipped,
+        "failed": [{"tag": t, "reason": why} for t, why in result.failed],
+    }
+
+
+@app.post("/api/tag-runs")
+def start_tag_run(req: TagRunRequest) -> dict:
+    job_id = _start("tag", req)
     pre = notices.for_filters(req.min_reviews, req.lo, req.hi, req.max_games, req.reviews)
     return {"id": job_id, "notices": [n.model_dump() for n in pre]}
 
 
 @app.get("/api/tag-runs/{job_id}")
 def tag_run_status(job_id: str) -> dict:
-    job = _job(job_id)
+    return _status(job_id, _job(job_id), tag_result_json)
+
+
+@app.post("/api/market-runs")
+def start_market_run(req: MarketRunRequest) -> dict:
+    pre = notices.for_filters(req.min_reviews, req.lo, req.hi, 0, 0)
+    return {"id": _start("market", req), "notices": [n.model_dump() for n in pre]}
+
+
+@app.get("/api/market-runs/{job_id}")
+def market_run_status(job_id: str) -> dict:
+    return _status(job_id, _job(job_id, "market"), market_result_json)
+
+
+@app.get("/api/runs")
+def list_runs() -> dict:
+    return {"runs": _runs.list()}
+
+
+@app.delete("/api/runs/{run_id}")
+def delete_run(run_id: str) -> dict:
+    if not _runs.delete(run_id):
+        raise HTTPException(404, "This run doesn't exist.")
     with _lock:
-        out = {"status": job.status, "message": job.message, "done": job.done, "total": job.total,
-               "error": job.error}
-        result = job.result
-    if result is not None:
-        r = job.request
-        label = pipeline.tag_label(r.tags)
-        post = notices.for_tag_result(label, r.min_reviews, r.lo, r.hi, r.max_games, result)
-        out["result"] = {
-            "tag": label, "tags": r.tags, "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
-            "n_tag_games": result.n_tag_games,
-            "n_candidates": len(result.candidates),
-            "not_games": result.not_games,
-            "unlisted": result.unlisted,
-            "games": [game_json(a) for a in rank(result.analyses)],
-            "notices": [n.model_dump() for n in post],
-        }
-    return out
+        _jobs.pop(run_id, None)
+    return {"deleted": run_id}
+
+
+@app.get("/api/tag-runs/{job_id}/ranking.csv")
+def tag_run_csv(job_id: str) -> PlainTextResponse:
+    job = _job(job_id)
+    if job.result is None:
+        raise HTTPException(409, "The run hasn't finished yet.")
+    ranked = rank(job.result.analyses)
+    text = ranking_csv(ranked, _score_changes(job_id, ranked))
+    return PlainTextResponse(text, media_type="text/csv", headers={
+        "Content-Disposition": f'attachment; filename="{slug(pipeline.tag_label(job.request.tags))}.csv"'})
 
 
 @app.get("/api/tag-runs/{job_id}/report.md")
@@ -181,7 +277,8 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
     label = pipeline.tag_label(r.tags)
     text = render(tag=label, analyses=res.analyses, n_candidates=len(res.candidates),
                   n_tag_games=res.n_tag_games, min_reviews=r.min_reviews, lo=r.lo, hi=r.hi,
-                  not_games=res.not_games, unlisted=res.unlisted)
+                  not_games=res.not_games, unlisted=res.unlisted,
+                  market=market.summary(res.market) if res.market else "")
     return PlainTextResponse(text, media_type="text/markdown", headers={
         "Content-Disposition": f'attachment; filename="{slug(label)}.md"'})
 
