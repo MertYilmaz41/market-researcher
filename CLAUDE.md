@@ -128,7 +128,14 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 - The core fantasy is two- and three-word phrases counted per review across positive reviews. Generic words are filtered by `STOPWORDS`/`GENERIC` in `mining/keywords.py`.
 - `idea_praise_share` is the "great idea, bad execution" signal: negative reviews that still praise the idea or its potential.
 - `fixability` is the share of complaint mentions in fixable categories. Milestone 4 scoring will use it.
-- Known false positive: in driving games, "I crashed" is counted as a bug. Check changes to the lexicon against real reviews from `sr analyze`.
+- **Measured accuracy:** `uv run python -m steam_researcher.mining.evaluate` scores the miner against hand-labeled real reviews.
+  - `tests/fixtures/labeled_reviews.jsonl` (153 reviews from 9 games) is the set to tune on.
+  - `labeled_reviews_holdout.jsonl` (47 reviews from 6 other games) is never tuned on: it shows whether a change generalizes.
+  - Nov 2026, complaint precision/recall: 90%/87% on the tuning set, 86%/62% held-out (it was 86%/53% before tuning).
+  - `tests/test_miner_accuracy.py` keeps floors just under these scores. Re-run it after every lexicon change.
+  - New samples come from `scripts/sample_reviews.py <appid>...`; their `labels` are filled in by hand.
+- **Negation gotcha:** the negation check also discards "no optimization", which is a real complaint. Such phrases need their own pattern that starts at the negation word ("(?:no|not) optimi[sz]\w*").
+- "crashed into" (driving games) is not counted as a bug.
 
 - **Parallel analysis:** `run_tag` analyzes games in a thread pool (`config.ANALYZE_WORKERS`), and each game starts as soon as it passes the store-type check. `HttpClient` and `Cache` are thread-safe: one request is in flight per host, so different hosts work in parallel. Steam's review API is sometimes very slow (20–90+ s per page, measured Nov 2026), so it has a shorter timeout (`HOST_TIMEOUT`). A failed review fetch sets `review_error` instead of dropping the game.
 - **All network access goes through `http.HttpClient.get_json`.** It does per-host throttling (`HOST_INTERVAL`), tenacity retries on 429/5xx (other 4xx fail fast; empty responses are not cached), and caching in SQLite (`cache.Cache`, `~/.cache/steam-researcher/steam_researcher.sqlite`, TTLs in `config.py`). New data sources should be added as modules in `sources/` that take an `HttpClient`. Redirects are not followed; they raise instead, because Steam signals an unavailable endpoint by redirecting to its homepage.

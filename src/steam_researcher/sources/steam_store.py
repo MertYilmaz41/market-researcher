@@ -84,14 +84,15 @@ def reviews(
     review_type: str = "negative",  # "negative" | "positive" | "all"
     limit: int = 300,
     language: str = "english",
+    order: str = "all",  # "all" = most helpful first, "recent" = newest first
 ) -> list[Review]:
-    """Page through review texts (most helpful first, all time) until `limit` is reached."""
+    """Page through review texts (all time) until `limit` is reached."""
     out: list[Review] = []
     cursor = "*"
     while len(out) < limit:
         query = {
             "appid": appid,
-            "filter": "all",
+            "filter": order,
             "day_range": 0,  # 0 = all time; the default is only the last 30 days
             "review_type": REVIEW_TYPES[review_type],
             "language": language,
