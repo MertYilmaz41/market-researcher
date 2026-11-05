@@ -203,7 +203,10 @@ li[aria-selected="true"] .check { background: var(--accent); border-color: var(-
   background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--r-md);
 }
 .search-status[hidden] { display: none; }
-.search-status-head { display: flex; justify-content: space-between; gap: var(--s3); }
+.search-status-head { display: flex; align-items: center; gap: var(--s3); }
+.search-status-head .search-status-count { margin-left: auto; }
+.cancel-run { padding: 3px 12px; font-size: var(--fs-sm); }
+.cancel-run:hover { border-color: var(--bad); color: var(--bad); }
 .search-status-head b { font-family: var(--font-display); font-weight: 600; }
 .search-status-count { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text-2); }
 .map, #table-note, .table-wrap { transition: opacity .2s; }

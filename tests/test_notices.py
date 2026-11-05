@@ -386,3 +386,29 @@ def test_review_timeout_keeps_the_game(monkeypatch):
     assert a is not None and a.mining is None
     assert a.review_error == "api.steampowered.com didn't answer in time."
 
+
+
+def test_run_tag_stops_when_on_step_cancels(monkeypatch):
+    import threading
+    games = [game(appid=i, name=f"G{i}") for i in range(1, 9)]
+    started = []
+    release = threading.Event()
+    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: games)
+    monkeypatch.setattr(pipeline, "verify_games",
+                        lambda http, c, n, p, on_hit: ([on_hit(g) or g for g in c[:n]], [], set()))
+
+    def analyze(http, appid, n):
+        started.append(appid)
+        release.wait(5)
+        return None
+
+    monkeypatch.setattr(pipeline, "analyze_game", analyze)
+
+    def step(message, done, total):
+        if message == "Analyzing games":  # first heartbeat while games are running
+            raise pipeline.Cancelled
+
+    with pytest.raises(pipeline.Cancelled):
+        pipeline.run_tag(None, ["X"], 1, 0, 100, 8, 10, step)
+    release.set()
+    assert len(started) <= 4  # games not started yet were dropped (ANALYZE_WORKERS = 4)

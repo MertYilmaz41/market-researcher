@@ -1,7 +1,7 @@
 """Shared steps used by `discover`, `analyze` and `report`."""
 
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 
 import httpx
@@ -74,6 +74,10 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
         review_error=review_error,
         opportunity=opportunity,
     )
+
+
+class Cancelled(Exception):
+    """Raised by an on_step callback to stop a run (the web UI's Cancel button)."""
 
 
 class UnknownTag(Exception):
@@ -162,7 +166,9 @@ def run_tag(
     n_check = min(max_games, len(by_demand))
 
     futures = {}  # future -> game, in the order the games were kept
-    with ThreadPoolExecutor(max_workers=config.ANALYZE_WORKERS) as pool:
+    pool = ThreadPoolExecutor(max_workers=config.ANALYZE_WORKERS)
+    stopped = False
+    try:
 
         def done() -> int:
             return sum(f.done() for f in futures)
@@ -176,9 +182,21 @@ def run_tag(
 
         hits, result.not_games, unlisted = verify_games(http, by_demand, max_games, checking, start)
         result.unlisted = [g.name for g in hits if g.appid in unlisted]
-        for i, f in enumerate(as_completed(futures), 1):
+        pending, message = set(futures), "Analyzing games"
+        while pending:
+            # Wake at least every second, so on_step can show progress and cancel a run even while
+            # one of Steam's slow review pages holds up a game.
+            finished, pending = wait(pending, timeout=1, return_when=FIRST_COMPLETED)
+            if finished:
+                message = f"Analyzed {futures[next(iter(finished))].name}"
             if on_step:
-                on_step(f"Analyzed {futures[f].name}", i, len(hits))
+                on_step(message, len(futures) - len(pending), len(hits))
+    except BaseException:
+        stopped = True
+        raise
+    finally:
+        # Cancelled or failed: drop the games not started yet; the few running finish in the background.
+        pool.shutdown(wait=not stopped, cancel_futures=stopped)
 
     for f, g in futures.items():  # keep the deterministic order of `hits`
         try:

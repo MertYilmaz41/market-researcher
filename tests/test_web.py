@@ -282,3 +282,45 @@ def test_ranking_csv(client, monkeypatch):
     assert lines[0].startswith("rank,appid,name,score,score_change,reviews,pct_positive,reviews_last_12_months")
     assert lines[1].startswith("1,1,Best Sim,60,,1000,40,0,")  # its only histogram month is long ago
     assert len(lines) == 3  # the DLC is excluded, like in the ranking
+
+
+# --- cancel ---------------------------------------------------------------------------------------
+
+def test_cancel_stops_a_running_search(client, monkeypatch, run_store):
+    import threading
+    stopped = threading.Event()
+
+    def slow_run_tag(http, tags, *args):
+        step = args[-1]
+        try:
+            for i in range(500):
+                step("Analyzing", i, 500)
+                time.sleep(0.01)
+        except pipeline.Cancelled:
+            stopped.set()
+            raise
+        return fake_result()
+
+    monkeypatch.setattr(pipeline, "run_tag", slow_run_tag)
+    run_id = client.post("/api/tag-runs", json={"tags": ["X"]}).json()["id"]
+    time.sleep(0.05)
+    assert client.post(f"/api/tag-runs/{run_id}/cancel").json() == {"status": "cancelled"}
+    assert client.get(f"/api/tag-runs/{run_id}").json()["status"] == "cancelled"  # at once
+    assert stopped.wait(2)  # and the pipeline stops at its next step
+    time.sleep(0.05)
+    job = client.get(f"/api/tag-runs/{run_id}").json()
+    assert job["status"] == "cancelled" and "result" not in job
+    assert run_store.list() == []  # a cancelled run isn't saved
+
+
+def test_cancel_after_finish_changes_nothing(client, monkeypatch):
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    run_id = client.post("/api/tag-runs", json={"tags": ["X"]}).json()["id"]
+    wait(client, run_id)
+    assert client.post(f"/api/tag-runs/{run_id}/cancel").json() == {"status": "done"}
+    assert client.post("/api/tag-runs/nope/cancel").status_code == 404
+
+
+def test_page_files_are_revalidated(client):
+    for path in ["/", "/static/app.js"]:
+        assert client.get(path).headers["cache-control"] == "no-cache"

@@ -23,6 +23,16 @@ STATIC = Path(__file__).parent / "static"
 app = FastAPI(title="Steam Researcher")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
+
+@app.middleware("http")
+async def _revalidate_page_files(request: Request, call_next):
+    """Browsers must check the page and its scripts on every load (cheap: ETag/304). Without this they
+    may reuse an old cached app.js with a newer index.html, which breaks the page after an update."""
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 FIELD_LABELS = {
     "tags": "Steam tags",
     "min_reviews": "Minimum reviews",
@@ -68,7 +78,7 @@ async def _readable_validation(request: Request, exc: RequestValidationError) ->
 class Job:
     kind: str  # "tag" | "market"
     request: TagRunRequest | MarketRunRequest
-    status: str = "running"  # running | done | error
+    status: str = "running"  # running | done | error | cancelled
     message: str = "Starting..."
     done: int = 0
     total: int = 0
@@ -108,7 +118,15 @@ def _run(job_id: str) -> None:
 
     def step(message: str, done: int, total: int) -> None:
         with _lock:
+            if job.status == "cancelled":  # the pipeline calls this often: stop at the next step
+                raise pipeline.Cancelled
             job.message, job.done, job.total = message, done, total
+
+    def finish(**fields) -> None:
+        with _lock:
+            if job.status != "cancelled":  # a cancelled run ends quietly, whatever it was doing
+                for k, v in fields.items():
+                    setattr(job, k, v)
 
     try:
         http = HttpClient()
@@ -116,18 +134,18 @@ def _run(job_id: str) -> None:
             result = pipeline.run_markets(http, r.min_reviews, r.lo, r.hi, step)
         else:
             result = pipeline.run_tag(http, r.tags, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
+        if job.status == "cancelled":
+            return
         # Saved before it shows as done, so the first result the UI sees can already compare.
         label = pipeline.tag_label(r.tags) if job.kind == "tag" else "All tags"
         _runs.save(job.kind, label, r.model_dump(), result, run_id=job_id)
-        with _lock:
-            job.status, job.result = "done", result
+        finish(status="done", result=result)
+    except pipeline.Cancelled:
+        pass
     except pipeline.UnknownTag as e:
-        error = notices.unknown_tag(e.tag, notices.known_tags(http)).model_dump()
-        with _lock:
-            job.status, job.error = "error", error
+        finish(status="error", error=notices.unknown_tag(e.tag, notices.known_tags(http)).model_dump())
     except Exception as e:  # surface any failure to the UI instead of a stuck progress bar
-        with _lock:
-            job.status, job.error = "error", notices.friendly_error(e).model_dump()
+        finish(status="error", error=notices.friendly_error(e).model_dump())
 
 
 REQUESTS = {"tag": TagRunRequest, "market": MarketRunRequest}
@@ -242,6 +260,24 @@ def start_market_run(req: MarketRunRequest) -> dict:
 @app.get("/api/market-runs/{job_id}")
 def market_run_status(job_id: str) -> dict:
     return _status(job_id, _job(job_id, "market"), market_result_json)
+
+
+def _cancel(job: Job) -> dict:
+    """Stops a running job at its next step; the UI is free at once. A finished job is left as is."""
+    with _lock:
+        if job.status == "running":
+            job.status, job.message = "cancelled", "Cancelled"
+        return {"status": job.status}
+
+
+@app.post("/api/tag-runs/{job_id}/cancel")
+def cancel_tag_run(job_id: str) -> dict:
+    return _cancel(_job(job_id))
+
+
+@app.post("/api/market-runs/{job_id}/cancel")
+def cancel_market_run(job_id: str) -> dict:
+    return _cancel(_job(job_id, "market"))
 
 
 @app.get("/api/runs")

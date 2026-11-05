@@ -61,6 +61,38 @@ class ApiError extends Error {
   }
 }
 
+// Thrown when the user presses Cancel on a running search or market ranking.
+class CancelledRun extends Error {}
+
+// The run each banner's Cancel button stops: id once the server has started it.
+const runCtl = { games: { id: null, cancelled: false }, markets: { id: null, cancelled: false } };
+
+function cancelRun(kind) {
+  const ctl = runCtl[kind];
+  if (ctl.cancelled) return;
+  ctl.cancelled = true;
+  const box = kind === "games" ? $("#search-status") : $("#markets-status");
+  box.querySelector(".cancel-run").textContent = "Cancelling...";
+  box.querySelector(".search-status-text").textContent = "Stopping after the current step...";
+  if (ctl.id) fetch(`/api/${kind === "games" ? "tag" : "market"}-runs/${ctl.id}/cancel`, { method: "POST" }).catch(() => {});
+}
+
+function startRun(kind) {
+  Object.assign(runCtl[kind], { id: null, cancelled: false });
+  const box = kind === "games" ? $("#search-status") : $("#markets-status");
+  box.querySelector(".cancel-run").textContent = "Cancel";
+}
+
+// After the server answers with the job id: a Cancel pressed meanwhile is sent now.
+function runStarted(kind, id) {
+  runCtl[kind].id = id;
+  if (runCtl[kind].cancelled) {
+    runCtl[kind].cancelled = false;
+    cancelRun(kind);
+    throw new CancelledRun();
+  }
+}
+
 function notifyError(err, fallbackTitle = "Something went wrong") {
   if (err instanceof ApiError) return notify(err.notice);
   if (err instanceof TypeError) {
@@ -395,18 +427,25 @@ $("#tag-form").addEventListener("submit", async (e) => {
   openFilters(false);
   state.keepPanel = false;
   setSearching(true);
-  searchStatus(label, 0, "", `Fetching games tagged ${label}...`);
+  startRun("games");
   try {
+    // Inside the try: if anything here fails, the button and banner reset and the error is shown,
+    // instead of a "Searching..." that never ends.
+    searchStatus(label, 0, "", `Fetching games tagged ${label}...`);
     const res = await fetch("/api/tag-runs", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     if (!res.ok) throw await apiError(res);
     const { id, notices } = await res.json();
+    runStarted("games", id);
     notifyAll(notices);
-    state.runId = id;
     await poll(id, label);
   } catch (err) {
-    notifyError(err, "Search failed");
+    if (err instanceof CancelledRun) {
+      toast("info", "Search cancelled", state.games.length ? "The previous results are still shown." : "", "");
+    } else {
+      notifyError(err, "Search failed");
+    }
   } finally {
     setSearching(false);
     searchStatus(null);
@@ -436,12 +475,17 @@ async function poll(id, tag) {
     }
     if (!res.ok) throw await apiError(res);
     const job = await res.json();
+    if (job.status === "cancelled" || runCtl.games.cancelled) throw new CancelledRun();
     if (job.status === "error") throw new ApiError(job.error);
     if (job.status === "done") return showResult(job.result, id);
     searchStatus(tag, job.total ? job.done / job.total : 0, job.total ? `${job.done} / ${job.total}` : "", job.message);
     await new Promise((r) => setTimeout(r, 1000));
+    if (runCtl.games.cancelled) throw new CancelledRun();
   }
 }
+
+$("#search-status .cancel-run").addEventListener("click", () => cancelRun("games"));
+$("#markets-status .cancel-run").addEventListener("click", () => cancelRun("markets"));
 
 $("#game-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -572,13 +616,15 @@ $("#markets-run").addEventListener("click", async () => {
   const box = $("#markets-status"), button = $("#markets-run");
   markets.running = true;
   setButtonBusy(button, true, "Building...");
-  statusBox(box, "Building the market ranking...", 0, "", "Reading the Steam tag list");
+  startRun("markets");
   try {
+    statusBox(box, "Building the market ranking...", 0, "", "Reading the Steam tag list");
     const res = await fetch("/api/market-runs", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     if (!res.ok) throw await apiError(res);
     const { id, notices } = await res.json();
+    runStarted("markets", id);
     notifyAll(notices);
     for (;;) {
       const r = await fetch(`/api/market-runs/${id}`);
@@ -588,14 +634,17 @@ $("#markets-run").addEventListener("click", async () => {
       }
       if (!r.ok) throw await apiError(r);
       const job = await r.json();
+      if (job.status === "cancelled" || runCtl.markets.cancelled) throw new CancelledRun();
       if (job.status === "error") throw new ApiError(job.error);
       if (job.status === "done") { showMarkets(job.result); break; }
       statusBox(box, "Building the market ranking...", job.total ? job.done / job.total : 0,
         job.total ? `${job.done} / ${job.total} tags` : "", job.message);
       await new Promise((r2) => setTimeout(r2, 1000));
+      if (runCtl.markets.cancelled) throw new CancelledRun();
     }
   } catch (err) {
-    notifyError(err, "Market ranking failed");
+    if (err instanceof CancelledRun) toast("info", "Market ranking cancelled", "Tags read so far stay cached, so the next build is faster.");
+    else notifyError(err, "Market ranking failed");
   } finally {
     markets.running = false;
     setButtonBusy(button, false, "Rebuild market ranking");

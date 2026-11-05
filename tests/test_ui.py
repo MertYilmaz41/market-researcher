@@ -39,6 +39,10 @@ def base_url(tmp_path_factory):
         searches.append(tags)
         if tags == ["Survival"]:
             time.sleep(2)  # slow enough to analyze a game while it runs
+        if tags == ["Colony Sim"]:  # runs until cancelled
+            for i in range(3000):
+                args[-1]("Analyzing games", i, 3000)
+                time.sleep(0.01)
         r = fake_result()
         r.market = market_stats([a.game for a in r.analyses], 100, 5, 70)
         return r
@@ -156,5 +160,18 @@ def test_ui_smoke(base_url, browser):
     page.click("#runs-list li:last-child .run-main")
     page.wait_for_function("document.querySelector('#table-title').textContent.startsWith('Crafting + Colony Sim')")
     assert sorted(page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)")) == ["Colony Sim", "Crafting"]
+
+    # Cancel a search: the button frees at once and the previous results come back.
+    page.keyboard.press("Escape")
+    page.click("#tag-toggle")
+    opt("Crafting").click()  # untick it: only Colony Sim, whose fake search runs until cancelled
+    page.keyboard.press("Escape")
+    page.click("#run")
+    page.wait_for_selector("#search-status .cancel-run")
+    page.click("#search-status .cancel-run")
+    page.wait_for_function("!document.body.classList.contains('searching')", timeout=3000)
+    assert page.is_hidden("#search-status") and page.text_content("#run") == "Find opportunities"
+    assert "Search cancelled" in page.inner_text("#toasts")
+    assert page.text_content("#table-title").startswith("Crafting + Colony Sim")  # previous results stay
 
     assert errors == []
