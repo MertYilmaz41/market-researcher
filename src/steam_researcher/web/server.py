@@ -1,5 +1,6 @@
 """FastAPI backend for the web UI. Display-only: all logic lives in `pipeline`/`report`/`notices`."""
 
+import hashlib
 import threading
 import uuid
 from dataclasses import dataclass
@@ -8,7 +9,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
@@ -168,8 +169,24 @@ def _job(job_id: str, kind: str = "tag") -> Job:
 
 
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    return FileResponse(STATIC / "index.html")
+def index() -> HTMLResponse:
+    return HTMLResponse(versioned_index())
+
+
+def versioned_index() -> str:
+    """index.html with every local script and stylesheet URL tagged ?v=<hash of the static files>.
+
+    After an update the URLs differ, so a browser can't keep running an old cached app.js next to the
+    new page (that left the search button stuck on "Searching..."). Module imports such as
+    "/static/palette.js" are versioned through the page's import map.
+    """
+    files = sorted(STATIC.glob("*.*"))
+    v = hashlib.sha256(b"".join(f.name.encode() + f.read_bytes() for f in files)).hexdigest()[:12]
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    html = html.replace('href="/static/style.css"', f'href="/static/style.css?v={v}"')
+    html = html.replace('src="/static/app.js"', f'src="/static/app.js?v={v}"')
+    scripts = "".join(f'\n        "/static/{f.name}": "/static/{f.name}?v={v}",' for f in files if f.suffix == ".js")
+    return html.replace('"imports": {', '"imports": {' + scripts, 1)
 
 
 @app.get("/api/tags")

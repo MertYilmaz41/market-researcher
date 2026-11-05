@@ -46,7 +46,7 @@ def fake_result():
 
 def test_index_and_static(client):
     html = client.get("/")
-    assert html.status_code == 200 and "map3d.js" not in html.text  # loaded by app.js
+    assert html.status_code == 200 and "src=\"/static/map3d.js" not in html.text  # loaded by app.js
     assert "/static/app.js" in html.text and "three@0.170.0" in html.text
     for f in ["app.js", "map2d.js", "map3d.js", "palette.js", "style.css"]:
         assert client.get(f"/static/{f}").status_code == 200
@@ -324,3 +324,14 @@ def test_cancel_after_finish_changes_nothing(client, monkeypatch):
 def test_page_files_are_revalidated(client):
     for path in ["/", "/static/app.js"]:
         assert client.get(path).headers["cache-control"] == "no-cache"
+
+
+def test_page_versions_its_scripts(client):
+    """A browser must never pair an old cached app.js with a newer page."""
+    import re
+    html = client.get("/").text
+    v = re.search(r'src="/static/app\.js\?v=(\w+)"', html).group(1)
+    assert f'href="/static/style.css?v={v}"' in html
+    for f in ["palette.js", "map2d.js", "map3d.js"]:  # imported by the scripts: versioned via the import map
+        assert f'"/static/{f}": "/static/{f}?v={v}"' in html
+    assert client.get(f"/static/app.js?v={v}").status_code == 200
