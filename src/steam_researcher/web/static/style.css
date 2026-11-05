@@ -491,7 +491,7 @@ tbody tr.selected { background: color-mix(in srgb, var(--accent) 16%, transparen
   body { height: auto; min-height: 100vh; overflow: visible; display: block; }
   .topbar { position: sticky; top: 0; }
   .layout {
-    grid-template-columns: 1fr; grid-template-rows: none;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none; /* lets wide tables scroll inside their card */
     grid-template-areas: "map" "panel" "table"; padding: var(--s3) var(--s4) var(--s5);
   }
   .map { flex: none; height: 400px; }
@@ -501,11 +501,18 @@ tbody tr.selected { background: color-mix(in srgb, var(--accent) 16%, transparen
   th { position: static; }
 }
 @media (max-width: 1000px) {
-  .topbar { grid-template-columns: 1fr; gap: var(--s3); padding: var(--s3) var(--s4); }
+  /* minmax(0, ...): a plain 1fr can't shrink below the search row's content, which ran off phone screens */
+  .topbar { grid-template-columns: minmax(0, 1fr); gap: var(--s3); padding: var(--s3) var(--s4); }
   #tag-form { width: 100%; }
-  .search > input { width: 100%; }
+  .search > input { width: 100%; min-width: 0; }
   .search.small { width: 100%; }
   .search.small > input { flex: 1; width: auto; }
   #lang { justify-self: start; }
   .popover { width: min(400px, calc(100vw - 32px)); }
+}
+@media (max-width: 560px) {
+  /* phones: the tag field gets its own row; Filters and the search button share the next one */
+  #tag-form { flex-wrap: wrap; }
+  #tag-form .combo { flex-basis: 100%; }
+  #tag-form > button { flex: 1; }
 }
