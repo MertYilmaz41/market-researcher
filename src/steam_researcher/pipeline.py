@@ -62,16 +62,17 @@ def official_reviews(http: HttpClient, game: Game, hist: list[HistPoint]) -> Gam
         summary = steam_store.review_summary(http, game.appid)
     except (RuntimeError, httpx.HTTPError, RetryableStatus):
         summary = None
+    offtopic = 0
     if summary:
-        positive, total = summary
-        source = "steam"
+        positive, total, with_offtopic = summary
+        source, offtopic = "steam", with_offtopic - total
     elif hist and (total := sum(p.total for p in hist)):
         positive, source = sum(p.up for p in hist), "histogram"
     else:
         return game
     return game.model_copy(update={
         "positive": positive, "negative": total - positive,
-        "rating_source": source, "steamspy_rating": game.rating,
+        "rating_source": source, "steamspy_rating": game.rating, "offtopic_reviews": offtopic,
     })
 
 

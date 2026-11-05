@@ -62,6 +62,8 @@ def rating_source_text(g: Game) -> str:
     text = SOURCE_NAMES.get(g.rating_source, g.rating_source)
     if g.steamspy_rating is not None and abs(g.steamspy_rating - g.rating) >= 3:
         text += f" (SteamSpy says {g.steamspy_rating:.0f}%)"
+    if g.offtopic_reviews:
+        text += f"; {g.offtopic_reviews:,} reviews from review-bomb periods count toward demand, not % positive"
     return text
 
 

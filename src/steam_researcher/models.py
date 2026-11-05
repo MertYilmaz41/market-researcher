@@ -20,17 +20,21 @@ class Game(BaseModel):
     # (Steam's own All Reviews number) or "histogram" (Steam's monthly review counts, a fallback).
     rating_source: str = "steamspy"
     steamspy_rating: float | None = None  # SteamSpy's % positive, kept when replaced by Steam's
+    # Reviews from off-topic (review-bomb) periods Steam leaves out of its rating: they count toward
+    # demand and the Box Method (the reviewers bought the game), not toward % positive.
+    offtopic_reviews: int = 0
 
     @computed_field
     @property
     def reviews(self) -> int:
-        return self.positive + self.negative
+        return self.positive + self.negative + self.offtopic_reviews
 
     @computed_field
     @property
     def rating(self) -> float:
         """Percent positive (0-100)."""
-        return 100.0 * self.positive / self.reviews if self.reviews else 0.0
+        rated = self.positive + self.negative
+        return 100.0 * self.positive / rated if rated else 0.0
 
     @property
     def base_price(self) -> float:

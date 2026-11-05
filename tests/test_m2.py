@@ -216,13 +216,16 @@ def test_review_summary_asks_for_all_languages(tmp_path, monkeypatch):
     seen = []
 
     def handler(request):
-        seen.append(json.loads(request.url.params["input_json"]))
-        return httpx.Response(200, json={"response": {"query_summary": {"total_positive": 3, "total_reviews": 4}}})
+        q = json.loads(request.url.params["input_json"])
+        seen.append(q)
+        total = 11 if q.get("filter_offtopic_activity") == 0 else 4  # off-topic periods included
+        return httpx.Response(200, json={"response": {"query_summary": {"total_positive": 3, "total_reviews": total}}})
 
     http = HttpClient(cache=Cache(tmp_path / "c.sqlite"), transport=httpx.MockTransport(handler))
-    assert steam_store.review_summary(http, 7) == (3, 4)
+    assert steam_store.review_summary(http, 7) == (3, 4, 11)
     # without languages=["all"] the summary is English-only
     assert seen[0]["languages"] == ["all"] and seen[0]["num_per_page"] == 0 and seen[0]["day_range"] == 0
+    assert "filter_offtopic_activity" not in seen[0] and seen[1]["filter_offtopic_activity"] == 0
 
 
 def _game(**kw):
@@ -234,10 +237,21 @@ def _game(**kw):
 def test_official_reviews_replace_steamspy(monkeypatch):
     from steam_researcher import pipeline
 
-    monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (928, 1460))
+    monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (928, 1460, 1460))
     g = pipeline.official_reviews(None, _game(), [])
-    assert (g.positive, g.negative, g.rating_source) == (928, 532, "steam")
+    assert (g.positive, g.negative, g.rating_source, g.offtopic_reviews) == (928, 532, "steam", 0)
     assert g.steamspy_rating == 30
+
+
+def test_review_bomb_reviews_count_for_demand_not_rating(monkeypatch):
+    from steam_researcher import pipeline, scoring
+
+    # Feed the Cups (Nov 2026): 3,527 of 4,855 rated, 11,224 with the review-bomb periods
+    monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (3527, 4855, 11224))
+    g = pipeline.official_reviews(None, _game(), [])
+    assert g.offtopic_reviews == 6369 and g.reviews == 11224
+    assert round(g.rating) == 73  # 3,527 / 4,855: the bomb doesn't drag the rating down
+    assert scoring.demand(g.reviews) > scoring.demand(4855)
 
 
 def test_official_reviews_fall_back(monkeypatch):
@@ -261,6 +275,8 @@ def test_rating_source_text():
     assert rating_source_text(_game()) == "SteamSpy estimate"
     assert rating_source_text(_game(rating_source="steam", steamspy_rating=31)) == "Steam's own numbers"
     assert rating_source_text(_game(rating_source="steam", steamspy_rating=40)) == "Steam's own numbers (SteamSpy says 40%)"
+    assert rating_source_text(_game(rating_source="steam", offtopic_reviews=6369)).endswith(
+        "; 6,369 reviews from review-bomb periods count toward demand, not % positive")
 
 
 # --- "is it already fixed?" ------------------------------------------------------------------

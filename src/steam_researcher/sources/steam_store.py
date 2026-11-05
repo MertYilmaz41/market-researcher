@@ -124,14 +124,24 @@ def parse_review_summary(data: dict) -> tuple[int, int] | None:
     return (s.get("total_positive", 0), total) if total else None
 
 
-def review_summary(http: HttpClient, appid: int) -> tuple[int, int] | None:
-    """Steam's own review count and positives: the store page's "All Reviews" number (all languages,
-    off-topic review-bomb periods that Steam confirmed are excluded). Without `languages: ["all"]` the
+def review_summary(http: HttpClient, appid: int) -> tuple[int, int, int] | None:
+    """Steam's own numbers: (positive, total, total including off-topic periods).
+
+    positive/total are the store page's "All Reviews" number (all languages), which leaves out
+    off-topic review-bomb periods that Steam confirmed. The third count includes them: those
+    reviewers mostly bought the game, so they still show demand. Without `languages: ["all"]` the
     summary is English-only, whatever `language` says."""
-    query = {"appid": appid, "languages": ["all"], "review_type": 0, "filter": 0, "day_range": 0,
-             "purchase_type": "all", "num_per_page": 0, "cursor": "*"}
-    data = http.get_json(REVIEWS_API, {"input_json": json.dumps(query, sort_keys=True)}, ttl=config.TTL_HISTOGRAM)
-    return parse_review_summary(data or {})
+    def summary(**extra) -> tuple[int, int] | None:
+        query = {"appid": appid, "languages": ["all"], "review_type": 0, "filter": 0, "day_range": 0,
+                 "purchase_type": "all", "num_per_page": 0, "cursor": "*", **extra}
+        data = http.get_json(REVIEWS_API, {"input_json": json.dumps(query, sort_keys=True)}, ttl=config.TTL_HISTOGRAM)
+        return parse_review_summary(data or {})
+
+    rated = summary()
+    if rated is None:
+        return None
+    everything = summary(filter_offtopic_activity=0)
+    return (*rated, max(rated[1], everything[1] if everything else 0))
 
 
 TAGS_API = "https://api.steampowered.com/IStoreService/GetTagList/v1/"

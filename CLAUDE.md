@@ -150,7 +150,7 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
   - The source is `steam_store.review_summary`, GetAppReviews' `query_summary` with `languages: ["all"]`. It matches the store page's "All Reviews" exactly, and excludes off-topic review-bomb periods that Steam confirmed. Without `languages` it is English-only.
   - Fallback: the histogram totals, then SteamSpy.
   - `Game.rating_source` and `steamspy_rating` record the choice, and `report.rating_source_text` shows it. SteamSpy can be far off (Feed the Cups: SteamSpy 30%, Steam 73%).
-  - Caveat: excluding review-bomb periods also lowers the review count that demand and the Box Method use.
+  - Review-bomb periods: a second call with `filter_offtopic_activity: 0` counts them too. The difference goes into `Game.offtopic_reviews`, which `Game.reviews` (demand, Box Method) includes but `Game.rating` doesn't, because those reviewers bought the game but the bomb isn't about its quality. Feed the Cups: 73% of 4,855 rated, 11,224 counted for demand.
 
 ## Data sources and constraints
 
