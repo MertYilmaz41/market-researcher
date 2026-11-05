@@ -4,6 +4,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -23,7 +24,7 @@ app = FastAPI(title="Steam Researcher")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 FIELD_LABELS = {
-    "tag": "Steam tag",
+    "tags": "Steam tags",
     "min_reviews": "Minimum reviews",
     "lo": "% positive from",
     "hi": "% positive to",
@@ -33,7 +34,7 @@ FIELD_LABELS = {
 
 
 class TagRunRequest(BaseModel):
-    tag: str = Field(min_length=1, max_length=100)
+    tags: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(min_length=1, max_length=config.MAX_TAGS)
     min_reviews: int = Field(config.MIN_REVIEWS, ge=1)
     lo: float = Field(config.MIN_RATING, ge=0, le=100)
     hi: float = Field(config.MAX_RATING, ge=0, le=100)
@@ -102,12 +103,13 @@ def _run(job_id: str) -> None:
 
     try:
         http = HttpClient()
-        result = pipeline.run_tag(http, r.tag, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
+        result = pipeline.run_tag(http, r.tags, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
         with _lock:
-            if result is None:
-                job.status, job.error = "error", notices.unknown_tag(r.tag, notices.known_tags(http)).model_dump()
-            else:
-                job.status, job.result = "done", result
+            job.status, job.result = "done", result
+    except pipeline.UnknownTag as e:
+        error = notices.unknown_tag(e.tag, notices.known_tags(http)).model_dump()
+        with _lock:
+            job.status, job.error = "error", error
     except Exception as e:  # surface any failure to the UI instead of a stuck progress bar
         with _lock:
             job.status, job.error = "error", notices.friendly_error(e).model_dump()
@@ -153,9 +155,10 @@ def tag_run_status(job_id: str) -> dict:
         result = job.result
     if result is not None:
         r = job.request
-        post = notices.for_tag_result(r.tag, r.min_reviews, r.lo, r.hi, r.max_games, result)
+        label = pipeline.tag_label(r.tags)
+        post = notices.for_tag_result(label, r.min_reviews, r.lo, r.hi, r.max_games, result)
         out["result"] = {
-            "tag": r.tag, "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
+            "tag": label, "tags": r.tags, "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
             "n_tag_games": result.n_tag_games,
             "n_candidates": len(result.candidates),
             "not_games": result.not_games,
@@ -172,11 +175,12 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
     if job.result is None:
         raise HTTPException(409, "The run hasn't finished yet.")
     r, res = job.request, job.result
-    text = render(tag=r.tag, analyses=res.analyses, n_candidates=len(res.candidates),
+    label = pipeline.tag_label(r.tags)
+    text = render(tag=label, analyses=res.analyses, n_candidates=len(res.candidates),
                   n_tag_games=res.n_tag_games, min_reviews=r.min_reviews, lo=r.lo, hi=r.hi,
                   not_games=res.not_games, unlisted=res.unlisted)
     return PlainTextResponse(text, media_type="text/markdown", headers={
-        "Content-Disposition": f'attachment; filename="{slug(r.tag)}.md"'})
+        "Content-Disposition": f'attachment; filename="{slug(label)}.md"'})
 
 
 @app.get("/api/games/{appid}")

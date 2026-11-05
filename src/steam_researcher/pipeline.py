@@ -12,7 +12,7 @@ from .mining import mine
 from .discover import filter_candidates
 from .models import Analysis, Game
 from .notices import friendly_error
-from .sources import steam_store, steamspy
+from .sources import steam_search, steam_store, steamspy
 
 
 def verify_games(
@@ -75,6 +75,52 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
     )
 
 
+class UnknownTag(Exception):
+    """SteamSpy has no games for this tag."""
+
+    def __init__(self, tag: str):
+        super().__init__(f"Unknown tag: {tag}")
+        self.tag = tag
+
+
+def tag_label(tags: list[str]) -> str:
+    """How a multi-tag search is named in titles, notices and report file names."""
+    return " + ".join(tags)
+
+
+_UNSEARCHABLE = {t.casefold() for t in config.STEAMSPY_UNSEARCHABLE_TAGS}
+
+
+def _games_for_tag(http: HttpClient, tag: str, on_step: Callable[[str, int, int], None] | None) -> list[Game]:
+    """SteamSpy for most tags; Steam's store search for the ones SteamSpy can't search."""
+    if tag.strip().casefold() not in _UNSEARCHABLE:
+        return steamspy.games_by_tag(http, tag)
+    ids = {name.casefold(): i for name, i in steam_store.tag_ids(http).items()}
+    tag_id = ids.get(tag.strip().casefold())
+    if tag_id is None:
+        return []
+
+    def page(done: int, total: int) -> None:
+        if on_step:
+            on_step(f"Listing games tagged {tag} from the Steam store", done, total)  # done/total: pages
+
+    return steam_search.games_by_tag(http, tag_id, page)
+
+
+def tag_games(
+    http: HttpClient, tags: list[str], on_step: Callable[[str, int, int], None] | None = None
+) -> list[Game]:
+    """Games that have every one of the tags. Raises UnknownTag for the first tag with no games."""
+    per_tag = []
+    for tag in tags:
+        games = _games_for_tag(http, tag, on_step)
+        if not games:
+            raise UnknownTag(tag)
+        per_tag.append(games)
+    shared = set.intersection(*({g.appid for g in games} for games in per_tag))
+    return [g for g in per_tag[0] if g.appid in shared]
+
+
 @dataclass
 class TagResult:
     n_tag_games: int
@@ -88,23 +134,21 @@ class TagResult:
 
 def run_tag(
     http: HttpClient,
-    tag: str,
+    tags: list[str],
     min_reviews: int,
     lo: float,
     hi: float,
     max_games: int,
     review_limit: int,
     on_step: Callable[[str, int, int], None] | None = None,
-) -> TagResult | None:
-    """Steps 1-4 for a tag. Returns None if SteamSpy knows no games for the tag.
+) -> TagResult:
+    """Steps 1-4 for the games that have all `tags`. Raises UnknownTag if SteamSpy doesn't know a tag.
 
     Games are analyzed in parallel (config.ANALYZE_WORKERS), starting as soon as each one passes
     the store-type check; the shared HttpClient keeps every host within its rate limit.
     on_step(message, done, total) is always called from the calling thread.
     """
-    games = steamspy.games_by_tag(http, tag)
-    if not games:
-        return None
+    games = tag_games(http, tags, on_step)
     candidates = filter_candidates(games, min_reviews, lo, hi)
     result = TagResult(
         n_tag_games=len(games),

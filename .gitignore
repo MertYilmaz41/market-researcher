@@ -10,3 +10,6 @@ dist/
 image-*.png.url
 Underserved-Auidience.md
 requirements-summary.txt
+
+# Screenshots dropped in the repo root while testing
+/*.png

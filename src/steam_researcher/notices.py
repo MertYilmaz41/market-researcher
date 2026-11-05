@@ -74,6 +74,13 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
     n_cand = len(result.candidates)
     ranked = rank(result.analyses)
 
+    if result.n_tag_games == 0:  # only possible with several tags: no game has all of them
+        return [Notice(
+            level="warning", title="No game has all these tags",
+            message=f"No game on SteamSpy is tagged {tag}.",
+            hint="Remove a tag or pick a broader one.",
+        )]
+
     if result.n_tag_games > BROAD_TAG_GAMES:
         out.append(Notice(
             level="info", title="Very broad tag",
@@ -252,8 +259,15 @@ def friendly_error(exc: BaseException) -> Notice:
 
 
 def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
+    fold = tag.strip().casefold()
+    # A real Steam tag that SteamSpy can't search (known: Steam's catalog, which may gain new tags).
+    # Spelling suggestions would mislead here (Incremental -> Instrumental Music), so none are given.
+    if fold in {k.casefold() for k in [*known, *config.STEAMSPY_UNSEARCHABLE_TAGS]}:
+        return Notice(level="error", title="Tag can't be searched",
+                      message=f"'{tag}' is a Steam tag, but SteamSpy (the data source) can't search it.",
+                      hint=f"Pick a related tag instead, e.g. {TAG_EXAMPLES}.")
     by_fold = {k.casefold(): k for k in known}
-    close = difflib.get_close_matches(tag.casefold(), list(by_fold), n=3, cutoff=0.6)
+    close = difflib.get_close_matches(fold, list(by_fold), n=3, cutoff=0.6)
     names = [by_fold[c] for c in close]
     hint = (f"Did you mean {' or '.join([', '.join(names[:-1]), names[-1]] if len(names) > 1 else names)}?" if close
             else f"Check the spelling. Examples: {TAG_EXAMPLES}.")

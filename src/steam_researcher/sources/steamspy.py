@@ -5,6 +5,7 @@ from ..http import HttpClient
 from ..models import Game
 
 API = "https://steamspy.com/api.php"
+_SPY_NAMES = {steam.casefold(): spy for steam, spy in config.STEAMSPY_TAG_NAMES.items()}
 
 
 def _int(v) -> int:
@@ -48,7 +49,7 @@ def games_by_tag(http: HttpClient, tag: str) -> list[Game]:
     """
     if not tag.strip():
         return []
-    data = _tag_data(http, tag)
+    data = _tag_data(http, _SPY_NAMES.get(tag.strip().casefold(), tag))  # Steam name -> SteamSpy name
     if data and set(data) == set(_tag_data(http, "") or {}):
         return []
     return parse_tag_response(data)

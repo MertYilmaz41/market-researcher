@@ -13,9 +13,8 @@ from .cache import Cache
 from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
 from .models import Analysis, MiningResult
-from .pipeline import TagResult, analyze_game, run_tag, verify_games
+from .pipeline import TagResult, UnknownTag, analyze_game, run_tag, tag_games, tag_label, verify_games
 from .report import money, rank, render, slug
-from .sources import steamspy
 
 app = typer.Typer(help="Find underserved Steam audiences (CodeMonkey's method).", no_args_is_help=True)
 cache_app = typer.Typer(help="Manage the local cache.")
@@ -45,8 +44,9 @@ def _guarded(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (typer.Exit, click.exceptions.Exit, click.exceptions.ClickException, click.exceptions.Abort,
-                KeyboardInterrupt):
+        # typer.BadParameter: Typer bundles its own click, so it isn't a click.ClickException
+        except (typer.Exit, typer.BadParameter, click.exceptions.Exit, click.exceptions.ClickException,
+                click.exceptions.Abort, KeyboardInterrupt):
             raise
         except Exception as e:
             if os.environ.get("SR_DEBUG"):
@@ -64,15 +64,28 @@ def _rating_range(rating: str) -> tuple[float, float]:
         raise typer.BadParameter(str(e), param_hint="--rating") from None
 
 
-def _tag_games(http: HttpClient, tag: str):
-    with console.status(f"Fetching games tagged {tag!r} from SteamSpy..."):
-        games = steamspy.games_by_tag(http, tag)
-    if not games:
-        _print_notice(notices.unknown_tag(tag, notices.known_tags(http)))
-        raise typer.Exit(1)
-    return games
+def _label(tags: list[str]) -> str:
+    if len(tags) > config.MAX_TAGS:
+        raise typer.BadParameter(f"use at most {config.MAX_TAGS} tags", param_hint="--tag")
+    return tag_label(tags)
 
 
+def _unknown_tag(http: HttpClient, e: UnknownTag):
+    _print_notice(notices.unknown_tag(e.tag, notices.known_tags(http)))
+    raise typer.Exit(1)
+
+
+def _tag_games(http: HttpClient, tags: list[str], label: str):
+    try:
+        with console.status(f"Fetching games tagged {label!r}...") as status:
+            return tag_games(http, tags, lambda msg, done, total: status.update(f"{msg} (page {done}/{total})"))
+    except UnknownTag as e:
+        _unknown_tag(http, e)
+
+
+TAG_OPT = typer.Option(
+    ..., "--tag", "-t", help='Steam tag, e.g. "Job Simulator". Repeat it for games with all the tags: -t Crafting -t Survival'
+)
 RATING_OPT = typer.Option(
     f"{config.MIN_RATING:g}-{config.MAX_RATING:g}", "--rating", help="Allowed % positive range, LO-HI"
 )
@@ -82,7 +95,7 @@ NO_CACHE_OPT = typer.Option(False, "--no-cache", help="Bypass the cache")
 @app.command()
 @_guarded
 def discover(
-    tag: str = typer.Option(..., "--tag", "-t", help='Steam tag, e.g. "Job Simulator"'),
+    tag: list[str] = TAG_OPT,
     min_reviews: int = typer.Option(config.MIN_REVIEWS, min=1, help="Demand filter"),
     rating: str = RATING_OPT,
     top: int = typer.Option(30, min=1, help="Max rows to show"),
@@ -90,14 +103,15 @@ def discover(
 ):
     """Steps 1-3: list games in a tag with proven demand but weak satisfaction."""
     lo, hi = _rating_range(rating)
+    label = _label(tag)
     _print_notices(notices.for_filters(min_reviews, lo, hi, 0, 0))
     http = HttpClient(use_cache=not no_cache)
-    games = _tag_games(http, tag)
+    games = _tag_games(http, tag, label)
     candidates = filter_candidates(games, min_reviews, lo, hi)
     if not candidates:
         empty = TagResult(n_tag_games=len(games), candidates=[],
                           n_enough_reviews=sum(g.reviews >= min_reviews for g in games))
-        _print_notices(notices.for_tag_result(tag, min_reviews, lo, hi, top, empty))
+        _print_notices(notices.for_tag_result(label, min_reviews, lo, hi, top, empty))
         raise typer.Exit(1)
 
     with console.status("Checking store type (games only)...") as status:
@@ -106,7 +120,7 @@ def discover(
         )
 
     table = Table(
-        title=f"{tag}: {len(candidates) - len(not_games)} of {len(games)} games with "
+        title=f"{label}: {len(candidates) - len(not_games)} of {len(games)} games with "
         f">={min_reviews} reviews and {lo:g}-{hi:g}% positive"
     )
     for col, just in [
@@ -161,7 +175,7 @@ def analyze(
 @app.command()
 @_guarded
 def report(
-    tag: str = typer.Option(..., "--tag", "-t", help='Steam tag, e.g. "Job Simulator"'),
+    tag: list[str] = TAG_OPT,
     min_reviews: int = typer.Option(config.MIN_REVIEWS, min=1, help="Demand filter"),
     rating: str = RATING_OPT,
     max_games: int = typer.Option(15, min=1, max=50, help="Analyze up to N candidates, highest review count first"),
@@ -171,33 +185,35 @@ def report(
 ):
     """Steps 1-4 for a whole tag: rank games by opportunity and write a Markdown report."""
     lo, hi = _rating_range(rating)
+    label = _label(tag)
     _print_notices(notices.for_filters(min_reviews, lo, hi, max_games, reviews))
     http = HttpClient(use_cache=not no_cache)
     with Progress(console=console, transient=True) as progress:
-        task = progress.add_task(f"Fetching games tagged {tag!r}", total=None)
+        task = progress.add_task(f"Fetching games tagged {label!r}", total=None)
 
         def step(message: str, done: int, total: int) -> None:
             progress.update(task, description=message[:50], completed=done, total=total)
 
-        result = run_tag(http, tag, min_reviews, lo, hi, max_games, reviews, step)
-    if result is None:
-        _print_notice(notices.unknown_tag(tag, notices.known_tags(http)))
-        raise typer.Exit(1)
-    post = notices.for_tag_result(tag, min_reviews, lo, hi, max_games, result)
+        try:
+            result = run_tag(http, tag, min_reviews, lo, hi, max_games, reviews, step)
+        except UnknownTag as e:
+            progress.stop()
+            _unknown_tag(http, e)
+    post = notices.for_tag_result(label, min_reviews, lo, hi, max_games, result)
     if not result.candidates:
         _print_notices(post)
         raise typer.Exit(1)
     analyses = result.analyses
 
     text = render(
-        tag=tag, analyses=analyses, n_candidates=len(result.candidates), n_tag_games=result.n_tag_games,
+        tag=label, analyses=analyses, n_candidates=len(result.candidates), n_tag_games=result.n_tag_games,
         min_reviews=min_reviews, lo=lo, hi=hi, not_games=result.not_games, unlisted=result.unlisted,
     )
-    out = out or Path("reports") / f"{slug(tag)}.md"
+    out = out or Path("reports") / f"{slug(label)}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
 
-    table = Table(title=f"{tag}: opportunity ranking")
+    table = Table(title=f"{label}: opportunity ranking")
     for col, just in [("#", "right"), ("Name", "left"), ("Score", "right"), ("Reviews", "right"),
                       ("% Pos", "right"), ("Top complaint", "left")]:
         table.add_column(col, justify=just)

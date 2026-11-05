@@ -115,12 +115,27 @@ def reviews(
 TAGS_API = "https://api.steampowered.com/IStoreService/GetTagList/v1/"
 
 
+def parse_tag_ids(data: dict) -> dict[str, int]:
+    """Steam tag name -> tag id."""
+    tags = ((data or {}).get("response") or {}).get("tags") or []
+    return {t["name"].strip(): t["tagid"] for t in tags if (t.get("name") or "").strip() and t.get("tagid")}
+
+
 def parse_tag_list(data: dict) -> list[str]:
     tags = ((data or {}).get("response") or {}).get("tags") or []
     names = {t["name"].strip() for t in tags if (t.get("name") or "").strip()}
     return sorted(names, key=str.casefold)
 
 
+def _tag_catalog(http: HttpClient) -> dict:
+    return http.get_json(TAGS_API, {"language": "english"}, ttl=config.TTL_TAG_NAMES)
+
+
 def tag_names(http: HttpClient) -> list[str]:
-    """All Steam user tags (about 450), A-Z. SteamSpy uses the same names."""
-    return parse_tag_list(http.get_json(TAGS_API, {"language": "english"}, ttl=config.TTL_TAG_NAMES))
+    """All Steam user tags (about 450), A-Z. pipeline.tag_games finds their games on SteamSpy, or via
+    Steam's store search for the tags SteamSpy can't search."""
+    return parse_tag_list(_tag_catalog(http))
+
+
+def tag_ids(http: HttpClient) -> dict[str, int]:
+    return parse_tag_ids(_tag_catalog(http))
