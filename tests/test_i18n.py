@@ -74,3 +74,68 @@ def test_risk_flag_text_follows_language_and_old_runs_still_show():
     old = RiskFlag(code="deep_discount", severity="warn", message="saved before templates")
     with use("tr"):
         assert old.text() == "saved before templates"
+
+
+# ---- the web page: static/i18n.js holds the catalog for t("...") in the JS and data-i18n in index.html
+STATIC = PACKAGE / "web" / "static"
+JS_STRING = r'"((?:[^"\\]|\\.)*)"'
+
+
+def js_catalog() -> dict[str, str]:
+    import json
+    import re
+
+    body = (STATIC / "i18n.js").read_text(encoding="utf-8").split("const TR = {", 1)[1].split("\n};", 1)[0]
+    pairs = re.findall(rf"^\s*{JS_STRING}:\s*{JS_STRING},?\s*$", body, re.M)
+    return {json.loads(f'"{k}"'): json.loads(f'"{v}"') for k, v in pairs}
+
+
+def page_texts() -> set[str]:
+    """t("...") literals in the page's scripts, plus index.html's data-i18n text and attributes."""
+    import json
+    import re
+    from html.parser import HTMLParser
+
+    texts = set()
+    for path in STATIC.glob("*.js"):
+        texts |= {json.loads(f'"{m}"') for m in re.findall(rf"\bt\({JS_STRING}", path.read_text(encoding="utf-8"))}
+
+    class Page(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.open: list[list] = []  # [tag, collected text or None]
+
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            for name in filter(None, (a.get("data-i18n-attr") or "").split(",")):
+                texts.add(a[name])
+            if tag not in ("input", "br", "meta", "link"):
+                self.open.append([tag, [] if "data-i18n" in a else None])
+
+        def handle_data(self, data):
+            for _tag, buf in self.open:
+                if buf is not None:
+                    buf.append(data)
+
+        def handle_endtag(self, tag):
+            if tag in ("input", "br", "meta", "link"):
+                return
+            _tag, buf = self.open.pop()
+            if buf is not None:
+                texts.add(" ".join("".join(buf).split()))
+
+    Page().feed((STATIC / "index.html").read_text(encoding="utf-8"))
+    return texts
+
+
+def test_every_page_text_is_translated():
+    catalog = js_catalog()
+    missing = sorted(t for t in page_texts() if t not in catalog)
+    assert not missing, "add to TR in web/static/i18n.js:\n" + "\n".join(missing)
+
+
+@pytest.mark.parametrize("english", sorted(page_texts()))
+def test_page_translation_keeps_placeholders(english):
+    catalog = js_catalog()
+    if english in catalog:
+        assert fields(catalog[english]) == fields(english)

@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import * as palette from "/static/palette.js";
+import { fmt, percent, t } from "/static/i18n.js";
 
 const HALF = 5;      // x/z span: -5..5
 const HEIGHT = 8;    // y span: 0..8
@@ -40,7 +41,7 @@ export function createMap(container, { onSelect }) {
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   } catch (e) {
-    return { setGames() {}, select() {}, setVisible() {}, available: false }; // no WebGL: app.js falls back to 2D
+    return { setGames() {}, select() {}, setVisible() {}, relabel() {}, available: false }; // no WebGL: app.js falls back to 2D
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.prepend(renderer.domElement);
@@ -85,13 +86,15 @@ export function createMap(container, { onSelect }) {
   const axisMat = (c) => new THREE.LineBasicMaterial({ color: c });
   const origin = new THREE.Vector3(-HALF, 0, HALF);
   const axes = [
-    [new THREE.Vector3(HALF, 0, HALF), color("--accent"), "Demand →", new THREE.Vector3(HALF + 0.6, 0, HALF + 0.6)],
-    [new THREE.Vector3(-HALF, HEIGHT, HALF), color("--accent-2"), "Dissatisfaction ↑", new THREE.Vector3(-HALF, HEIGHT + 0.6, HALF)],
-    [new THREE.Vector3(-HALF, 0, -HALF), color("--good"), "Fixability →", new THREE.Vector3(-HALF - 0.6, 0, -HALF - 0.6)],
+    [new THREE.Vector3(HALF, 0, HALF), color("--accent"), () => t("Demand →"), new THREE.Vector3(HALF + 0.6, 0, HALF + 0.6)],
+    [new THREE.Vector3(-HALF, HEIGHT, HALF), color("--accent-2"), () => t("Dissatisfaction ↑"), new THREE.Vector3(-HALF, HEIGHT + 0.6, HALF)],
+    [new THREE.Vector3(-HALF, 0, -HALF), color("--good"), () => t("Fixability →"), new THREE.Vector3(-HALF - 0.6, 0, -HALF - 0.6)],
   ];
+  const axisLabels = []; // [label, text()]: relabel() refills them in the current language
   for (const [end, color, text, at] of axes) {
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([origin, end]), axisMat(color)));
-    const l = label(text);
+    const l = label(text());
+    axisLabels.push([l, text]);
     l.position.copy(at);
     scene.add(l);
   }
@@ -188,7 +191,7 @@ export function createMap(container, { onSelect }) {
     const b = document.createElement("b");
     b.textContent = g.game.name;
     const s = document.createElement("span");
-    s.textContent = `Score ${Math.round(g.opportunity.score)} · ${g.reviews.toLocaleString("en-US")} reviews · ${Math.round(g.rating)}% pos`;
+    s.textContent = t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(g.opportunity.score), n: fmt(g.reviews), pct: percent(g.rating) });
     tooltip.append(b, s);
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y}px`;
@@ -230,9 +233,9 @@ export function createMap(container, { onSelect }) {
   renderer.setAnimationLoop((now) => {
     if (!visible) return; // hidden behind the 2D view: don't burn GPU
     for (const s of spheres) {
-      const t = Math.min(1, Math.max(0, (now - born - s.userData.delay) / 600));
+      const k = Math.min(1, Math.max(0, (now - born - s.userData.delay) / 600));
       const pulse = s === selected ? 1 + 0.06 * Math.sin(now / 250) : 1;
-      s.scale.setScalar(Math.max(0.001, ease(t)) * pulse);
+      s.scale.setScalar(Math.max(0.001, ease(k)) * pulse);
     }
     controls.target.lerp(targetGoal, 0.08);
     if (ring.visible) ring.lookAt(camera.position);
@@ -241,5 +244,9 @@ export function createMap(container, { onSelect }) {
     labels.render(scene, camera);
   });
 
-  return { setGames, select, setVisible, available: true };
+  function relabel() {
+    for (const [l, text] of axisLabels) l.element.textContent = text();
+  }
+
+  return { setGames, select, setVisible, relabel, available: true };
 }

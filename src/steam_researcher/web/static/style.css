@@ -70,7 +70,7 @@ a:hover { text-decoration: underline; }
 /* ---------- top bar ---------- */
 .topbar {
   position: relative; z-index: 20; flex: none;
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s5);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s5);
   padding: 10px var(--s5);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(12px);
@@ -506,5 +506,6 @@ tbody tr.selected { background: color-mix(in srgb, var(--accent) 16%, transparen
   .search > input { width: 100%; }
   .search.small { width: 100%; }
   .search.small > input { flex: 1; width: auto; }
+  #lang { justify-self: start; }
   .popover { width: min(400px, calc(100vw - 32px)); }
 }

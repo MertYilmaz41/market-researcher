@@ -175,3 +175,47 @@ def test_ui_smoke(base_url, browser):
     assert page.text_content("#table-title").startswith("Crafting + Colony Sim")  # previous results stay
 
     assert errors == []
+
+
+def test_ui_turkish(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d')")
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")  # Job Simulator is pre-picked
+    page.click("#run")
+    page.wait_for_selector("#ranking tbody tr")
+    page.click("#ranking tbody tr:first-child")
+
+    # Switch to Turkish with results on screen: everything is redrawn, nothing is lost.
+    page.click('#lang button[data-lang="tr"]')
+    page.wait_for_function("document.querySelector('#table-title').textContent.includes('fırsat sıralaması')")
+    assert page.get_attribute("html", "lang") == "tr"
+    assert page.text_content("#run") == "Fırsatları bul"
+    assert page.text_content('#ranking th[data-key="score"]') == "Puan"
+    assert page.locator("#ranking tbody tr").count() == 2
+    assert "Şikayetler" in page.inner_text("#panel .tabs")
+    assert "olumlu" in page.text_content("#map-legend") or "talep" in page.text_content("#map-legend")
+    page.hover("#ranking tbody tr:first-child .score-pill")
+    tip = page.inner_text("#score-tip")
+    assert "Fırsat puanı" in tip and "Talep" in tip and "Düzeltilebilirlik" in tip  # server text too
+    page.mouse.move(5, 5)
+
+    # Toasts: the page's own and the server's.
+    page.evaluate("document.querySelector('#toasts').replaceChildren()")
+    page.fill("#appid", "abc")
+    page.press("#appid", "Enter")
+    assert "AppID ya da Steam mağaza linki değil" in page.inner_text("#toasts")
+    page.click("#run")
+    page.wait_for_function("document.querySelector('#toasts').innerText.includes('Analiz tamamlandı')")
+    assert page.get_attribute("#download", "href").endswith("lang=tr")
+
+    # Remembered after a reload; back to English with one click.
+    page.reload()
+    page.wait_for_selector(".tag-chip")
+    assert page.text_content("#run") == "Fırsatları bul"
+    page.click('#lang button[data-lang="en"]')
+    assert page.text_content("#run") == "Find opportunities"
+    assert page.text_content('#ranking th[data-key="score"]') == "Score"
+    assert errors == []

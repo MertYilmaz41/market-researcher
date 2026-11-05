@@ -1,6 +1,7 @@
 // 2D opportunity map (SVG): x = demand, y = dissatisfaction, size = estimated revenue (log),
 // color = opportunity score. Same interface as map3d.js; needs no CDN, so it always works.
 import { scoreColor } from "/static/palette.js";
+import { fmt, pct, percent, t } from "/static/i18n.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const PAD = { l: 58, r: 28, t: 26, b: 46 };
@@ -12,11 +13,9 @@ function svg(tag, attrs = {}, text = null) {
   return node;
 }
 
-const pct = (x) => `${Math.round(x * 100)}%`;
-
 export function createMap2d(container, { onSelect }) {
   const tooltip = container.querySelector("#tooltip");
-  const root = svg("svg", { class: "map2d", role: "img", "aria-label": "Opportunity map, 2D" });
+  const root = svg("svg", { class: "map2d", role: "img", "aria-label": t("Opportunity map, 2D") });
   container.prepend(root);
   let games = [], selected = null, w = 0, h = 0;
   let dx = [0, 1], dy = [0, 1]; // axis ranges, zoomed to the data
@@ -41,12 +40,12 @@ export function createMap2d(container, { onSelect }) {
     tooltip.replaceChildren(
       Object.assign(document.createElement("b"), { textContent: g.game.name }),
       Object.assign(document.createElement("span"), {
-        textContent: `Score ${Math.round(o.score)} · ${g.reviews.toLocaleString("en-US")} reviews · `
-          + `${Math.round(g.rating)}% pos`,
+        textContent: t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(o.score), n: fmt(g.reviews), pct: percent(g.rating) }),
       }),
       Object.assign(document.createElement("span"), {
-        textContent: `demand ${pct(o.demand)} · dissatisfaction ${pct(o.dissatisfaction)} · fixability ${pct(o.fixability)}`
-          + (o.penalty ? ` · -${Math.round(o.penalty)} risks` : ""),
+        textContent: t("demand {demand} · dissatisfaction {dissatisfaction} · fixability {fixability}",
+          { demand: pct(o.demand), dissatisfaction: pct(o.dissatisfaction), fixability: pct(o.fixability) })
+          + (o.penalty ? t(" · -{points} risks", { points: Math.round(o.penalty) }) : ""),
       }),
     );
     tooltip.style.left = `${e.clientX - box.left}px`;
@@ -72,10 +71,10 @@ export function createMap2d(container, { onSelect }) {
     root.append(
       svg("line", { class: "axis demand", x1: x(x0), x2: x(x1), y1: y(y0), y2: y(y0) }),
       svg("line", { class: "axis dissatisfaction", x1: x(x0), x2: x(x0), y1: y(y0), y2: y(y1) }),
-      svg("text", { class: "axis-label", x: x(x1), y: h - 8, "text-anchor": "end" }, "Demand →"),
+      svg("text", { class: "axis-label", x: x(x1), y: h - 8, "text-anchor": "end" }, t("Demand →")),
       svg("text", { class: "axis-label", x: 16, y: y(y1), "text-anchor": "end", transform: `rotate(-90 16 ${y(y1)})` },
-        "Dissatisfaction →"),
-      svg("text", { class: "hint", x: x(x1) - 8, y: y(y1) + 16, "text-anchor": "end" }, "Best opportunities ↗"),
+        t("Dissatisfaction →")),
+      svg("text", { class: "hint", x: x(x1) - 8, y: y(y1) + 16, "text-anchor": "end" }, t("Best opportunities ↗")),
     );
 
     // Bubble size by revenue, relative within this result (like the 3D spheres).
@@ -133,5 +132,10 @@ export function createMap2d(container, { onSelect }) {
   new ResizeObserver(resize).observe(container);
   resize();
 
-  return { setGames, select, setVisible, available: true };
+  function relabel() {
+    root.setAttribute("aria-label", t("Opportunity map, 2D"));
+    draw();
+  }
+
+  return { setGames, select, setVisible, relabel, available: true };
 }
