@@ -65,3 +65,19 @@ def test_non_json_raises_clear_error(tmp_path):
     client, _ = make_client(tmp_path, lambda r: httpx.Response(200, text="<html>oops"))
     with pytest.raises(RuntimeError, match="did not return JSON"):
         client.get_json(URL)
+
+
+def test_throttle_reserves_slots_per_host(tmp_path, monkeypatch):
+    """Parallel callers to one host are spaced by its interval; other hosts don't wait."""
+    slept = []
+    monkeypatch.setattr(http_mod.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(http_mod.time, "sleep", slept.append)
+    client = HttpClient(cache=Cache(tmp_path / "c.sqlite"), use_cache=False)
+    for _ in range(3):
+        client._throttle("steamspy.com")
+    client._throttle("store.steampowered.com")
+    assert slept == [1.0, 2.0]  # 1st steamspy call and the store call go immediately
+
+
+def test_review_api_has_short_timeout():
+    assert http_mod.HOST_TIMEOUT["api.steampowered.com"] < http_mod.DEFAULT_TIMEOUT

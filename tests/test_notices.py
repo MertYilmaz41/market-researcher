@@ -130,10 +130,16 @@ def test_friendly_error(exc, title):
 
 # ---------- pipeline resilience ----------
 
+def fake_verify(http, candidates, limit, progress=None, on_hit=None):
+    for g in candidates:
+        on_hit(g)
+    return candidates, [], set()
+
+
 def test_run_tag_survives_one_broken_game(monkeypatch):
     games = [game(appid=1, name="Good"), game(appid=2, name="Broken")]
     monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: games)
-    monkeypatch.setattr(pipeline, "verify_games", lambda http, c, limit, cb: (c, [], set()))
+    monkeypatch.setattr(pipeline, "verify_games", fake_verify)
 
     def analyze(http, appid, n):
         if appid == 2:
@@ -209,3 +215,45 @@ def test_unknown_tag_suggests_close_tags():
     assert notices.unknown_tag("Colny Sim", known).hint.startswith("Did you mean Colony Sim")
     assert "Examples:" in notices.unknown_tag("Colny Sim").hint
     assert "Examples:" in notices.unknown_tag("Qwzzqxnope", known).hint
+
+
+# ---------- parallel analysis ----------
+
+def test_run_tag_analyzes_in_parallel_and_keeps_order(monkeypatch):
+    import threading
+    import time
+
+    games = [game(appid=i, name=f"G{i}") for i in range(1, 5)]
+    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: games)
+    monkeypatch.setattr(pipeline, "verify_games", fake_verify)
+    seen, steps = set(), []
+
+    def slow_analyze(http, appid, n):
+        seen.add(threading.get_ident())
+        time.sleep(0.3 if appid == 1 else 0.1)  # the first game finishes last
+        return analysis(40, f"G{appid}", appid=appid)
+
+    monkeypatch.setattr(pipeline, "analyze_game", slow_analyze)
+    start = time.monotonic()
+    result = pipeline.run_tag(None, "T", 100, 5, 70, 10, 50, lambda m, d, t: steps.append((m, d, t)))
+    assert time.monotonic() - start < 0.6  # sequential would take 0.6 s
+    assert len(seen) > 1
+    assert [a.game.name for a in result.analyses] == ["G1", "G2", "G3", "G4"]
+    assert steps[-1] == ("Analyzed G1", 4, 4)
+
+
+def test_review_timeout_keeps_the_game(monkeypatch):
+    """A slow review API must not drop the game: it is ranked without complaint mining."""
+    from steam_researcher.sources import steam_store, steamspy
+
+    monkeypatch.setattr(steamspy, "game_details", lambda http, appid: game(appid=appid, name="Slow"))
+    monkeypatch.setattr(steam_store, "app_details", lambda http, appid: None)
+    monkeypatch.setattr(steam_store, "review_histogram", lambda http, appid: [])
+
+    def stalled(*a, **kw):
+        raise httpx.ReadTimeout("x", request=httpx.Request("GET", "https://api.steampowered.com/IUserReviewsService/"))
+
+    monkeypatch.setattr(steam_store, "reviews", stalled)
+    a = pipeline.analyze_game(None, 7, 100)
+    assert a is not None and a.mining is None
+    assert a.review_error == "api.steampowered.com didn't answer in time."

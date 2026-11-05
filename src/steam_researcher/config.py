@@ -59,3 +59,7 @@ RISK_PENALTIES = {  # points subtracted per flag; review bombs are handled via a
 EXCLUDE_FLAGS = {"not_game"}
 
 USER_AGENT = "steam-researcher/0.1 (hobby market research CLI)"
+
+# Games analyzed in parallel. Each host is still rate-limited (http.HOST_INTERVAL); parallel games
+# keep every host busy and stop one slow request from holding up the whole run.
+ANALYZE_WORKERS = 4

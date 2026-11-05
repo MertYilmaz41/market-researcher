@@ -1,6 +1,7 @@
 """HTTP client: polite per-host rate limiting, retries, and caching."""
 
 import json
+import threading
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -13,6 +14,10 @@ from .cache import Cache
 
 # Minimum seconds between requests to the same host
 HOST_INTERVAL = {"steamspy.com": 1.0, "store.steampowered.com": 1.5, "api.steampowered.com": 1.5}
+# Read timeout per host (seconds). The review API is sometimes very slow (20-90+ s for one page,
+# measured Nov 2026); give up sooner than the default and retry, since a retry is often fast.
+HOST_TIMEOUT = {"api.steampowered.com": 20.0}
+DEFAULT_TIMEOUT = 30.0
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
@@ -21,6 +26,9 @@ class RetryableStatus(Exception):
 
 
 class HttpClient:
+    """Safe to share between threads: requests to different hosts run in parallel, while each host
+    gets one request at a time, at most one per HOST_INTERVAL."""
+
     def __init__(
         self,
         cache: Cache | None = None,
@@ -31,17 +39,23 @@ class HttpClient:
         self.use_cache = use_cache
         self.client = httpx.Client(
             headers={"User-Agent": config.USER_AGENT},
-            timeout=30.0,
+            timeout=DEFAULT_TIMEOUT,
             follow_redirects=False,
             transport=transport,
         )
         self._last: dict[str, float] = {}
+        self._lock = threading.Lock()
+        self._host_locks: dict[str, threading.Lock] = {}
 
     def _throttle(self, host: str) -> None:
-        wait = HOST_INTERVAL.get(host, 1.0) - (time.monotonic() - self._last.get(host, 0.0))
-        if wait > 0:
-            time.sleep(wait)
-        self._last[host] = time.monotonic()
+        # Reserve the next free slot for this host under the lock, then sleep outside it,
+        # so threads waiting for one host never block requests to another.
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._last.get(host, float("-inf")) + HOST_INTERVAL.get(host, 1.0))
+            self._last[host] = slot
+        if slot > now:
+            time.sleep(slot - now)
 
     @retry(
         retry=retry_if_exception_type((httpx.TransportError, RetryableStatus)),
@@ -50,8 +64,12 @@ class HttpClient:
         reraise=True,
     )
     def _fetch(self, url: str, params: dict[str, Any]) -> Any:
-        self._throttle(urlparse(url).hostname or "")
-        resp = self.client.get(url, params=params)
+        host = urlparse(url).hostname or ""
+        with self._lock:
+            host_lock = self._host_locks.setdefault(host, threading.Lock())
+        with host_lock:  # one request in flight per host; retries back off outside the lock
+            self._throttle(host)
+            resp = self.client.get(url, params=params, timeout=HOST_TIMEOUT.get(host, DEFAULT_TIMEOUT))
         if resp.status_code in RETRYABLE_STATUS:
             raise RetryableStatus(f"{url} returned HTTP {resp.status_code}")
         if resp.is_redirect:

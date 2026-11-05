@@ -1,10 +1,13 @@
 """Shared steps used by `discover`, `analyze` and `report`."""
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
-from . import risk, scoring
-from .http import HttpClient
+import httpx
+
+from . import config, risk, scoring
+from .http import HttpClient, RetryableStatus
 from .mining import mine
 from .discover import filter_candidates
 from .models import Analysis, Game
@@ -17,9 +20,11 @@ def verify_games(
     candidates: list[Game],
     limit: int,
     progress: Callable[[Game], None] | None = None,
+    on_hit: Callable[[Game], None] | None = None,
 ) -> tuple[list[Game], list[str], set[int]]:
     """'Games Only': SteamSpy has no type field, so confirm with Steam appdetails.
 
+    on_hit(game) is called as soon as a game is kept, so callers can start work on it early.
     Returns (games kept, excluded non-game descriptions, appids with no store page).
     """
     hits, not_games, unlisted = [], [], set()
@@ -35,6 +40,8 @@ def verify_games(
             not_games.append(f"{g.name} ({details.type})")
             continue
         hits.append(g)
+        if on_hit:
+            on_hit(g)
     return hits, not_games, unlisted
 
 
@@ -51,8 +58,9 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
         negative = steam_store.reviews(http, appid, "negative", limit=review_limit)
         positive = steam_store.reviews(http, appid, "positive", limit=review_limit)
         mining = mine(negative, positive)
-    except RuntimeError as e:
-        review_error = str(e)
+    except (RuntimeError, httpx.HTTPError, RetryableStatus) as e:
+        # Steam's review API is sometimes very slow; still rank the game on its other data.
+        review_error = friendly_error(e).message
 
     flags = risk.assess(game, details, hist) + (risk.check_scope(mining) if mining else [])
     opportunity = scoring.score(game, flags, mining, risk.rating_without_bombs(hist))
@@ -90,7 +98,9 @@ def run_tag(
 ) -> TagResult | None:
     """Steps 1-4 for a tag. Returns None if SteamSpy knows no games for the tag.
 
-    on_step(message, done, total) reports progress over verify + analyze steps.
+    Games are analyzed in parallel (config.ANALYZE_WORKERS), starting as soon as each one passes
+    the store-type check; the shared HttpClient keeps every host within its rate limit.
+    on_step(message, done, total) is always called from the calling thread.
     """
     games = steamspy.games_by_tag(http, tag)
     if not games:
@@ -104,21 +114,28 @@ def run_tag(
     by_demand = sorted(candidates, key=lambda g: -g.reviews)
     n_check = min(max_games, len(by_demand))
 
-    checked = 0
+    futures = {}  # future -> game, in the order the games were kept
+    with ThreadPoolExecutor(max_workers=config.ANALYZE_WORKERS) as pool:
 
-    def checking(g: Game) -> None:
-        nonlocal checked
-        if on_step:
-            on_step(f"Checking store type: {g.name}", checked, n_check)
-        checked += 1
+        def done() -> int:
+            return sum(f.done() for f in futures)
 
-    hits, result.not_games, unlisted = verify_games(http, by_demand, max_games, checking)
-    result.unlisted = [g.name for g in hits if g.appid in unlisted]
-    for i, g in enumerate(hits):
-        if on_step:
-            on_step(f"Analyzing {g.name}", i, len(hits))
+        def checking(g: Game) -> None:
+            if on_step:
+                on_step(f"Checking store type: {g.name}", done(), n_check)
+
+        def start(g: Game) -> None:
+            futures[pool.submit(analyze_game, http, g.appid, review_limit)] = g
+
+        hits, result.not_games, unlisted = verify_games(http, by_demand, max_games, checking, start)
+        result.unlisted = [g.name for g in hits if g.appid in unlisted]
+        for i, f in enumerate(as_completed(futures), 1):
+            if on_step:
+                on_step(f"Analyzed {futures[f].name}", i, len(hits))
+
+    for f, g in futures.items():  # keep the deterministic order of `hits`
         try:
-            a = analyze_game(http, g.appid, review_limit)
+            a = f.result()
         except Exception as e:  # one broken game must not sink the whole run
             result.failed.append((g.name, friendly_error(e).message))
             continue
