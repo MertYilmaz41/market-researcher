@@ -522,10 +522,13 @@ const sortValue = {
   score: (g) => g.opportunity.score,
   reviews: (g) => g.reviews,
   rating: (g) => g.rating,
+  recent: (g) => g.recent_share ?? -1,
   gross: (g) => g.box.gross_mid,
   complaint: (g) => g.mining?.categories[0]?.share ?? -1,
   risks: (g) => riskCodes(g).length,
 };
+
+const recentText = (g) => g.recent_share == null ? "-" : `${g.recent_reviews.toLocaleString("en-US")} (${pct(g.recent_share)})`;
 
 const riskCodes = (g) => g.flags.filter((f) => f.severity !== "info").map((f) => f.code);
 
@@ -550,6 +553,7 @@ function renderTable() {
         el("td", { class: "num" }, el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}` }, Math.round(o.score))),
         el("td", { class: "num" }, g.reviews.toLocaleString("en-US")),
         el("td", { class: "num" }, `${Math.round(g.rating)}%${adj}`),
+        el("td", { class: "num" }, recentText(g)),
         el("td", { class: "num" }, g.price ? money(g.box.gross_mid) : "F2P"),
         el("td", { class: "complaint-cell" }, top ? `${top.label} (${pct(top.share)})` : "-"),
         el("td", { class: "risks-cell" }, riskCodes(g).join(", ") || "-"),
@@ -610,6 +614,7 @@ function renderPanel(g) {
       el("div", { class: "facts" },
         el("div", {}, el("span", {}, "Reviews"), el("b", {}, g.reviews.toLocaleString("en-US"))),
         el("div", {}, el("span", {}, "% positive"), el("b", {}, `${Math.round(g.rating)}%`, adjusted ? ` (${Math.round(o.effective_rating)}% adj.)` : "")),
+        el("div", {}, el("span", {}, "Last 12 months"), el("b", {}, recentText(g))),
         el("div", {}, el("span", {}, "Est. gross (x45)"), el("b", {}, g.price ? money(g.box.gross_mid) : "F2P")),
         el("div", {}, el("span", {}, "Range (x30-x100)"), el("b", {}, g.price ? `${money(g.box.gross_low)} - ${money(g.box.gross_high)}` : "-")),
       ),

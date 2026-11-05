@@ -134,3 +134,41 @@ def test_reviews_redirect_is_clear_error(tmp_path, monkeypatch):
     http = HttpClient(cache=Cache(tmp_path / "c.sqlite"), transport=httpx.MockTransport(handler))
     with pytest.raises(RuntimeError, match="redirected"):
         steam_store.reviews(http, 1)
+
+
+# --- recent demand ---------------------------------------------------------------------------
+
+NOW = 1_800_000_000  # fixed "now" so the 12-month window is deterministic
+MONTH = 31 * 24 * 3600  # 12 of these fit in a year, 13 do not
+
+
+def _months(counts: list[int]) -> list[HistPoint]:
+    """One point per month, oldest first, ending this month."""
+    n = len(counts)
+    return [HistPoint(date=NOW - (n - 1 - i) * MONTH, up=c, down=0) for i, c in enumerate(counts)]
+
+
+def test_recent_activity_counts_last_12_months():
+    hist = _months([100] * 24 + [5] * 12)
+    recent, total, age = risk.recent_activity(hist, NOW)
+    assert (recent, total) == (60, 2460)
+    assert 2.9 < age < 3.0
+
+
+def test_old_quiet_game_is_fading():
+    flags = risk.check_fading(_months([500] * 36 + [1] * 12), NOW)
+    assert [f.code for f in flags] == ["fading_demand"]
+    assert "0.1%" in flags[0].message  # 12 of 18,012 reviews
+
+
+def test_young_or_active_game_is_not_fading():
+    assert risk.check_fading(_months([500] * 6 + [1] * 12), NOW) == []  # under 2 years old
+    assert risk.check_fading(_months([100] * 36 + [50] * 12), NOW) == []  # still busy
+    assert risk.check_fading([], NOW) == []
+
+
+def test_fading_demand_costs_points():
+    from steam_researcher import scoring
+    g = Game(appid=1, name="x", positive=4000, negative=4000, price_cents=999)
+    flag = risk.check_fading(_months([500] * 36 + [1] * 12), NOW)
+    assert scoring.score(g, flag, None).penalty == 10

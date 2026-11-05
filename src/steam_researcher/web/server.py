@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
-from .. import boxmethod, config, notices, pipeline
+from .. import boxmethod, config, notices, pipeline, risk
 from ..http import HttpClient
 from ..models import Analysis
 from ..report import rank, render, slug
@@ -80,6 +80,7 @@ def game_json(a: Analysis) -> dict:
     """Everything the frontend needs for one game; no math happens in JS."""
     g = a.game
     box = boxmethod.estimate(g.reviews, g.base_price)
+    recent, total, _ = risk.recent_activity(a.histogram)
     data = a.model_dump(mode="json")
     data.update(
         store_url=g.store_url,
@@ -89,6 +90,8 @@ def game_json(a: Analysis) -> dict:
         box=box.model_dump(),
         excluded=a.excluded,
         has_histogram=a.has_histogram,
+        recent_reviews=recent,
+        recent_share=recent / total if total else None,
     )
     return data
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from . import boxmethod
+from . import boxmethod, risk
 from .models import Analysis
 
 _env = Environment(
@@ -48,6 +48,12 @@ def top_complaint(a: Analysis) -> str:
         return "-"
     c = a.mining.categories[0]
     return f"{c.label} ({c.share:.0%})"
+
+
+def recent_text(a: Analysis) -> str:
+    """Reviews in the last 12 months and their share of all reviews (English histogram)."""
+    recent, total, _ = risk.recent_activity(a.histogram)
+    return f"{recent:,} ({recent / total:.0%})" if total else "-"
 
 
 def risk_codes(a: Analysis) -> str:
@@ -92,6 +98,7 @@ def render(
         gross=gross,
         top_complaint=top_complaint,
         risk_codes=risk_codes,
+        recent_text=recent_text,
     )
     return re.sub(r"\n{3,}", "\n\n", text)  # template whitespace tidy-up
 

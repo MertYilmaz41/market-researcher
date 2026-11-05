@@ -68,6 +68,8 @@ NETCODE_CATEGORY_IDS = {
 }
 NICHE_TAGS = {"VR", "Hentai", "Sexual Content", "NSFW", "Nudity", "Visual Novel", "Otome"}
 SCOPE_MIN_SHARE = 0.10  # AAA comparisons in >= 10% of negative reviews
+FADING_SHARE = 0.05  # < 5% of all reviews in the last 12 months...
+FADING_MIN_AGE_YEARS = 2  # ...for a game at least this old = fading demand
 HARD_TAGS = {"Physics", "Open World", "MMORPG", "Massively Multiplayer"}
 
 # Opportunity score: weighted geometric mean of [0,1] parts, x100, minus risk penalties
@@ -83,6 +85,7 @@ RISK_PENALTIES = {  # points subtracted per flag; review bombs are handled via a
     "niche": 10,
     "scope_unrealistic": 10,
     "hard_tech": 5,
+    "fading_demand": 10,
 }
 EXCLUDE_FLAGS = {"not_game"}
 

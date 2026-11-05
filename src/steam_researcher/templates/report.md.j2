@@ -24,6 +24,7 @@ Analyzed the {{ analyses|length }} highest-demand of {{ n_candidates }} candidat
 [Steam store]({{ a.game.store_url }}) · AppID {{ a.game.appid }}{% if a.details %} · Released {{ a.details.release_date }}{% endif %} · {{ a.game.developer|md }}
 
 - **Demand:** {{ "{:,}".format(a.game.reviews) }} reviews, {{ a.game.owners }} owners (SteamSpy). Box Method: ~{{ "{:,}".format(box(a).units_mid) }} units, {{ money(box(a).gross_low) }} - {{ money(box(a).gross_high) }} gross at ${{ "%.2f"|format(a.game.base_price) }}.
+- **Recent demand:** {{ recent_text(a) }} of its reviews came in the last 12 months.
 - **Satisfaction:** {{ a.game.rating|round|int }}% positive{% if a.opportunity.effective_rating|round != a.game.rating|round %}, {{ a.opportunity.effective_rating|round|int }}% with review bombs removed{% endif %}.
 - **Score parts:** demand {{ pct(a.opportunity.demand) }}, dissatisfaction {{ pct(a.opportunity.dissatisfaction) }}, fixability {{ pct(a.opportunity.fixability) }}{% if a.opportunity.penalty %}, penalty -{{ a.opportunity.penalty|int }} ({{ a.opportunity.penalized|join(", ") }}){% endif %}.
 {% if a.game.tags %}- **Tags:** {{ (a.game.tags|list)[:8]|join(", ") }}

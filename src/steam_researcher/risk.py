@@ -1,6 +1,7 @@
 """Deceptive-metric and feasibility checks (guide section 5)."""
 
 import datetime as dt
+import time
 from statistics import median
 
 from . import config
@@ -63,6 +64,30 @@ def rating_without_bombs(hist: list[HistPoint]) -> float | None:
     if not bombs or not rest:
         return None
     return 100 * (sum(p.up for p in hist) - sum(p.up for p in bombs)) / rest
+
+
+YEAR = 365 * 24 * 3600
+
+
+def recent_activity(hist: list[HistPoint], now: float | None = None) -> tuple[int, int, float]:
+    """(reviews in the last 12 months, all reviews, years since the first review) from the histogram."""
+    if not hist:
+        return 0, 0, 0.0
+    now = time.time() if now is None else now
+    recent = sum(p.total for p in hist if p.date >= now - YEAR)
+    return recent, sum(p.total for p in hist), (now - hist[0].date) / YEAR
+
+
+def check_fading(hist: list[HistPoint], now: float | None = None) -> list[RiskFlag]:
+    """An old game whose audience has mostly moved on: the demand is history, not a market."""
+    recent, total, age = recent_activity(hist, now)
+    if not total or age < config.FADING_MIN_AGE_YEARS or recent / total >= config.FADING_SHARE:
+        return []
+    return [RiskFlag(
+        code="fading_demand", severity="warn",
+        message=f"Only {recent / total:.1%} of its reviews ({recent:,}) came in the last 12 months. "
+        "The audience may have moved on.",
+    )]
 
 
 def check_discount(game: Game, details: AppDetails | None) -> list[RiskFlag]:
@@ -139,6 +164,7 @@ def assess(game: Game, details: AppDetails | None, hist: list[HistPoint]) -> lis
     return (
         check_listing(details)
         + check_spikes(hist)
+        + check_fading(hist)
         + check_discount(game, details)
         + check_complexity(details, game.tags)
         + check_niche(game.tags)
