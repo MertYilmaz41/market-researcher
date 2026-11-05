@@ -1,17 +1,20 @@
 // 3D opportunity map: one sphere per game.
 //   x = demand, y = dissatisfaction (review-bomb adjusted), z = fixability
-//   size = estimated gross revenue (log), color = opportunity score (red -> green)
+//   size = estimated gross revenue (log), color = opportunity score (blue -> teal -> gold)
+// Colors come from style.css :root via palette.js.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import * as palette from "/static/palette.js";
 
 const HALF = 5;      // x/z span: -5..5
 const HEIGHT = 8;    // y span: 0..8
 const CENTER = new THREE.Vector3(0, HEIGHT * 0.4, 0);
 
+const color = (name) => new THREE.Color(palette.cssVar(name));
+
 export function scoreColor(score) {
-  const hue = (Math.max(0, Math.min(100, score)) / 100) * 140; // 0 red -> 140 green
-  return new THREE.Color().setHSL(hue / 360, 0.75, 0.55);
+  return new THREE.Color(palette.scoreColor(score));
 }
 
 function position(game) {
@@ -37,9 +40,7 @@ export function createMap(container, { onSelect }) {
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   } catch (e) {
-    container.querySelector("#map-empty").textContent =
-      "3D map unavailable (WebGL is disabled in this browser). The table and details still work.";
-    return { setGames() {}, select() {} };
+    return { setGames() {}, select() {}, setVisible() {}, available: false }; // no WebGL: app.js falls back to 2D
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.prepend(renderer.domElement);
@@ -49,7 +50,7 @@ export function createMap(container, { onSelect }) {
   container.append(labels.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0b0e14, 22, 45);
+  scene.fog = new THREE.Fog(color("--bg"), 22, 45);
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
   camera.position.set(11, 9, 13);
 
@@ -65,17 +66,18 @@ export function createMap(container, { onSelect }) {
   controls.addEventListener("end", () => { idleTimer = setTimeout(() => (controls.autoRotate = true), 8000); });
 
   // Lights
-  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1a1030, 1.1));
+  // neutral warm light: no tint on the score colors
+  scene.add(new THREE.HemisphereLight(0xfff3e0, 0x14110c, 1.1));
   const key = new THREE.DirectionalLight(0xffffff, 1.6);
   key.position.set(6, 12, 8);
   scene.add(key);
 
   // Floor grid + bounding box + axes
-  const grid = new THREE.GridHelper(HALF * 2, 10, 0x3a4360, 0x222a3c);
+  const grid = new THREE.GridHelper(HALF * 2, 10, color("--line").offsetHSL(0, 0, 0.08), color("--line"));
   scene.add(grid);
   const box = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(HALF * 2, HEIGHT, HALF * 2)),
-    new THREE.LineBasicMaterial({ color: 0x2a3348, transparent: true, opacity: 0.6 }),
+    new THREE.LineBasicMaterial({ color: color("--line"), transparent: true, opacity: 0.8 }),
   );
   box.position.y = HEIGHT / 2;
   scene.add(box);
@@ -83,9 +85,9 @@ export function createMap(container, { onSelect }) {
   const axisMat = (c) => new THREE.LineBasicMaterial({ color: c });
   const origin = new THREE.Vector3(-HALF, 0, HALF);
   const axes = [
-    [new THREE.Vector3(HALF, 0, HALF), 0x7c5cff, "Demand →", new THREE.Vector3(HALF + 0.6, 0, HALF + 0.6)],
-    [new THREE.Vector3(-HALF, HEIGHT, HALF), 0x22d3ee, "Dissatisfaction ↑", new THREE.Vector3(-HALF, HEIGHT + 0.6, HALF)],
-    [new THREE.Vector3(-HALF, 0, -HALF), 0x34d399, "Fixability →", new THREE.Vector3(-HALF - 0.6, 0, -HALF - 0.6)],
+    [new THREE.Vector3(HALF, 0, HALF), color("--accent"), "Demand →", new THREE.Vector3(HALF + 0.6, 0, HALF + 0.6)],
+    [new THREE.Vector3(-HALF, HEIGHT, HALF), color("--accent-2"), "Dissatisfaction ↑", new THREE.Vector3(-HALF, HEIGHT + 0.6, HALF)],
+    [new THREE.Vector3(-HALF, 0, -HALF), color("--good"), "Fixability →", new THREE.Vector3(-HALF - 0.6, 0, -HALF - 0.6)],
   ];
   for (const [end, color, text, at] of axes) {
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([origin, end]), axisMat(color)));
@@ -218,7 +220,15 @@ export function createMap(container, { onSelect }) {
 
   // Loop
   const ease = (t) => 1 - Math.pow(1 - t, 3);
+  let visible = true;
+  function setVisible(on) {
+    visible = on;
+    renderer.domElement.style.display = labels.domElement.style.display = on ? "" : "none";
+    if (on) resize();
+  }
+
   renderer.setAnimationLoop((now) => {
+    if (!visible) return; // hidden behind the 2D view: don't burn GPU
     for (const s of spheres) {
       const t = Math.min(1, Math.max(0, (now - born - s.userData.delay) / 600));
       const pulse = s === selected ? 1 + 0.06 * Math.sin(now / 250) : 1;
@@ -231,5 +241,5 @@ export function createMap(container, { onSelect }) {
     labels.render(scene, camera);
   });
 
-  return { setGames, select };
+  return { setGames, select, setVisible, available: true };
 }

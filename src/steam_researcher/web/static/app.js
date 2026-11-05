@@ -1,3 +1,6 @@
+import { cssVar, scoreColor, scoreInk } from "/static/palette.js";
+import { createMap2d } from "/static/map2d.js";
+
 const $ = (sel) => document.querySelector(sel);
 
 // ---------- tiny DOM helper: text is always set via textContent ----------
@@ -19,7 +22,6 @@ function el(tag, attrs = {}, ...children) {
 
 const money = (x) => (x >= 1e6 ? `$${(x / 1e6).toFixed(1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Math.round(x)}`);
 const pct = (x) => `${Math.round(x * 100)}%`;
-const scoreCss = (s) => `hsl(${(Math.max(0, Math.min(100, s)) / 100) * 140} 75% 55%)`;
 
 // ---------- toasts: every message the user should see goes through here ----------
 const ICONS = { success: "✓", info: "i", warning: "!", error: "×" };
@@ -78,32 +80,79 @@ async function apiError(res) {
   return new ApiError({ level: "error", title: `Request failed (HTTP ${res.status})`, message: detail || res.statusText, hint: "" });
 }
 
-// ---------- 3D map (optional: the rest of the UI must work without it) ----------
-let map = { setGames() {}, select() {} };
+// ---------- opportunity map: 2D (always works) and 3D (needs three.js from the CDN + WebGL) ----------
+const onMapSelect = (appid) => selectGame(appid);
+const map2d = createMap2d($("#map"), { onSelect: onMapSelect });
+let map3d = null;
 try {
   const { createMap } = await import("/static/map3d.js");
-  map = createMap($("#map"), { onSelect: (appid) => selectGame(appid, { fromMap: true }) });
+  const m = createMap($("#map"), { onSelect: onMapSelect });
+  if (!m.available) throw new Error("WebGL is disabled in this browser");
+  map3d = m;
 } catch (err) {
   console.error(err);
-  $("#map-empty").textContent = "The 3D map couldn't load. The table and details below still work.";
   toast("warning", "3D map unavailable",
-    "The map library couldn't be downloaded (no internet, or the CDN is blocked).",
-    "Check your connection and reload the page. The ranking table and game details still work.");
+    "The 3D library couldn't load (no internet, the CDN is blocked, or WebGL is off).",
+    "The 2D map shows the same games. Reload the page to try 3D again.");
 }
+// Both maps always hold the current games and selection, so switching views is instant.
+const map = {
+  setGames(games) { map2d.setGames(games); map3d?.setGames(games); },
+  select(appid) { map2d.select(appid); map3d?.select(appid); },
+};
+
+const MAP_LEGEND = {
+  "2d": "x: demand · y: dissatisfaction · size: revenue · color: score · hover for fixability",
+  "3d": "x: demand · y: dissatisfaction · z: fixability · size: revenue · color: score",
+};
+function setMapView(view) {
+  if (view !== "2d" && !map3d) view = "2d";
+  else if (view !== "2d") view = "3d";
+  map2d.setVisible(view === "2d");
+  map3d?.setVisible(view === "3d");
+  $("#map-legend").textContent = MAP_LEGEND[view];
+  for (const b of document.querySelectorAll("#map-view button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.view === view));
+  }
+  try { localStorage.setItem("mapView", view); } catch { /* private mode: just not remembered */ }
+}
+document.querySelectorAll("#map-view button").forEach((b) => b.addEventListener("click", () => setMapView(b.dataset.view)));
+if (!map3d) {
+  const b3 = $('#map-view button[data-view="3d"]');
+  b3.disabled = true;
+  b3.title = "3D map unavailable in this browser";
+}
+let savedView = "3d";
+try { savedView = localStorage.getItem("mapView") || "3d"; } catch { /* storage blocked */ }
+setMapView(savedView);
 
 // ---------- state ----------
-const state = { games: [], selected: null, sort: { key: "rank", asc: true }, runId: null, busy: false };
+// A search and a single-game analysis can run at the same time. keepPanel: the user analyzed a game
+// during the current search, so its results must not replace that game in the panel.
+const state = { games: [], selected: null, sort: { key: "rank", asc: true }, runId: null,
+  searching: false, analyzing: false, keepPanel: false };
 
-function setBusy(busy) {
-  state.busy = busy;
-  $("#run").disabled = busy;
-  $("#game-form button").disabled = busy;
+// Buttons are never disabled while busy: a disabled button ignores clicks and Enter silently.
+// They show what's running instead, and a second press explains why nothing new starts.
+function setButtonBusy(button, busy, label) {
+  button.textContent = label;
+  button.classList.toggle("busy", busy);
+  button.setAttribute("aria-busy", String(busy));
 }
 
-function busyGuard() {
-  if (!state.busy) return false;
-  toast("info", "Please wait", "A search is already running.", "Wait for it to finish, then try again.");
-  return true;
+function setSearching(on) {
+  state.searching = on;
+  document.body.classList.toggle("searching", on);
+  setButtonBusy($("#run"), on, on ? "Searching..." : "Find opportunities");
+}
+
+function setAnalyzing(on) {
+  state.analyzing = on;
+  setButtonBusy($("#game-form button"), on, on ? "Analyzing..." : "Analyze");
+}
+
+function stillRunning(what) {
+  toast("info", "Please wait", `${what} is still running.`, "Wait for it to finish, then try again.");
 }
 
 // ---------- top bar ----------
@@ -127,10 +176,17 @@ function fieldError(input, message, hint = "") {
   toast("error", `Check "${labelOf(input)}"`, message, hint);
 }
 
-// ---------- tag picker: searchable list of all Steam tags ----------
+// ---------- tag picker: tick any number of Steam tags (games must have all of them) ----------
+const MAX_TAGS = 5; // config.MAX_TAGS on the server
 const tagInput = $("#tag");
+const tagPop = $("#tag-pop");
 const tagList = $("#tag-list");
-const tagPicker = { tags: [], shown: [], active: -1 };
+// tags: Steam's catalog. shown: options in list order. freeText: the catalog failed to load, so the
+// box takes comma-separated tags typed by hand.
+const tagPicker = { tags: [], picked: ["Job Simulator"], shown: [], active: -1, freeText: false };
+
+const isPicked = (t) => tagPicker.picked.includes(t);
+const tagsLabel = (tags) => tags.join(" + ");
 
 // Case-insensitive substring match, prefix matches first. Empty query = every tag.
 function matchTags(query) {
@@ -145,70 +201,124 @@ function matchTags(query) {
   return prefix.concat(inside);
 }
 
-const findTag = (text) => tagPicker.tags.find((t) => t.toLowerCase() === text.trim().toLowerCase());
+function renderChips() {
+  $("#tag-chips").replaceChildren(...tagPicker.picked.map((t) =>
+    el("span", { class: "tag-chip" }, t,
+      el("button", { type: "button", tabindex: "-1", "aria-label": `Remove ${t}`,
+        onmousedown: (e) => e.preventDefault(), // don't steal focus from the filter box
+        onclick: (e) => { e.stopPropagation(); togglePick(t); } }, "×"))));
+  if (tagPicker.freeText) return;
+  const open = !tagPop.hidden;
+  tagInput.placeholder = open ? "Filter tags..." : tagPicker.picked.length ? "" : "Pick Steam tags...";
+}
+
+// Update checkboxes, limits and the footer in place: rows never move while you tick.
+function refreshList() {
+  const full = tagPicker.picked.length >= MAX_TAGS;
+  tagList.querySelectorAll("li[role=option]").forEach((li) => {
+    const on = isPicked(li.dataset.tag);
+    li.setAttribute("aria-selected", String(on));
+    li.classList.toggle("disabled", full && !on);
+    li.setAttribute("aria-disabled", String(full && !on));
+  });
+  const n = tagPicker.picked.length;
+  $("#tag-count").textContent = full ? `${MAX_TAGS} selected (the maximum)`
+    : n ? `${n} selected · games must have all of them` : "Tick one or more tags";
+  $("#tag-clear").hidden = !n;
+}
+
+function togglePick(tag) {
+  if (isPicked(tag)) tagPicker.picked = tagPicker.picked.filter((t) => t !== tag);
+  else if (tagPicker.picked.length < MAX_TAGS) tagPicker.picked.push(tag);
+  else return;
+  tagInput.classList.remove("invalid");
+  renderChips();
+  refreshList();
+}
 
 function setActive(i) {
   const items = tagList.querySelectorAll("li[role=option]");
   items[tagPicker.active]?.classList.remove("active");
-  items[tagPicker.active]?.setAttribute("aria-selected", "false");
   tagPicker.active = i;
   const li = items[i];
   if (!li) return tagInput.removeAttribute("aria-activedescendant");
   li.classList.add("active");
-  li.setAttribute("aria-selected", "true");
   li.scrollIntoView({ block: "nearest" });
   tagInput.setAttribute("aria-activedescendant", li.id);
 }
 
-// Opening shows every tag (with the current one highlighted); typing filters.
-function openTagList(query = "") {
+// Ticked tags first (as of opening), then the rest. Typing in the box only narrows the list.
+function openTagList(query = tagInput.value) {
   if (!tagPicker.tags.length) return;
-  tagPicker.shown = matchTags(query);
+  const matches = matchTags(query);
+  const picked = matches.filter(isPicked), rest = matches.filter((t) => !isPicked(t));
+  tagPicker.shown = picked.concat(rest);
   tagPicker.active = -1;
-  tagList.replaceChildren(...(tagPicker.shown.length
-    ? tagPicker.shown.map((t, i) => el("li", { role: "option", id: `tag-opt-${i}`, "aria-selected": "false",
-        onclick: () => pickTag(t) }, t))
-    : [el("li", { class: "none" }, `No Steam tag contains "${query.trim()}"`)]));
-  tagList.hidden = false;
+  let i = 0;
+  const option = (t) => el("li", { role: "option", id: `tag-opt-${i++}`, "data-tag": t, onclick: () => togglePick(t) },
+    el("span", { class: "check", "aria-hidden": "true" }, "✓"), t);
+  const group = (title) => el("li", { class: "group", role: "presentation" }, title);
+  const rows = [];
+  if (picked.length) rows.push(group("Selected"), ...picked.map(option));
+  if (rest.length) rows.push(...(picked.length ? [group("All tags")] : []), ...rest.map(option));
+  if (!matches.length) rows.push(el("li", { class: "none" }, `No Steam tag contains "${query.trim()}"`));
+  tagList.replaceChildren(...rows);
+  tagPop.hidden = false;
   tagInput.setAttribute("aria-expanded", "true");
-  const current = tagPicker.shown.indexOf(findTag(tagInput.value));
-  setActive(current >= 0 ? current : query.trim() && tagPicker.shown.length ? 0 : -1);
+  if (query.trim() && tagPicker.shown.length) setActive(0);
+  renderChips();
+  refreshList();
 }
 
 function closeTagList() {
-  tagList.hidden = true;
+  tagPop.hidden = true;
+  if (!tagPicker.freeText) tagInput.value = ""; // the filter is temporary; picks live in the chips
   tagInput.setAttribute("aria-expanded", "false");
   tagInput.removeAttribute("aria-activedescendant");
+  renderChips();
 }
 
-function pickTag(tag) {
-  tagInput.value = tag;
-  tagInput.classList.remove("invalid");
-  closeTagList();
-}
-
-tagInput.addEventListener("focus", () => { tagInput.select(); openTagList(); });
-tagInput.addEventListener("click", () => { if (tagList.hidden) openTagList(); });
-tagInput.addEventListener("input", () => openTagList(tagInput.value));
+tagInput.addEventListener("focus", () => openTagList());
+tagInput.addEventListener("input", () => openTagList());
 tagInput.addEventListener("blur", closeTagList);
-tagList.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus while clicking/scrolling the list
+// A click anywhere on the field (chips, empty space) opens the list.
+$("#tag-combo").addEventListener("click", (e) => {
+  if (tagPop.contains(e.target) || e.target.closest("#tag-toggle")) return;
+  if (document.activeElement !== tagInput) tagInput.focus();
+  else if (tagPop.hidden) openTagList();
+});
+tagPop.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus while ticking/scrolling
+$("#tag-clear").addEventListener("click", () => {
+  tagPicker.picked = [];
+  renderChips();
+  refreshList();
+});
 $("#tag-toggle").addEventListener("mousedown", (e) => {
   e.preventDefault();
-  if (!tagList.hidden) return closeTagList();
-  tagInput.focus();
-  openTagList();
+  if (!tagPop.hidden) return closeTagList();
+  if (document.activeElement !== tagInput) tagInput.focus();
+  else openTagList();
 });
 tagInput.addEventListener("keydown", (e) => {
-  if (tagList.hidden) {
-    if (e.key === "ArrowDown") { e.preventDefault(); openTagList(); }
+  if (e.key === "Backspace" && !tagInput.value && tagPicker.picked.length && tagPicker.tags.length) {
+    e.preventDefault();
+    return togglePick(tagPicker.picked[tagPicker.picked.length - 1]);
+  }
+  if (tagPop.hidden) {
+    if (e.key === "ArrowDown" && tagPicker.tags.length) { e.preventDefault(); openTagList(); }
     return; // Enter with the list closed submits the search as usual
   }
   const last = tagPicker.shown.length - 1;
   if (e.key === "ArrowDown") { e.preventDefault(); setActive(Math.min(last, tagPicker.active + 1)); }
   else if (e.key === "ArrowUp") { e.preventDefault(); setActive(Math.max(0, tagPicker.active - 1)); }
-  else if (e.key === "Enter" && tagPicker.active >= 0) { e.preventDefault(); pickTag(tagPicker.shown[tagPicker.active]); }
-  else if (e.key === "Escape") closeTagList();
+  else if (e.key === "Enter") {
+    e.preventDefault(); // Enter ticks; it never submits while the list is open
+    if (tagPicker.active >= 0) togglePick(tagPicker.shown[tagPicker.active]);
+    else closeTagList();
+  } else if (e.key === "Escape") closeTagList();
 });
+
+renderChips();
 
 (async function loadTags() {
   try {
@@ -217,11 +327,16 @@ tagInput.addEventListener("keydown", (e) => {
     tagPicker.tags = (await res.json()).tags || [];
     if (document.activeElement === tagInput) openTagList();
   } catch (err) {
+    // Fallback: type tags by hand, comma-separated.
     $("#tag-toggle").hidden = true;
-    tagInput.placeholder = "Steam tag, e.g. Job Simulator";
+    tagInput.value = tagPicker.picked.join(", ");
+    tagPicker.picked = [];
+    renderChips();
+    tagPicker.freeText = true;
+    tagInput.placeholder = "Steam tags, comma-separated, e.g. Crafting, Survival";
     toast("warning", "Tag list unavailable",
       err instanceof ApiError ? err.notice.message : "The list of Steam tags couldn't be loaded.",
-      "You can still type a tag by hand, e.g. Job Simulator or Colony Sim.");
+      "You can still type tags by hand, separated by commas, e.g. Crafting, Survival.");
   }
 })();
 
@@ -244,8 +359,7 @@ $("#tag-form").addEventListener("invalid", (e) => {
   e.preventDefault(); // our toast replaces the browser bubble
   const input = e.target;
   if ($("#tag-form").querySelector(".invalid")) return; // one toast per submit
-  fieldError(input, validityText(input),
-    input.id === "tag" ? "Type a Steam tag, e.g. Job Simulator or Colony Sim." : "");
+  fieldError(input, validityText(input));
 }, true);
 
 $("#run").addEventListener("click", () => {
@@ -254,35 +368,34 @@ $("#run").addEventListener("click", () => {
 
 $("#tag-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (busyGuard()) return;
+  if (state.searching) return stillRunning("A search");
   const body = {
-    tag: $("#tag").value.trim(),
+    // picks come only from ticks; in the free-text fallback, from the comma-separated box
+    tags: !tagPicker.freeText ? [...tagPicker.picked]
+      : tagInput.value.split(",").map((t) => t.trim()).filter(Boolean),
     min_reviews: +$("#min-reviews").value,
     lo: +$("#lo").value,
     hi: +$("#hi").value,
     max_games: +$("#max-games").value,
     reviews: +$("#reviews").value,
   };
-  if (!body.tag) return fieldError($("#tag"), "Enter a Steam tag to search.", "For example Job Simulator or Colony Sim.");
-  if (tagPicker.tags.length) {
-    const tag = findTag(body.tag);
-    if (!tag) {
-      const near = matchTags(body.tag).slice(0, 3);
-      fieldError(tagInput, `"${body.tag.slice(0, 60)}" isn't a Steam tag.`,
-        near.length ? `Did you mean ${near.join(", ")}? Pick one from the list.`
-          : "Pick one from the list. Clear the field to browse all tags.");
-      return openTagList(body.tag);
-    }
-    body.tag = tagInput.value = tag; // Steam's exact spelling
+  if (!body.tags.length) {
+    return fieldError(tagInput, "Pick at least one tag.",
+      !tagPicker.freeText ? "Tick one or more tags in the list." : "Type tags separated by commas, e.g. Crafting, Survival.");
   }
+  if (body.tags.length > MAX_TAGS) {
+    return fieldError(tagInput, `Use at most ${MAX_TAGS} tags.`, "Games must have every tag, so a few tags is usually enough.");
+  }
+  const label = tagsLabel(body.tags);
   if (body.lo > body.hi) {
     $("#lo").classList.add("invalid");
     return fieldError($("#hi"), `'% positive from' (${body.lo}) is higher than '% positive to' (${body.hi}).`,
       "Swap the two values, e.g. 5 to 70.");
   }
   openFilters(false);
-  setBusy(true);
-  progress(0, `Fetching games tagged "${body.tag}"...`);
+  state.keepPanel = false;
+  setSearching(true);
+  searchStatus(label, 0, "", `Fetching games tagged ${label}...`);
   try {
     const res = await fetch("/api/tag-runs", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -291,16 +404,27 @@ $("#tag-form").addEventListener("submit", async (e) => {
     const { id, notices } = await res.json();
     notifyAll(notices);
     state.runId = id;
-    await poll(id);
+    await poll(id, label);
   } catch (err) {
     notifyError(err, "Search failed");
   } finally {
-    setBusy(false);
-    progress(null);
+    setSearching(false);
+    searchStatus(null);
   }
 });
 
-async function poll(id) {
+// The banner over the (faded) previous results while a search runs; tag null hides it.
+function searchStatus(tag, frac, count, message) {
+  const box = $("#search-status");
+  box.hidden = tag == null;
+  if (tag == null) return;
+  $("#search-status-title").textContent = `Searching "${tag}"...`;
+  $("#search-status-count").textContent = count;
+  $("#search-status-fill").style.width = `${Math.round(frac * 100)}%`;
+  $("#search-status-text").textContent = message || "";
+}
+
+async function poll(id, tag) {
   for (;;) {
     const res = await fetch(`/api/tag-runs/${id}`);
     if (res.status === 404) {
@@ -311,14 +435,14 @@ async function poll(id) {
     const job = await res.json();
     if (job.status === "error") throw new ApiError(job.error);
     if (job.status === "done") return showResult(job.result, id);
-    progress(job.total ? job.done / job.total : 0, job.message);
+    searchStatus(tag, job.total ? job.done / job.total : 0, job.total ? `${job.done} / ${job.total}` : "", job.message);
     await new Promise((r) => setTimeout(r, 1000));
   }
 }
 
 $("#game-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (busyGuard()) return;
+  if (state.analyzing) return stillRunning("The analysis of the previous game");
   const input = $("#appid");
   input.classList.remove("invalid");
   const raw = input.value.trim();
@@ -333,8 +457,15 @@ $("#game-form").addEventListener("submit", async (e) => {
   }
   if (state.games.some((g) => g.game.appid === +appid)) return selectGame(+appid);
 
-  setBusy(true);
-  progress(0.3, `Analyzing AppID ${appid}... (the first time can take ~15 s)`);
+  if (state.searching) state.keepPanel = true; // the finishing search must not replace this game
+  setAnalyzing(true);
+  const panel = $("#panel");
+  const previous = [...panel.childNodes];
+  panel.replaceChildren(el("div", { class: "empty loading" },
+    el("div", {},
+      el("p", {}, `Analyzing AppID ${appid}...`),
+      el("div", { class: "progress-bar indeterminate" }, el("span")),
+      el("p", { class: "muted" }, "The first time can take ~15 s, longer if Steam's review server is slow."))));
   try {
     const res = await fetch(`/api/games/${appid}?reviews=${+$("#reviews").value || 300}`);
     if (!res.ok) throw await apiError(res);
@@ -348,20 +479,13 @@ $("#game-form").addEventListener("submit", async (e) => {
     }
     notifyAll(g.notices);
   } catch (err) {
+    panel.replaceChildren(...previous);
+    state.keepPanel = false;
     notifyError(err, "Analysis failed");
   } finally {
-    setBusy(false);
-    progress(null);
+    setAnalyzing(false);
   }
 });
-
-function progress(frac, text) {
-  const box = $("#progress");
-  box.hidden = frac == null;
-  if (frac == null) return;
-  $("#progress-fill").style.width = `${Math.round(frac * 100)}%`;
-  $("#progress-text").textContent = text || "";
-}
 
 // ---------- results ----------
 function showResult(result, id) {
@@ -380,7 +504,9 @@ function showResult(result, id) {
   map.setGames(state.games);
   renderTable();
   notifyAll(result.notices);
-  if (state.games.length) {
+  if (state.keepPanel) {
+    // the panel shows a game the user analyzed during the search: leave it there
+  } else if (state.games.length) {
     selectGame(state.games[0].game.appid);
   } else {
     state.selected = null;
@@ -421,7 +547,7 @@ function renderTable() {
       return el("tr", { "data-appid": g.game.appid, onclick: () => selectGame(g.game.appid) },
         el("td", { class: "num" }, g.rank),
         el("td", {}, g.game.name),
-        el("td", { class: "num" }, el("span", { class: "score-pill", style: `background:${scoreCss(o.score)}` }, Math.round(o.score))),
+        el("td", { class: "num" }, el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}` }, Math.round(o.score))),
         el("td", { class: "num" }, g.reviews.toLocaleString("en-US")),
         el("td", { class: "num" }, `${Math.round(g.rating)}%${adj}`),
         el("td", { class: "num" }, g.price ? money(g.box.gross_mid) : "F2P"),
@@ -447,11 +573,11 @@ function highlightRow() {
   }
 }
 
-function selectGame(appid, { fromMap = false } = {}) {
+function selectGame(appid) {
   const g = state.games.find((x) => x.game.appid === appid);
   if (!g) return;
   state.selected = appid;
-  if (!fromMap) map.select(appid);
+  map.select(appid); // both views, so the hidden one is in sync when you switch
   highlightRow();
   renderPanel(g);
   document.querySelector(`#ranking tr[data-appid="${appid}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -480,7 +606,7 @@ function renderPanel(g) {
       game.developer ? ` · ${game.developer}` : "",
     ),
     el("div", { class: "score-row" },
-      el("div", { class: "score-ring", style: `--p:${o.score};--ring:${scoreCss(o.score)}` }, el("span", {}, Math.round(o.score))),
+      el("div", { class: "score-ring", style: `--p:${o.score};--ring:${scoreColor(o.score)}` }, el("span", {}, Math.round(o.score))),
       el("div", { class: "facts" },
         el("div", {}, el("span", {}, "Reviews"), el("b", {}, g.reviews.toLocaleString("en-US"))),
         el("div", {}, el("span", {}, "% positive"), el("b", {}, `${Math.round(g.rating)}%`, adjusted ? ` (${Math.round(o.effective_rating)}% adj.)` : "")),
@@ -563,6 +689,8 @@ function risksTab(g) {
   ));
 }
 
+const POSITIVE = cssVar("--accent-2"), NEGATIVE = cssVar("--bad"); // History bars
+
 function historyTab(g) {
   const h = g.histogram || [];
   if (!h.length) return el("div", { class: "callout" }, "No review histogram available.");
@@ -586,16 +714,16 @@ function historyTab(g) {
     const upH = ((H - pad) * p.up) / max, downH = ((H - pad) * p.down) / max;
     const x = pad / 2 + i * bw + bw * 0.12, w = bw * 0.76;
     const tip = `${month}: ${p.up} positive, ${p.down} negative`;
-    rect(x, H - pad - upH, w, upH, "#60a5fa", tip);
-    rect(x, H - pad - upH - downH, w, downH, "#f87171", tip);
+    rect(x, H - pad - upH, w, upH, POSITIVE, tip);
+    rect(x, H - pad - upH - downH, w, downH, NEGATIVE, tip);
   });
   const first = new Date(h[0].date * 1000).toISOString().slice(0, 7);
   const last = new Date(h[h.length - 1].date * 1000).toISOString().slice(0, 7);
   return el("div", { class: "hist" },
     svg,
     el("div", { class: "legend" },
-      el("span", {}, el("i", { style: "background:#60a5fa" }), "Positive"),
-      el("span", {}, el("i", { style: "background:#f87171" }), "Negative"),
+      el("span", {}, el("i", { style: `background:${POSITIVE}` }), "Positive"),
+      el("span", {}, el("i", { style: `background:${NEGATIVE}` }), "Negative"),
       el("span", { style: "margin-left:auto" }, `${first} → ${last}`),
     ),
     el("p", { class: "muted" }, "Monthly reviews. A tall spike after launch can mean a streamer effect (mostly blue) or a review bomb (mostly red)."),

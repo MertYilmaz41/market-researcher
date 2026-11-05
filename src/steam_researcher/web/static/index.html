@@ -28,11 +28,18 @@
     </div>
 
     <form id="tag-form" class="search" autocomplete="off">
-      <div class="combo">
-        <input id="tag" value="Job Simulator" placeholder="Search Steam tags..." aria-label="Steam tag" required
+      <div id="tag-combo" class="combo">
+        <div id="tag-chips" class="tag-chips"></div>
+        <input id="tag" placeholder="Pick Steam tags..." aria-label="Steam tags"
                role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tag-list">
         <button type="button" id="tag-toggle" class="combo-toggle" tabindex="-1" aria-label="Show all tags">&#9662;</button>
-        <ul id="tag-list" class="combo-list" role="listbox" aria-label="Steam tags" hidden></ul>
+        <div id="tag-pop" class="combo-pop" hidden>
+          <ul id="tag-list" class="combo-list" role="listbox" aria-label="Steam tags" aria-multiselectable="true"></ul>
+          <div class="combo-foot">
+            <span id="tag-count"></span>
+            <button type="button" id="tag-clear" tabindex="-1">Clear</button>
+          </div>
+        </div>
       </div>
       <button type="button" id="filters-toggle" class="ghost" aria-expanded="false">Filters</button>
       <button type="submit" id="run" class="primary">Find opportunities</button>
@@ -50,11 +57,6 @@
       <input id="appid" placeholder="AppID or Steam URL" aria-label="AppID or Steam store URL">
       <button type="submit" class="ghost">Analyze</button>
     </form>
-
-    <div id="progress" class="progress" hidden>
-      <div class="progress-bar"><span id="progress-fill"></span></div>
-      <span id="progress-text"></span>
-    </div>
   </header>
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
@@ -62,10 +64,16 @@
     <section class="card map-card">
       <div class="card-head">
         <h2>Opportunity map</h2>
-        <span id="map-legend" class="muted">x: demand &middot; y: dissatisfaction &middot; z: fixability &middot; size: revenue &middot; color: score</span>
+        <div class="map-head-right">
+          <span id="map-legend" class="muted"></span>
+          <div id="map-view" class="seg" role="group" aria-label="Map view">
+            <button type="button" data-view="2d" aria-pressed="false">2D</button>
+            <button type="button" data-view="3d" aria-pressed="true">3D</button>
+          </div>
+        </div>
       </div>
       <div id="map" class="map">
-        <div id="map-empty" class="empty"><p>Pick a tag and press <b>Find opportunities</b>.<br>Each sphere is a game; drag to orbit, scroll to zoom, click to inspect.</p></div>
+        <div id="map-empty" class="empty"><p>Tick one or more tags and press <b>Find opportunities</b>.<br>Each bubble is a game; click one to inspect it. In 3D, drag to orbit and scroll to zoom.</p></div>
         <div id="tooltip" class="tooltip" hidden></div>
       </div>
     </section>
@@ -80,6 +88,14 @@
         <a id="download" class="ghost button" hidden>Download report (.md)</a>
       </div>
       <p id="table-note" class="muted"></p>
+      <div id="search-status" class="search-status" role="status" hidden>
+        <div class="search-status-head">
+          <b id="search-status-title"></b>
+          <span id="search-status-count"></span>
+        </div>
+        <div class="progress-bar"><span id="search-status-fill"></span></div>
+        <span id="search-status-text" class="muted"></span>
+      </div>
       <div class="table-wrap">
         <table id="ranking">
           <thead>

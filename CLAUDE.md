@@ -78,13 +78,14 @@ uv run pytest -q                           # all tests
 uv run pytest tests/test_core.py::test_parse_and_filter   # single test
 uv run sr discover --tag "Job Simulator" --min-reviews 100 --rating 5-70 --top 30
 uv run sr discover --tag "Job Simulator" --no-cache
+uv run sr discover -t Crafting -t Survival  # several tags: only games that have all of them
 uv run sr analyze 2336220 --reviews 300     # risks, mining, score for one AppID
 uv run sr report --tag "Job Simulator" --max-games 15 --reviews 200   # writes reports/job-simulator.md
 uv run sr ui                                # web UI (3D map) on http://localhost:8501
 uv run sr cache clear
 ```
 
-Tag names are SteamSpy tag names (e.g. "Job Simulator", "Colony Sim"); matching is case-insensitive.
+Tag names are SteamSpy tag names (e.g. "Job Simulator", "Colony Sim"); matching is case-insensitive. Up to `config.MAX_TAGS` (5) tags per search.
 
 ## Architecture
 
@@ -98,8 +99,9 @@ Scoring (`scoring.py`): 100 × the weighted geometric mean of demand (log of rev
 Web UI (`web/`): `sr ui` runs uvicorn on `web/server.py`, bound to 127.0.0.1, and opens the browser.
 - **Server:** a FastAPI app that is display-only. `POST /api/tag-runs` starts `pipeline.run_tag` in a background thread; each job builds its own `HttpClient` because SQLite connections are per thread. Jobs live in an in-memory dict, and `GET /api/tag-runs/{id}` is polled for progress and the result. `GET /api/games/{appid}` runs `analyze_game` synchronously.
 - **JSON:** `game_json()` adds `box`, `store_url`, `rating`, etc., so the frontend never re-implements any math.
-- **Frontend:** `web/static/` is plain ES modules with no build step. `app.js` handles data, the table and the panel; `map3d.js` draws the three.js scene (x = demand, y = dissatisfaction, z = fixability, size = revenue, color = score). three.js is pinned to `three@0.170.0` in the import map in `index.html`.
-- **Tag picker:** the tag field in `app.js` is a searchable dropdown filled from `GET /api/tags`. That calls `steam_store.tag_names`, which uses Steam's `IStoreService/GetTagList` (about 450 tags, cached 7 days); SteamSpy uses the same names. If the list fails to load, the field falls back to free text. Unknown tags are detected in `steamspy.games_by_tag`: SteamSpy answers them with the same fallback list as an empty tag. `notices.unknown_tag` then suggests close matches.
+- **Frontend:** `web/static/` is plain ES modules with no build step. `app.js` handles data, the table and the panel. The map has a 2D | 3D switch (remembered in localStorage). `map2d.js` is an SVG scatter (x = demand, y = dissatisfaction, size = revenue, color = score) that needs no CDN; `map3d.js` draws the three.js scene (plus z = fixability). Both get the same games and selection through the `map` wrapper in `app.js`, and if three.js or WebGL is missing, only 2D is offered. Colors come from `style.css :root` only, and `palette.js` reads them for the JS (score scale, map, charts). three.js is pinned to `three@0.170.0` in the import map in `index.html`.
+- **Multiple tags:** a search takes a list of tags and keeps only games that have all of them (`pipeline.tag_games`: one SteamSpy request per tag, or Steam's store search for tags SteamSpy can't search). An unknown tag raises `pipeline.UnknownTag`. Titles, notices and report file names get one string, the label `pipeline.tag_label` ("Crafting + Survival"), so they need no changes.
+- **Tag picker:** the tag field in `app.js` is a checklist dropdown. You tick tags with the mouse; the text box only filters the list. Ticked tags show as chips with an ×. The list is filled from `GET /api/tags`. That calls `steam_store.tag_names`, which uses Steam's `IStoreService/GetTagList` (about 450 tags, cached 7 days). If the list fails to load, the field falls back to comma-separated free text. Unknown tags are detected in `steamspy.games_by_tag`: SteamSpy answers them with the same fallback list as an empty tag. `notices.unknown_tag` then suggests close matches.
 - **Safety:** put review text into the DOM only via `textContent` (the `el()` helper in `app.js`), never `innerHTML`.
 - **Tests:** `tests/test_web.py` uses FastAPI's `TestClient` with `pipeline.run_tag`/`analyze_game` monkeypatched, so it needs no network. The JS has no tests; check it with `node --check` and a real browser.
 
@@ -129,9 +131,10 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 ## Data sources and constraints
 
 - **SteamDB:** has no public API and forbids scraping, so don't add a SteamDB scraper.
-- **SteamSpy** (`steamspy.com/api.php?request=tag`): games by tag, with positive and negative counts, price/initialprice/discount and owners. Limit is about 1 request/sec. Its tag lists may be incomplete.
+- **SteamSpy** (`steamspy.com/api.php?request=tag`): games by tag, with positive and negative counts, price/initialprice/discount and owners. Limit is about 1 request/sec. Its tag lists may be incomplete. Its tag names are older than Steam's catalog, which the picker shows. Renamed tags (Roguelite is "Rogue-lite" on SteamSpy) are mapped in `config.STEAMSPY_TAG_NAMES`. Tags it can't search (any name with `&` or `'`, and missing tags such as Incremental) are listed in `config.STEAMSPY_UNSEARCHABLE_TAGS`; their games come from Steam's store search instead (below). Both lists came from querying every Steam tag in Nov 2026; redo that if Steam adds tags.
 - **Steam store endpoints:**
   - Work from this machine: `api/appdetails?appids=` (type, price, categories) and `appreviewhistogram/{appid}` (monthly up/down rollups, used to detect streamer spikes).
+  - Store search, `search/results/?tags=<tagid>&infinite=1` (`sources/steam_search.py`, used only for `STEAMSPY_UNSEARCHABLE_TAGS`): JSON whose `results_html` rows carry the appid, title, "N% of the M user reviews" and `data-price-final` (cents). It can't sort by review count (`Reviews_DESC` sorts by % positive), so a tag is read page by page, 100 rows each. It is stricter than the rest of the store: HTTP 429 after ~30 pages at 1.5 s, so `http.URL_INTERVAL` paces it at 3 s/page, and a 429 retries with 10-60 s waits. Incremental (~9,300 games) takes ~5 min the first time, then comes from the cache. The parser reads HTML, so a Steam layout change breaks it; `test_parse_search_page` pins the format.
   - Retired: `store.steampowered.com/appreviews` (review texts) has redirected to the homepage since about Oct 2026. Use its replacement, `api.steampowered.com/IUserReviewsService/GetAppReviews/v1/`. It needs no key, and parameters go in `input_json`. Gotchas: `review_type` is numeric (1 = positive, 2 = negative; strings are silently ignored), and `day_range` must be 0 for all-time results (the default is 30 days, and `filter:"all"` is capped at 365). Don't spoof browser User-Agents.
 - **Review mining is keyword-only** (the user's choice: no LLM). An LLM miner may be added later behind the same interface.
 
