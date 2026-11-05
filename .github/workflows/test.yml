@@ -1,0 +1,18 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - name: Check the web UI's JavaScript
+        run: for f in src/steam_researcher/web/static/*.js; do node --check "$f"; done
+      - name: Install a browser for the UI tests
+        run: uv run playwright install --with-deps chromium
+      - run: uv run pytest -q
