@@ -13,14 +13,28 @@ from . import boxmethod, config, market, notices, runs
 from .cache import Cache
 from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
+from .i18n import LANG, LANGS, _, fmt, num
 from .models import Analysis, MiningResult
 from .pipeline import TagResult, UnknownTag, analyze_game, run_markets, run_tag, tag_games, tag_label, verify_games
-from .report import money, rank, rating_source_text, recent_text, render, slug
+from .report import money, percent, rank, rating_source_text, recent_text, render, risk_label, severity, slug
 
 app = typer.Typer(help="Find underserved Steam audiences (CodeMonkey's method).", no_args_is_help=True)
 cache_app = typer.Typer(help="Manage the local cache.")
 app.add_typer(cache_app, name="cache")
 console = Console()
+
+
+@app.callback()
+def main(
+    ctx: typer.Context,
+    lang: str = typer.Option("en", "--lang", envvar="SR_LANG",
+                             help="Output language: en or tr (also SR_LANG). Put it before the command: sr --lang tr report ..."),
+):
+    """Find underserved Steam audiences (CodeMonkey's method)."""
+    if lang not in LANGS:
+        raise typer.BadParameter(f"use one of: {', '.join(LANGS)}", param_hint="--lang")
+    token = LANG.set(lang)
+    ctx.call_on_close(lambda: LANG.reset(token))
 
 SEVERITY_STYLE = {"high": "bold red", "warn": "yellow", "info": "cyan"}
 NOTICE_STYLE = {"success": ("green", "OK"), "info": ("cyan", "i"), "warning": ("yellow", "!"), "error": ("bold red", "x")}
@@ -67,7 +81,7 @@ def _rating_range(rating: str) -> tuple[float, float]:
 
 def _label(tags: list[str]) -> str:
     if len(tags) > config.MAX_TAGS:
-        raise typer.BadParameter(f"use at most {config.MAX_TAGS} tags", param_hint="--tag")
+        raise typer.BadParameter(_("use at most {n} tags", n=config.MAX_TAGS), param_hint="--tag")
     return tag_label(tags)
 
 
@@ -78,8 +92,9 @@ def _unknown_tag(http: HttpClient, e: UnknownTag):
 
 def _tag_games(http: HttpClient, tags: list[str], label: str):
     try:
-        with console.status(f"Fetching games tagged {label!r}...") as status:
-            return tag_games(http, tags, lambda msg, done, total: status.update(f"{msg} (page {done}/{total})"))
+        with console.status(_("Fetching games tagged '{tag}'...", tag=label)) as status:
+            return tag_games(http, tags, lambda msg, done, total: status.update(
+                _("{message} (page {done}/{total})", message=msg, done=done, total=total)))
     except UnknownTag as e:
         _unknown_tag(http, e)
 
@@ -109,7 +124,7 @@ def discover(
     http = HttpClient(use_cache=not no_cache)
     games = _tag_games(http, tag, label)
     stats = market.market_stats(games, min_reviews, lo, hi)
-    console.print(f"[bold]Market:[/] {market.summary(stats)}")
+    console.print(f"[bold]{_('Market:')}[/] {market.summary(stats)}")
     candidates = filter_candidates(games, min_reviews, lo, hi)
     if not candidates:
         empty = TagResult(n_tag_games=len(games), candidates=[],
@@ -117,40 +132,36 @@ def discover(
         _print_notices(notices.for_tag_result(label, min_reviews, lo, hi, top, empty))
         raise typer.Exit(1)
 
-    with console.status("Checking store type (games only)...") as status:
+    with console.status(_("Checking store type (games only)...")) as status:
         hits, not_games, unlisted = verify_games(
-            http, candidates, top, lambda g: status.update(f"Checking store type: {g.name}")
+            http, candidates, top, lambda g: status.update(_("Checking store type: {name}", name=g.name))
         )
 
-    table = Table(
-        title=f"{label}: {len(candidates) - len(not_games)} of {len(games)} games with "
-        f">={min_reviews} reviews and {lo:g}-{hi:g}% positive"
-    )
+    table = Table(title=_("{tag}: {n} of {total} games with >={min} reviews and {lo:g}-{hi:g}% positive",
+                          tag=label, n=len(candidates) - len(not_games), total=len(games), min=min_reviews, lo=lo, hi=hi))
     for col, just in [
-        ("AppID", "right"), ("Name", "left"), ("Reviews", "right"), ("% Pos", "right"),
-        ("Price", "right"), ("Est. units (x45)", "right"), ("Est. gross (x30-x100)", "right"),
+        (_("AppID"), "right"), (_("Name"), "left"), (_("Reviews"), "right"), (_("% Pos"), "right"),
+        (_("Price"), "right"), (_("Est. units (x45)"), "right"), (_("Est. gross (x30-x100)"), "right"),
     ]:
         table.add_column(col, justify=just)
 
     for g in hits:
         est = boxmethod.estimate(g.reviews, g.base_price)
-        reviews = f"[bold]{g.reviews:,}[/]" if g.reviews >= config.IDEAL_REVIEWS else f"{g.reviews:,}"
+        reviews = f"[bold]{num(g.reviews)}[/]" if g.reviews >= config.IDEAL_REVIEWS else num(g.reviews)
         color = "red" if g.rating < 40 else "yellow"
         free = g.base_price == 0
-        name = f"{g.name} [dim](unlisted)[/]" if g.appid in unlisted else g.name
+        name = f"{g.name} [dim]({_('unlisted')})[/]" if g.appid in unlisted else g.name
         table.add_row(
-            str(g.appid), name, reviews, f"[{color}]{g.rating:.0f}%[/]",
-            "F2P" if free else f"${g.base_price:.2f}", f"{est.units_mid:,}",
+            str(g.appid), name, reviews, f"[{color}]{percent(g.rating)}[/]",
+            "F2P" if free else fmt("${x:.2f}", x=g.base_price), num(est.units_mid),
             "n/a" if free else f"{money(est.gross_low)} - {money(est.gross_high)}",
         )
     console.print(table)
-    console.print(
-        "[dim]Bold review counts = 500+ (ideal demand). Gross uses the undiscounted price, "
-        "before Steam's cut, regional pricing and discounts.[/]"
-    )
+    console.print("[dim]" + _("Bold review counts = 500+ (ideal demand). Gross uses the undiscounted price, "
+                              "before Steam's cut, regional pricing and discounts.") + "[/]")
     if not_games:
-        console.print(f"[dim]Excluded non-games: {', '.join(not_games)}[/]")
-    console.print("[dim]Next: sr analyze <AppID>, or sr report --tag ...[/]")
+        console.print("[dim]" + _("Excluded non-games: {names}", names=", ".join(not_games)) + "[/]")
+    console.print("[dim]" + _("Next: sr analyze <AppID>, or sr report --tag ...") + "[/]")
 
 
 @app.command()
@@ -162,12 +173,13 @@ def analyze(
 ):
     """Step 4 for one game: risk checks, complaint mining, core fantasy, design pillars."""
     http = HttpClient(use_cache=not no_cache)
-    with console.status("Fetching SteamSpy, Steam store data and reviews..."):
+    with console.status(_("Fetching SteamSpy, Steam store data and reviews...")):
         a = analyze_game(http, appid, reviews)
     if a is None:
         _print_notice(notices.Notice(
-            level="error", title="Game not found", message=f"SteamSpy has no data for AppID {appid}.",
-            hint="Check the number on the game's Steam store page (store.steampowered.com/app/<AppID>/).",
+            level="error", title=_("Game not found"), message=_("SteamSpy has no data for AppID {appid}.", appid=appid),
+            hint=_("Check the number on the game's Steam store page (store.steampowered.com/app/<AppID>/). "
+                   "Unreleased or very new games may not be listed yet."),
         ))
         raise typer.Exit(1)
     _print_analysis(a)
@@ -192,7 +204,7 @@ def report(
     _print_notices(notices.for_filters(min_reviews, lo, hi, max_games, reviews))
     http = HttpClient(use_cache=not no_cache)
     with Progress(console=console, transient=True) as progress:
-        task = progress.add_task(f"Fetching games tagged {label!r}", total=None)
+        task = progress.add_task(_("Fetching games tagged '{tag}'...", tag=label), total=None)
 
         def step(message: str, done: int, total: int) -> None:
             progress.update(task, description=message[:50], completed=done, total=total)
@@ -217,26 +229,26 @@ def report(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
 
-    table = Table(title=f"{label}: opportunity ranking")
-    for col, just in [("#", "right"), ("Name", "left"), ("Score", "right"), ("Reviews", "right"),
-                      ("% Pos", "right"), ("Top complaint", "left")]:
+    table = Table(title=_("{tag}: opportunity ranking", tag=label))
+    for col, just in [("#", "right"), (_("Name"), "left"), (_("Score"), "right"), (_("Reviews"), "right"),
+                      (_("% Pos"), "right"), (_("Top complaint"), "left")]:
         table.add_column(col, justify=just)
     for i, a in enumerate(rank(analyses), 1):
         o = a.opportunity
-        pos = f"{a.game.rating:.0f}%"
+        pos = percent(a.game.rating)
         if round(o.effective_rating) != round(a.game.rating):
-            pos += f" ({o.effective_rating:.0f}% adj.)"
+            pos += " " + _("({rating} adj.)", rating=percent(o.effective_rating))
         top = a.mining.categories[0] if a.mining and a.mining.categories else None
         table.add_row(
-            str(i), a.game.name, f"[bold]{o.score:.0f}[/]", f"{a.game.reviews:,}", pos,
-            f"{top.label} ({top.share:.0%})" if top else "-",
+            str(i), a.game.name, f"[bold]{o.score:.0f}[/]", num(a.game.reviews), pos,
+            f"{_(top.label)} ({fmt('{x:.0%}', x=top.share)})" if top else "-",
         )
     console.print(table)
     if result.market:
-        console.print(f"[bold]Market:[/] {market.summary(result.market)}")
+        console.print(f"[bold]{_('Market:')}[/] {market.summary(result.market)}")
     params = dict(tags=tag, min_reviews=min_reviews, lo=lo, hi=hi, max_games=max_games, reviews=reviews)
     runs.RunStore().save("tag", label, params, result)
-    console.print(f"Report written to [bold]{out}[/] (the run is also saved: sr runs, or Past runs in sr ui)")
+    console.print(_("Report written to {path} (the run is also saved: sr runs, or Past runs in sr ui)", path=f"[bold]{out}[/]"))
     _print_notices(post)
 
 
@@ -253,27 +265,28 @@ def markets(
     _print_notices(notices.for_filters(min_reviews, lo, hi, 0, 0))
     http = HttpClient(use_cache=not no_cache)
     with Progress(console=console, transient=True) as progress:
-        task = progress.add_task("Reading the Steam tag list", total=None)
+        task = progress.add_task(_("Reading the Steam tag list"), total=None)
         result = run_markets(http, min_reviews, lo, hi,
                              lambda msg, done, total: progress.update(task, description=msg[:50], completed=done, total=total))
 
-    table = Table(title=f"Markets: tags by underserved games (>={min_reviews} reviews, {lo:g}-{hi:g}% positive)")
-    for col in ["#", "Tag", "Games", "With demand", "Underserved", f"Well served ({config.WELL_SERVED_RATING}%+)",
-                "Gap", "Underserved gross"]:
-        table.add_column(col, justify="left" if col == "Tag" else "right")
+    table = Table(title=_("Markets: tags by underserved games (>={min} reviews, {lo:g}-{hi:g}% positive)",
+                          min=min_reviews, lo=lo, hi=hi))
+    for i, col in enumerate(["#", _("Tag"), _("Games"), _("With demand"), _("Underserved"),
+                             _("Well served ({pct}%+)", pct=config.WELL_SERVED_RATING), _("Gap"), _("Underserved gross")]):
+        table.add_column(col, justify="left" if i == 1 else "right")
     for i, r in enumerate(result.rows[:top], 1):
         m = r.stats
-        table.add_row(str(i), r.tag, f"{m.n_games:,}", f"{m.n_demand:,}", f"[bold]{m.n_underserved:,}[/]",
-                      f"{m.n_well_served:,}", f"{m.gap:.0%}", money(m.underserved_gross))
+        table.add_row(str(i), r.tag, num(m.n_games), num(m.n_demand), f"[bold]{num(m.n_underserved)}[/]",
+                      num(m.n_well_served), fmt("{x:.0%}", x=m.gap), money(m.underserved_gross))
     console.print(table)
-    console.print("[dim]Gap = underserved / (underserved + well served). High gap + many underserved games = "
-                  "an audience that good games don't reach yet.[/]")
+    console.print("[dim]" + _("Gap = underserved / (underserved + well served). High gap + many underserved games = "
+                              "an audience that good games don't reach yet.") + "[/]")
     if result.skipped:
-        console.print(f"[dim]Skipped {len(result.skipped)} tags SteamSpy can't search (search them one by one "
-                      "with sr discover).[/]")
+        console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with sr discover).",
+                                  n=len(result.skipped)) + "[/]")
     for tag, reason in result.failed:
-        console.print(f"[yellow]Could not read {tag}:[/] {reason}")
-    console.print("[dim]Next: sr report --tag <Tag>[/]")
+        console.print(f"[yellow]{_('Could not read {tag}:', tag=tag)}[/] {reason}")
+    console.print("[dim]" + _("Next: sr report --tag <Tag>") + "[/]")
 
 
 @app.command("runs")
@@ -282,14 +295,14 @@ def list_runs(limit: int = typer.Option(20, min=1, help="Max rows to show")):
     """Saved runs from sr report and the web UI (open them in sr ui under Past runs)."""
     items = runs.RunStore().list(limit)
     if not items:
-        console.print("No saved runs yet. Run sr report --tag ..., or search in sr ui.")
+        console.print(_("No saved runs yet. Run sr report --tag ..., or search in sr ui."))
         return
-    table = Table(title="Saved runs")
-    for col in ["Date", "Kind", "Search", "Rows", "ID"]:
-        table.add_column(col, justify="right" if col == "Rows" else "left")
+    table = Table(title=_("Saved runs"))
+    for i, col in enumerate([_("Date"), _("Kind"), _("Search"), _("Rows"), "ID"]):
+        table.add_column(col, justify="right" if i == 3 else "left")
     for r in items:
         when = dt.datetime.fromtimestamp(r["created"]).strftime("%Y-%m-%d %H:%M")
-        table.add_row(when, "markets" if r["kind"] == "market" else "tag", r["label"], str(r["n"]), r["id"][:8])
+        table.add_row(when, _("markets") if r["kind"] == "market" else _("tag"), r["label"], str(r["n"]), r["id"][:8])
     console.print(table)
 
 
@@ -298,80 +311,80 @@ def _print_analysis(a: Analysis) -> None:
     console.rule(f"[bold]{game.name}[/] ({game.appid})")
     console.print(game.store_url)
     console.print(
-        f"Reviews: [bold]{game.reviews:,}[/] ({game.rating:.0f}% positive)   "
-        f"Price: ${game.base_price:.2f}   Owners (SteamSpy): {game.owners}"
+        _("Reviews: {n} ({rating} positive)   Price: {price}   Owners (SteamSpy): {owners}",
+          n=f"[bold]{num(game.reviews)}[/]", rating=percent(game.rating), price=fmt("${x:.2f}", x=game.base_price),
+          owners=game.owners)
     )
-    console.print(f"[dim]Review numbers: {rating_source_text(game)}[/]")
+    console.print("[dim]" + _("Review numbers: {source}", source=rating_source_text(game)) + "[/]")
     if a.has_histogram:
-        console.print(f"Reviews in the last 12 months: {recent_text(a)}")
+        console.print(_("Reviews in the last 12 months: {recent}", recent=recent_text(a)))
     if details:
         cats = ", ".join(dict.fromkeys(details.categories)) or "-"
-        console.print(f"Released: {details.release_date}   Categories: {cats}")
+        console.print(_("Released: {date}   Categories: {categories}", date=details.release_date, categories=cats))
     if game.tags:
-        console.print(f"Top tags: {', '.join(list(game.tags)[:10])}")
+        console.print(_("Top tags: {tags}", tags=", ".join(list(game.tags)[:10])))
     if game.base_price:
         est = boxmethod.estimate(game.reviews, game.base_price)
-        console.print(
-            f"Box Method: ~{est.units_mid:,} units (x45), gross "
-            f"{money(est.gross_low)} - {money(est.gross_high)} (x30-x100)"
-        )
+        console.print(_("Box Method: ~{units} units (x45), gross {low} - {high} (x30-x100)",
+                        units=num(est.units_mid), low=money(est.gross_low), high=money(est.gross_high)))
     o = a.opportunity
-    console.print(
-        f"[bold]Opportunity score: {o.score:.0f}/100[/]  (demand {o.demand:.0%}, "
-        f"dissatisfaction {o.dissatisfaction:.0%} at {o.effective_rating:.0f}% positive, "
-        f"fixability {o.fixability:.0%}"
-        + (f", penalty -{o.penalty:.0f} for {', '.join(o.penalized)}" if o.penalty else "")
-        + ")"
-    )
+    parts = _("demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, fixability {fixability}",
+              demand=fmt("{x:.0%}", x=o.demand), dissatisfaction=fmt("{x:.0%}", x=o.dissatisfaction),
+              rating=percent(o.effective_rating), fixability=fmt("{x:.0%}", x=o.fixability))
+    if o.penalty:
+        parts += _(", penalty -{points:.0f} for {names}", points=o.penalty, names=", ".join(map(risk_label, o.penalized)))
+    console.print(f"[bold]{_('Opportunity score: {score:.0f}/100', score=o.score)}[/]  ({parts})")
 
     if a.review_error:
-        console.print(f"[yellow]Review texts unavailable:[/] {a.review_error}")
+        console.print(f"[yellow]{_('Review texts unavailable:')}[/] {a.review_error}")
     if a.flags:
-        table = Table(title="Risk checks")
-        table.add_column("Severity")
-        table.add_column("Check")
-        table.add_column("Finding")
+        table = Table(title=_("Risk checks"))
+        table.add_column(_("Severity"))
+        table.add_column(_("Check"))
+        table.add_column(_("Finding"))
         for f in a.flags:
-            table.add_row(f"[{SEVERITY_STYLE[f.severity]}]{f.severity}[/]", f.code, f.message)
+            table.add_row(f"[{SEVERITY_STYLE[f.severity]}]{severity(f.severity)}[/]", risk_label(f.code), f.text())
         console.print(table)
     else:
-        console.print("[green]No risk flags.[/]")
+        console.print(f"[green]{_('No risk flags.')}[/]")
     if not a.has_histogram:
-        console.print("[yellow]No review histogram available; spike checks skipped.[/]")
+        console.print(f"[yellow]{_('No review histogram available; spike checks skipped.')}[/]")
     if a.mining:
         _print_mining(a.mining)
 
 
 def _print_mining(m: MiningResult) -> None:
     if not m.n_negative:
-        console.print("[yellow]No English negative reviews to mine.[/]")
+        console.print(f"[yellow]{_('No English negative reviews to mine.')}[/]")
         return
-    table = Table(title=f"What went wrong ({m.n_negative} negative reviews)")
-    table.add_column("Complaint")
-    table.add_column("% of neg.", justify="right")
-    table.add_column(f"Lately ({m.n_recent_negative} from last 12 mo)")
-    table.add_column("Design pillar (do this instead)")
+    table = Table(title=_("What went wrong ({n} negative reviews)", n=m.n_negative))
+    table.add_column(_("Complaint"))
+    table.add_column(_("% of neg."), justify="right")
+    table.add_column(_("Lately ({n} from last 12 mo)", n=m.n_recent_negative))
+    table.add_column(_("Design pillar (do this instead)"))
     for c in m.categories:
-        pillar = c.pillar if c.fixable else f"[dim]{c.pillar}[/]"
-        table.add_row(c.label, f"{c.share:.0%}", c.trend or "-", pillar)
+        pillar = _(c.pillar) if c.fixable else f"[dim]{_(c.pillar)}[/]"
+        table.add_row(_(c.label), fmt("{x:.0%}", x=c.share), _(c.trend) if c.trend else "-", pillar)
     console.print(table)
-    console.print("[dim]Half most helpful, half newest reviews; reviews written under 2 h of play count half.[/]")
+    console.print("[dim]" + _("Half most helpful, half newest reviews; reviews written under 2 h of play count half.") + "[/]")
 
     for c in m.categories[:3]:
-        console.print(f"[bold]{c.label}[/] - what players say:")
+        console.print(_("{complaint} - what players say:", complaint=f"[bold]{_(c.label)}[/]"))
         for q in c.quotes:
             console.print(f'  [dim]"{q}"[/]')
 
     console.print()
     console.print(
-        f"[bold]Great idea, bad execution?[/] {m.idea_praise_share:.0%} of negative reviews still praise "
-        f"the idea or its potential.  Fixable complaints: {m.fixability:.0%} of mentions."
+        f"[bold]{_('Great idea, bad execution?')}[/] "
+        + _("{idea} of negative reviews still praise the idea or its potential.  Fixable complaints: {fix} of mentions.",
+            idea=fmt("{x:.0%}", x=m.idea_praise_share), fix=fmt("{x:.0%}", x=m.fixability))
     )
     if m.core_phrases:
         phrases = ", ".join(f"{p} ({n})" for p, n in m.core_phrases)
-        console.print(f"[bold]Core fantasy[/] (common phrases in {m.n_positive} positive reviews): {phrases}")
+        console.print(f"[bold]{_('Core fantasy')}[/] "
+                      + _("(common phrases in {n} positive reviews): {phrases}", n=m.n_positive, phrases=phrases))
     if m.liked:
-        console.print(f"[bold]Players liked:[/] {', '.join(p for p, _ in m.liked)}")
+        console.print(f"[bold]{_('Players liked:')}[/] {', '.join(p for p, _n in m.liked)}")
 
 
 @app.command()

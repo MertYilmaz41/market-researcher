@@ -1,73 +1,73 @@
-# Underserved Audience Report: {{ tag }}
+# {{ _("Underserved Audience Report: {tag}", tag=tag) }}
 
-*Generated {{ date }} by steam-researcher.* Filters: >= {{ min_reviews }} reviews, {{ lo }}-{{ hi }}% positive, games only.
-Analyzed the {{ analyses|length }} highest-demand of {{ n_candidates }} candidates (out of {{ n_tag_games }} games in the tag).
+*{{ _("Generated {date} by steam-researcher.", date=date) }}* {{ _("Filters: >= {min} reviews, {lo}-{hi}% positive, games only.", min=min_reviews, lo=lo, hi=hi) }}
+{{ _("Analyzed the {n} highest-demand of {candidates} candidates (out of {total} games in the tag).", n=analyses|length, candidates=n_candidates, total=n_tag_games) }}
 {% if market %}
-**Market:** {{ market }}. "Well served" = {{ well_served }}%+ positive; the gap is the share of underserved among those two groups.
+**{{ _("Market:") }}** {{ market }}. {{ _('"Well served" = {pct}%+ positive; the gap is the share of underserved among those two groups.', pct=well_served) }}
 {% endif %}
-> **Proven Demand + Poor Execution = High Opportunity.** The score (0-100) is a weighted geometric mean of
-> demand (review volume), dissatisfaction (how far below 70% positive) and fixability (share of complaints a
-> small team can fix), minus points for risk flags. Review-bombed periods are removed from the rating first.
+> **{{ _("Proven Demand + Poor Execution = High Opportunity.") }}** {{ _("The score (0-100) is a weighted geometric mean of") }}
+> {{ _("demand (review volume), dissatisfaction (how far below 70% positive) and fixability (share of complaints a") }}
+> {{ _("small team can fix), minus points for risk flags. Review-bombed periods are removed from the rating first.") }}
 
-## Ranking
+## {{ _("Ranking") }}
 
-| # | Game | Score | Reviews | % Pos | Est. gross (x45) | Top complaint | Risks |
+| # | {{ _("Game") }} | {{ _("Score") }} | {{ _("Reviews") }} | {{ _("% Pos") }} | {{ _("Est. gross (x45)") }} | {{ _("Top complaint") }} | {{ _("Risks") }} |
 |--:|---|--:|--:|--:|--:|---|---|
 {% for a in ranked -%}
-| {{ loop.index }} | [{{ a.game.name|md }}](#{{ a.game.appid }}) | **{{ a.opportunity.score|round|int }}** | {{ "{:,}".format(a.game.reviews) }} | {{ a.game.rating|round|int }}%{% if a.opportunity.effective_rating|round != a.game.rating|round %} ({{ a.opportunity.effective_rating|round|int }}% adj.){% endif %} | {{ gross(a) }} | {{ top_complaint(a)|md }} | {{ risk_codes(a)|md }} |
+| {{ loop.index }} | [{{ a.game.name|md }}](#{{ a.game.appid }}) | **{{ a.opportunity.score|round|int }}** | {{ num(a.game.reviews) }} | {{ percent(a.game.rating) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %} {{ _("({rating} adj.)", rating=percent(a.opportunity.effective_rating)) }}{% endif %} | {{ gross(a) }} | {{ complaint_text(a)|md }} | {{ risk_names(a)|md }} |
 {% endfor %}
 
 {% for a in ranked %}
 ---
 
 <a id="{{ a.game.appid }}"></a>
-## {{ loop.index }}. {{ a.game.name|md }} (score {{ a.opportunity.score|round|int }})
+## {{ loop.index }}. {{ a.game.name|md }} {{ _("(score {score})", score=a.opportunity.score|round|int) }}
 
-[Steam store]({{ a.game.store_url }}) · AppID {{ a.game.appid }}{% if a.details %} · Released {{ a.details.release_date }}{% endif %} · {{ a.game.developer|md }}
+[{{ _("Steam store") }}]({{ a.game.store_url }}) · AppID {{ a.game.appid }}{% if a.details %} · {{ _("Released {date}", date=a.details.release_date) }}{% endif %} · {{ a.game.developer|md }}
 
-- **Demand:** {{ "{:,}".format(a.game.reviews) }} reviews, {{ a.game.owners }} owners (SteamSpy). Box Method: ~{{ "{:,}".format(box(a).units_mid) }} units, {{ money(box(a).gross_low) }} - {{ money(box(a).gross_high) }} gross at ${{ "%.2f"|format(a.game.base_price) }}.
-- **Recent demand:** {{ recent_text(a) }} of its reviews came in the last 12 months.
-- **Satisfaction:** {{ a.game.rating|round|int }}% positive{% if a.opportunity.effective_rating|round != a.game.rating|round %}, {{ a.opportunity.effective_rating|round|int }}% with review bombs removed{% endif %} ({{ rating_source_text(a.game) }}).
-- **Score parts:** demand {{ pct(a.opportunity.demand) }}, dissatisfaction {{ pct(a.opportunity.dissatisfaction) }}, fixability {{ pct(a.opportunity.fixability) }}{% if a.opportunity.penalty %}, penalty -{{ a.opportunity.penalty|int }} ({{ a.opportunity.penalized|join(", ") }}){% endif %}.
-{% if a.game.tags %}- **Tags:** {{ (a.game.tags|list)[:8]|join(", ") }}
+- **{{ _("Demand:") }}** {{ _("{n} reviews, {owners} owners (SteamSpy). Box Method: ~{units} units, {low} - {high} gross at {price}.", n=num(a.game.reviews), owners=a.game.owners, units=num(box(a).units_mid), low=money(box(a).gross_low), high=money(box(a).gross_high), price=fmt_price(a.game.base_price)) }}
+- **{{ _("Recent demand:") }}** {{ _("{recent} of its reviews came in the last 12 months.", recent=recent_text(a)) }}
+- **{{ _("Satisfaction:") }}** {{ _("{rating} positive", rating=percent(a.game.rating)) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %}{{ _(", {rating} with review bombs removed", rating=percent(a.opportunity.effective_rating)) }}{% endif %} ({{ rating_source_text(a.game) }}).
+- **{{ _("Score parts:") }}** {{ _("demand {demand}, dissatisfaction {dissatisfaction}, fixability {fixability}", demand=pct(a.opportunity.demand), dissatisfaction=pct(a.opportunity.dissatisfaction), fixability=pct(a.opportunity.fixability)) }}{% if a.opportunity.penalty %}{{ _(", penalty -{points} ({names})", points=a.opportunity.penalty|int, names=a.opportunity.penalized|map(risk_label)|join(", ")) }}{% endif %}.
+{% if a.game.tags %}- **{{ _("Tags:") }}** {{ (a.game.tags|list)[:8]|join(", ") }}
 {% endif %}
 {% if a.mining and a.mining.n_negative %}
-### What went wrong ({{ a.mining.n_negative }} negative reviews)
+### {{ _("What went wrong ({n} negative reviews)", n=a.mining.n_negative) }}
 
-| Complaint | % of neg. | Lately | Design pillar |
+| {{ _("Complaint") }} | {{ _("% of neg.") }} | {{ _("Lately") }} | {{ _("Design pillar") }} |
 |---|--:|---|---|
 {% for c in a.mining.categories -%}
-| {{ c.label }} | {{ pct(c.share) }} | {{ c.trend or "-" }} | {{ c.pillar if c.fixable else "*" ~ c.pillar ~ "*" }} |
+| {{ _(c.label) }} | {{ pct(c.share) }} | {{ _(c.trend) if c.trend else "-" }} | {{ _(c.pillar) if c.fixable else "*" ~ _(c.pillar) ~ "*" }} |
 {% endfor %}
 {% for c in a.mining.categories[:3] if c.quotes %}
-**{{ c.label }}:**
+**{{ _(c.label) }}:**
 {% for q in c.quotes[:2] %}
 > "{{ q|md }}"
 {% endfor %}
 {% endfor %}
-**Great idea, bad execution?** {{ pct(a.mining.idea_praise_share) }} of negative reviews still praise the idea or its potential.
+**{{ _("Great idea, bad execution?") }}** {{ _("{pct} of negative reviews still praise the idea or its potential.", pct=pct(a.mining.idea_praise_share)) }}
 
-### Core fantasy to keep
-{% if a.mining.core_phrases %}- Common phrases in {{ a.mining.n_positive }} positive reviews: {{ a.mining.core_phrases|map("first")|join(", ") }}
-{% endif %}{% if a.mining.liked %}- Players liked: {{ a.mining.liked|map("first")|join(", ") }}
+### {{ _("Core fantasy to keep") }}
+{% if a.mining.core_phrases %}- {{ _("Common phrases in {n} positive reviews: {phrases}", n=a.mining.n_positive, phrases=a.mining.core_phrases|map("first")|join(", ")) }}
+{% endif %}{% if a.mining.liked %}- {{ _("Players liked: {phrases}", phrases=a.mining.liked|map("first")|join(", ")) }}
 {% endif %}
-### Mistakes to avoid
-{% for c in a.mining.categories if c.fixable %}{% if loop.index <= 4 %}- **Don't:** {{ c.label|lower }} (in {{ pct(c.share) }} of negative reviews). **Do:** {{ c.pillar|lower }}.
+### {{ _("Mistakes to avoid") }}
+{% for c in a.mining.categories if c.fixable %}{% if loop.index <= 4 %}- **{{ _("Don't:") }}** {{ _("{complaint} (in {pct} of negative reviews).", complaint=lower(_(c.label)), pct=pct(c.share)) }} **{{ _("Do:") }}** {{ lower(_(c.pillar)) }}.
 {% endif %}{% endfor %}
 {% elif a.review_error %}
-*Review texts unavailable: {{ a.review_error|md }}*
+*{{ _("Review texts unavailable: {error}", error=a.review_error|md) }}*
 {% endif %}
 {% if a.flags %}
-### Risk checks
-{% for f in a.flags %}- **{{ f.severity }}** `{{ f.code }}`: {{ f.message|md }}
+### {{ _("Risk checks") }}
+{% for f in a.flags %}- **{{ severity(f.severity) }}** `{{ f.code }}`: {{ f.text()|md }}
 {% endfor %}{% endif %}
 {% endfor %}
 {% if not_games or unlisted %}
 ---
 
-## Excluded / notes
-{% if not_games %}- Not games: {{ not_games|join(", ")|md }}
-{% endif %}{% if unlisted %}- No store page (delisted or region-locked), analyzed anyway: {{ unlisted|join(", ")|md }}
+## {{ _("Excluded / notes") }}
+{% if not_games %}- {{ _("Not games: {names}", names=not_games|join(", ")|md) }}
+{% endif %}{% if unlisted %}- {{ _("No store page (delisted or region-locked), analyzed anyway: {names}", names=unlisted|join(", ")|md) }}
 {% endif %}{% endif %}
-*Estimates use the undiscounted price, before Steam's cut, regional pricing and discounts. Review mining is
-keyword-based and English-only; read the quotes before trusting the percentages.*
+*{{ _("Estimates use the undiscounted price, before Steam's cut, regional pricing and discounts. Review mining is") }}
+{{ _("keyword-based and English-only; read the quotes before trusting the percentages.") }}*

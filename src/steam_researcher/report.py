@@ -9,7 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from . import boxmethod, config, risk
-from .i18n import N_, _
+from .i18n import N_, _, fmt, lang, num
 from .models import Analysis, Game
 
 _env = Environment(
@@ -23,9 +23,9 @@ _env = Environment(
 
 def money(x: float) -> str:
     if x >= 1_000_000_000:
-        return f"${x / 1_000_000_000:.1f}B"
+        return fmt("${x:.1f}B", x=x / 1_000_000_000)
     if x >= 1_000_000:
-        return f"${x / 1_000_000:.1f}M"
+        return fmt("${x:.1f}M", x=x / 1_000_000)
     if x >= 1_000:
         return f"${x / 1_000:.0f}k"
     return f"${x:.0f}"
@@ -37,7 +37,23 @@ def md(text: object) -> str:
 
 
 def pct(x: float) -> str:
-    return f"{x:.0%}"
+    return fmt("{x:.0%}", x=x)
+
+
+def percent(rating: float) -> str:
+    """A 0-100 rating: 40% / %40."""
+    return fmt("{x:.0%}", x=rating / 100)
+
+
+def fmt_price(price: float) -> str:
+    return fmt("${x:.2f}", x=price)
+
+
+SEVERITY_NAMES = {"high": N_("high"), "warn": N_("warn"), "info": N_("info")}
+
+
+def severity(level: str) -> str:
+    return _(SEVERITY_NAMES.get(level, level))
 
 
 def box(a: Analysis):
@@ -84,6 +100,28 @@ def risk_codes(a: Analysis) -> str:
     return ", ".join(codes) or "-"
 
 
+def risk_label(code: str) -> str:
+    """A risk flag's name in the report language; English reports keep the code (deep_discount)."""
+    return _(config.RISK_LABELS.get(code, code)) if lang() == "tr" else code
+
+
+def risk_names(a: Analysis) -> str:
+    return ", ".join(risk_label(f.code) for f in a.flags if f.severity != "info") or "-"
+
+
+def complaint_text(a: Analysis) -> str:
+    """The top complaint with its share, in the report language (top_complaint stays English for the CSV)."""
+    if not a.mining or not a.mining.categories:
+        return "-"
+    c = a.mining.categories[0]
+    return f"{_(c.label)} ({pct(c.share)})"
+
+
+def lower(text: str) -> str:
+    """Lower case mid-sentence in English; Turkish text keeps its case (str.lower() gets I/ı wrong)."""
+    return text.lower() if lang() == "en" else text
+
+
 def rank(analyses: list[Analysis]) -> list[Analysis]:
     kept = [a for a in analyses if not a.excluded]
     return sorted(kept, key=lambda a: -a.opportunity.score)
@@ -103,6 +141,7 @@ def render(
     market: str = "",  # market.summary() of the whole tag
 ) -> str:
     _env.filters["md"] = md
+    _env.globals["_"] = _
     template = _env.get_template("report.md.j2")
     text = template.render(
         tag=tag,
@@ -120,6 +159,14 @@ def render(
         well_served=config.WELL_SERVED_RATING,
         money=money,
         pct=pct,
+        percent=percent,
+        fmt_price=fmt_price,
+        severity=severity,
+        num=num,
+        lower=lower,
+        risk_label=risk_label,
+        risk_names=risk_names,
+        complaint_text=complaint_text,
         box=box,
         gross=gross,
         top_complaint=top_complaint,

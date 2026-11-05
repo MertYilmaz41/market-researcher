@@ -291,4 +291,157 @@ TR: dict[str, str] = {
         "Bu tarama artık yok. Silinmiş olabilir ya da çalışırken sunucu yeniden başlatılmış olabilir.",
     "This run doesn't exist.": "Böyle bir tarama yok.",
     "The run hasn't finished yet.": "Tarama henüz bitmedi.",
+
+    # ---- shared by the CLI and the report
+    "Game": "Oyun",
+    "Games": "Oyunlar",
+    "Name": "Ad",
+    "Score": "Puan",
+    "Reviews": "İnceleme",
+    "% Pos": "% Olumlu",
+    "Price": "Fiyat",
+    "Tag": "Etiket",
+    "Gap": "Boşluk",
+    "Ranking": "Sıralama",
+    "Risks": "Riskler",
+    "Top complaint": "En büyük şikayet",
+    "With demand": "Talep gören",
+    "Underserved": "Karşılanmamış",
+    "Underserved gross": "Karşılanmamış brüt",
+    "Well served ({pct}%+)": "İyi karşılanmış (%{pct}+)",
+    "Market:": "Pazar:",
+    "{tag}: opportunity ranking": "{tag}: fırsat sıralaması",
+    "({rating} adj.)": "({rating} düzeltilmiş)",
+    "Est. gross (x45)": "Tahmini brüt (x45)",
+    "Complaint": "Şikayet",
+    "% of neg.": "Olumsuzların %'si",
+    "Lately": "Son zamanlarda",
+    "Design pillar": "Tasarım ilkesi",
+    "Great idea, bad execution?": "İyi fikir, kötü yapım mı?",
+    "No English negative reviews to mine.": "İncelenecek İngilizce olumsuz inceleme yok.",
+    "Review numbers: {source}": "İnceleme rakamları: {source}",
+    "Risk checks": "Risk kontrolleri",
+    "high": "yüksek",
+    "warn": "uyarı",
+    "info": "bilgi",
+
+    # ---- CLI (cli.py)
+    "use at most {n} tags": "en fazla {n} etiket kullanın",
+    "Fetching games tagged '{tag}'...": "'{tag}' etiketli oyunlar alınıyor...",
+    "{message} (page {done}/{total})": "{message} (sayfa {done}/{total})",
+    "Checking store type (games only)...": "Mağaza türü kontrol ediliyor (yalnızca oyunlar)...",
+    "{tag}: {n} of {total} games with >={min} reviews and {lo:g}-{hi:g}% positive":
+        "{tag}: {total} oyundan {n} tanesinin >={min} incelemesi var ve %{lo:g}-{hi:g} olumlu",
+    "AppID": "AppID",
+    "Est. units (x45)": "Tahmini satış (x45)",
+    "Est. gross (x30-x100)": "Tahmini brüt (x30-x100)",
+    "unlisted": "mağazada yok",
+    "Bold review counts = 500+ (ideal demand). Gross uses the undiscounted price, "
+    "before Steam's cut, regional pricing and discounts.":
+        "Kalın inceleme sayıları = 500+ (ideal talep). Brüt gelir indirimsiz fiyatla hesaplanır; "
+        "Steam payı, bölgesel fiyatlar ve indirimler düşülmemiştir.",
+    "Excluded non-games: {names}": "Oyun olmadığı için çıkarılanlar: {names}",
+    "Next: sr analyze <AppID>, or sr report --tag ...": "Sonraki adım: sr analyze <AppID> ya da sr report --tag ...",
+    "Fetching SteamSpy, Steam store data and reviews...": "SteamSpy, Steam mağaza verileri ve incelemeler alınıyor...",
+    "Report written to {path} (the run is also saved: sr runs, or Past runs in sr ui)":
+        "Rapor {path} dosyasına yazıldı (tarama da kaydedildi: sr runs ya da sr ui'de Geçmiş taramalar)",
+    "Markets: tags by underserved games (>={min} reviews, {lo:g}-{hi:g}% positive)":
+        "Pazarlar: karşılanmamış oyunlarına göre etiketler (>={min} inceleme, %{lo:g}-{hi:g} olumlu)",
+    "Gap = underserved / (underserved + well served). High gap + many underserved games = "
+    "an audience that good games don't reach yet.":
+        "Boşluk = karşılanmamış / (karşılanmamış + iyi karşılanmış). Yüksek boşluk + çok sayıda karşılanmamış oyun = "
+        "iyi oyunların henüz ulaşmadığı bir kitle.",
+    "Skipped {n} tags SteamSpy can't search (search them one by one with sr discover).":
+        "SteamSpy'ın arayamadığı {n} etiket atlandı (onları sr discover ile tek tek arayın).",
+    "Could not read {tag}:": "{tag} okunamadı:",
+    "Reading the Steam tag list": "Steam etiket listesi okunuyor",
+    "Next: sr report --tag <Tag>": "Sonraki adım: sr report --tag <Etiket>",
+    "No saved runs yet. Run sr report --tag ..., or search in sr ui.":
+        "Henüz kayıtlı tarama yok. sr report --tag ... çalıştırın ya da sr ui'de arama yapın.",
+    "Saved runs": "Kayıtlı taramalar",
+    "Date": "Tarih",
+    "Kind": "Tür",
+    "Search": "Arama",
+    "Rows": "Satır",
+    "markets": "pazarlar",
+    "tag": "etiket",
+    "Reviews: {n} ({rating} positive)   Price: {price}   Owners (SteamSpy): {owners}":
+        "İnceleme: {n} ({rating} olumlu)   Fiyat: {price}   Sahip (SteamSpy): {owners}",
+    "Reviews in the last 12 months: {recent}": "Son 12 aydaki incelemeler: {recent}",
+    "Released: {date}   Categories: {categories}": "Çıkış: {date}   Kategoriler: {categories}",
+    "Top tags: {tags}": "Öne çıkan etiketler: {tags}",
+    "Box Method: ~{units} units (x45), gross {low} - {high} (x30-x100)":
+        "Box Method: ~{units} satış (x45), brüt {low} - {high} (x30-x100)",
+    "demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, fixability {fixability}":
+        "talep {demand}, {rating} olumluda memnuniyetsizlik {dissatisfaction}, düzeltilebilirlik {fixability}",
+    ", penalty -{points:.0f} for {names}": ", ceza -{points:.0f}: {names}",
+    "Opportunity score: {score:.0f}/100": "Fırsat puanı: {score:.0f}/100",
+    "Review texts unavailable:": "İnceleme metinleri alınamadı:",
+    "Severity": "Önem",
+    "Check": "Kontrol",
+    "Finding": "Bulgu",
+    "No risk flags.": "Risk işareti yok.",
+    "No review histogram available; spike checks skipped.": "İnceleme grafiği yok; sıçrama kontrolleri atlandı.",
+    "What went wrong ({n} negative reviews)": "Neler ters gitti ({n} olumsuz inceleme)",
+    "Lately ({n} from last 12 mo)": "Son zamanlarda (son 12 aydan {n})",
+    "Design pillar (do this instead)": "Tasarım ilkesi (bunun yerine bunu yap)",
+    "Half most helpful, half newest reviews; reviews written under 2 h of play count half.":
+        "Yarısı en faydalı, yarısı en yeni incelemeler; 2 saatten az oynanarak yazılan incelemeler yarım sayılır.",
+    "{complaint} - what players say:": "{complaint} - oyuncular ne diyor:",
+    "{idea} of negative reviews still praise the idea or its potential.  Fixable complaints: {fix} of mentions.":
+        "Olumsuz incelemelerin {idea} kadarı yine de fikri ya da potansiyelini övüyor.  "
+        "Düzeltilebilir şikayetler: anılanların {fix} kadarı.",
+    "Core fantasy": "Ana fantezi",
+    "(common phrases in {n} positive reviews): {phrases}": "({n} olumlu incelemede sık geçen ifadeler): {phrases}",
+    "Players liked:": "Oyuncuların sevdikleri:",
+
+    # ---- the Markdown report (templates/report.md.j2)
+    "Underserved Audience Report: {tag}": "Karşılanmamış Kitle Raporu: {tag}",
+    "Generated {date} by steam-researcher.": "steam-researcher tarafından {date} tarihinde oluşturuldu.",
+    "Filters: >= {min} reviews, {lo}-{hi}% positive, games only.":
+        "Filtreler: >= {min} inceleme, %{lo}-{hi} olumlu, yalnızca oyunlar.",
+    "Analyzed the {n} highest-demand of {candidates} candidates (out of {total} games in the tag).":
+        "{candidates} adaydan en çok talep gören {n} tanesi analiz edildi (etiketteki {total} oyun içinden).",
+    '"Well served" = {pct}%+ positive; the gap is the share of underserved among those two groups.':
+        '"İyi karşılanmış" = %{pct}+ olumlu; boşluk, bu iki grup içinde karşılanmamışların payıdır.',
+    "Proven Demand + Poor Execution = High Opportunity.": "Kanıtlanmış Talep + Kötü Yapım = Büyük Fırsat.",
+    "The score (0-100) is a weighted geometric mean of": "Puan (0-100), şunların ağırlıklı geometrik ortalamasıdır:",
+    "demand (review volume), dissatisfaction (how far below 70% positive) and fixability (share of complaints a":
+        "talep (inceleme hacmi), memnuniyetsizlik (%70 olumlunun ne kadar altında) ve düzeltilebilirlik (küçük bir",
+    "small team can fix), minus points for risk flags. Review-bombed periods are removed from the rating first.":
+        "ekibin düzeltebileceği şikayetlerin payı); risk işaretleri için puan düşülür. İnceleme bombardımanı dönemleri önce puandan çıkarılır.",
+    "(score {score})": "(puan {score})",
+    "Steam store": "Steam mağazası",
+    "Released {date}": "Çıkış {date}",
+    "Demand:": "Talep:",
+    "{n} reviews, {owners} owners (SteamSpy). Box Method: ~{units} units, {low} - {high} gross at {price}.":
+        "{n} inceleme, {owners} sahip (SteamSpy). Box Method: ~{units} satış, {price} fiyatla {low} - {high} brüt.",
+    "Recent demand:": "Yakın dönem talebi:",
+    "{recent} of its reviews came in the last 12 months.": "İncelemelerinin {recent} kadarı son 12 ayda geldi.",
+    "Satisfaction:": "Memnuniyet:",
+    "{rating} positive": "{rating} olumlu",
+    ", {rating} with review bombs removed": ", inceleme bombardımanları çıkarılınca {rating}",
+    "Score parts:": "Puan parçaları:",
+    "demand {demand}, dissatisfaction {dissatisfaction}, fixability {fixability}":
+        "talep {demand}, memnuniyetsizlik {dissatisfaction}, düzeltilebilirlik {fixability}",
+    ", penalty -{points} ({names})": ", ceza -{points} ({names})",
+    "Tags:": "Etiketler:",
+    "{pct} of negative reviews still praise the idea or its potential.":
+        "Olumsuz incelemelerin {pct} kadarı yine de fikri ya da potansiyelini övüyor.",
+    "Core fantasy to keep": "Korunacak ana fantezi",
+    "Common phrases in {n} positive reviews: {phrases}": "{n} olumlu incelemede sık geçen ifadeler: {phrases}",
+    "Players liked: {phrases}": "Oyuncuların sevdikleri: {phrases}",
+    "Mistakes to avoid": "Kaçınılacak hatalar",
+    "Don't:": "Yapma:",
+    "{complaint} (in {pct} of negative reviews).": "{complaint} (olumsuz incelemelerin {pct} kadarında).",
+    "Do:": "Yap:",
+    "Review texts unavailable: {error}": "İnceleme metinleri alınamadı: {error}",
+    "Excluded / notes": "Çıkarılanlar / notlar",
+    "Not games: {names}": "Oyun olmayanlar: {names}",
+    "No store page (delisted or region-locked), analyzed anyway: {names}":
+        "Mağaza sayfası yok (kaldırılmış ya da bölgeye kilitli), yine de analiz edildi: {names}",
+    "Estimates use the undiscounted price, before Steam's cut, regional pricing and discounts. Review mining is":
+        "Tahminler indirimsiz fiyatı kullanır; Steam payı, bölgesel fiyatlar ve indirimler düşülmemiştir. İnceleme analizi",
+    "keyword-based and English-only; read the quotes before trusting the percentages.":
+        "anahtar kelimeye dayalıdır ve yalnızca İngilizcedir; yüzdelere güvenmeden önce alıntıları okuyun.",
 }

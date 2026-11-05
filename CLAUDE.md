@@ -84,6 +84,7 @@ uv run sr report --tag "Job Simulator" --max-games 15 --reviews 200   # writes r
 uv run sr markets --top 30                  # rank every tag by underserved games (~7 min first time)
 uv run sr runs                              # saved runs (from sr report and the web UI)
 uv run sr ui                                # web UI (3D map) on http://localhost:8501
+uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report (or SR_LANG=tr); the web UI has an EN | TR switch
 uv run sr cache clear
 uv run --with playwright pytest tests/test_ui.py   # browser smoke test, if .venv lacks Playwright
 ```
@@ -112,6 +113,14 @@ Web UI (`web/`): `sr ui` runs uvicorn on `web/server.py`, bound to 127.0.0.1, an
 - **Market view** (`market.py`, pure): `market_stats(games, ...)` describes a whole tag from the game list a search already has: games, games with demand, underserved (in the % range), well served (`config.WELL_SERVED_RATING`, 85%+) and the gap (underserved / (underserved + well served)). `run_tag` stores it in `TagResult.market`; the web shows it as the Market strip above the ranking. `pipeline.run_markets` computes it for every tag SteamSpy can search (one request per tag, ~7 min first time, then cached) for `sr markets` and the web's Games | Markets switch; the slow Steam-store-search tags are skipped.
 - **Saved runs** (`runs.py`): every finished web job and `sr report` run is saved to `config.RUNS_DB` (`~/.local/share/steam-researcher/runs.sqlite`, apart from the cache so `sr cache clear` keeps it). The result is stored as JSON via pydantic `TypeAdapter` and rebuilt on load, so `_job()` serves saved runs after a restart (report, CSV, "Past runs" in the UI). A tag run is compared with the last earlier run with the same tags (any order) and filters: `score_change`/`new` per game, shown as ▲/▼/new.
 - **Tests:** `tests/test_web.py` uses FastAPI's `TestClient` with `pipeline.run_tag`/`analyze_game` monkeypatched, so it needs no network; an autouse fixture points `server._runs` at a temp DB. `tests/test_ui.py` drives the real app in a browser with Playwright (pipeline faked) and skips when Playwright or a browser is missing. Check JS syntax with `node --check`. CI (`.github/workflows/test.yml`) runs both on every push.
+
+**Interface language** (English or Turkish; review mining and Steam data stay English):
+- **Python:** write text in English as `_("Only {n} game(s) passed.", n=n)` (`i18n.py`) and add the Turkish to `i18n_tr.TR`, with the same `{placeholders}`. The language is a `ContextVar`: `use("tr")` for a block, `sr --lang tr` / `SR_LANG` for the CLI, and the `X-Lang` header or `?lang=` per web request. Web jobs run in the language of the request that started them (`contextvars.copy_context`).
+- **Numbers** come out the Turkish way from the same format specs: `{n:,}` gives 1.460, `{x:.0%}` gives %73, `{x:.1f}` gives 0,5. Where the English writes `{x:.0f}%`, the Turkish template writes `%{x:.0f}`. For numbers without text use `num()` / `fmt()`.
+- **Stored text:** `N_("...")` marks text translated later, where it's shown (`RISK_LABELS`, `FIELD_LABELS`). Risk flags store `template` and `params`, and `flag.text()` translates them; runs saved before that only have the English `message`. Complaint labels, pillars and trends stay English in the data, and `game_json`, the CLI and the report translate them (`trend_kind` tells the page which trend it is).
+- **Report:** `report.md.j2` uses `{{ _("...") }}`. The English output must stay as it was. The CSV stays English (machine-readable codes and labels).
+- **Web page:** `web/static/i18n.js` holds its own `TR` catalog, one `"English": "Türkçe",` entry per line. `t("...")` must be called with a literal. Static text in `index.html` is marked `data-i18n`, attributes `data-i18n-attr="title,..."`. The EN | TR switch redraws in place and re-fetches the current result and game.
+- **Tests:** `tests/test_i18n.py` finds every `_()`/`N_()` literal (Python and the template), every `t()` literal and every `data-i18n` text. Each must have a translation with the same placeholders, so a new English text without Turkish fails the tests. The user is a native Turkish speaker and reviews the wording.
 
 User-facing messages (validation, info, warnings, friendly errors) come from `notices.py` as `Notice(level, title, message, hint)`. The CLI and the web share them: the CLI prints them in color, and the web shows them as toasts (`toast`/`notify` in `app.js`). Add new cases in `notices.py`, not ad hoc in the UI; only instant field validation lives in JS. `friendly_error(exc)` turns exceptions into plain language. CLI commands are wrapped in `_guarded`, so no traceback is shown unless `SR_DEBUG=1`. `run_tag` records per-game failures in `TagResult.failed` and keeps going.
 
@@ -164,4 +173,4 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 
 ## Gotchas
 
-- The Windows console uses code page cp1254. Rich output must stay **ASCII-only** (`>=`, `-`, `x`, not `≥`, `–`, `×`), or printing raises `UnicodeEncodeError`.
+- The Windows console uses code page cp1254. Rich output must keep **ASCII symbols** (`>=`, `-`, `x`, not `≥`, `–`, `×`), or printing raises `UnicodeEncodeError`. Turkish letters (ç ğ ı ö ş ü İ, also â) are in cp1254 and print fine. The web catalog can use any symbol (`≥`, `→`).

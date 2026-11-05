@@ -58,6 +58,11 @@ def num(n: float) -> str:
     return f"{n:,}".translate(_SWAP) if LANG.get() == "tr" else f"{n:,}"
 
 
+def fmt(template: str, **params) -> str:
+    """Fill numbers into `template` the current language's way, without translating it ("${x:.1f}M")."""
+    return _TR_FORMAT.format(template, **params) if LANG.get() == "tr" else template.format(**params)
+
+
 @contextlib.contextmanager
 def use(language: str):
     """Run a block in `language` ("en" or "tr"; anything else means English)."""

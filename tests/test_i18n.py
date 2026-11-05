@@ -23,6 +23,11 @@ def python_texts() -> set[str]:
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("_", "N_")
                     and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)):
                 texts.add(node.args[0].value)
+    import re
+
+    for path in (PACKAGE / "templates").glob("*.j2"):  # {{ _("...") }} in the report template
+        for dq, sq in re.findall(r"""\b_\(\s*(?:"([^"]*)"|'([^']*)')""", path.read_text(encoding="utf-8")):
+            texts.add(dq or sq)
     texts |= set(config.RISK_LABELS.values())
     texts |= {c.label for c in CATEGORIES} | {c.pillar for c in CATEGORIES}
     texts |= {"still common lately", "less common lately", "rarely mentioned lately"}  # CategoryResult.trend
@@ -139,3 +144,39 @@ def test_page_translation_keeps_placeholders(english):
     catalog = js_catalog()
     if english in catalog:
         assert fields(catalog[english]) == fields(english)
+
+
+def test_cli_speaks_turkish(monkeypatch):
+    from typer.testing import CliRunner
+
+    from steam_researcher.cli import app
+    from test_m4 import analysis, flag
+
+    a = analysis(42, "Solo", [flag("deep_discount", "warn")], appid=5)
+    monkeypatch.setattr("steam_researcher.cli.analyze_game", lambda http, appid, n: a)
+    tr = CliRunner().invoke(app, ["--lang", "tr", "analyze", "5"])
+    assert tr.exit_code == 0, tr.output
+    assert "Fırsat puanı" in tr.output and "Risk kontrolleri" in tr.output and "Oyunu bozan hatalar" in tr.output
+    assert i18n.lang() == "en"  # the language doesn't leak past the command
+    en = CliRunner().invoke(app, ["analyze", "5"], env={"SR_LANG": ""})
+    assert "Opportunity score" in en.output and "Fırsat" not in en.output
+    assert CliRunner().invoke(app, ["analyze", "5"], env={"SR_LANG": "tr"}).output.count("Fırsat puanı") == 1
+    assert CliRunner().invoke(app, ["--lang", "xx", "analyze", "5"]).exit_code == 2
+
+
+def test_report_in_turkish():
+    from steam_researcher.report import render
+    from test_web import fake_result
+
+    r = fake_result()
+    args = dict(tag="Job Simulator", analyses=r.analyses, n_candidates=12, n_tag_games=50, min_reviews=100,
+                lo=5, hi=70, not_games=r.not_games, unlisted=[])
+    with use("tr"):
+        text = render(**args)
+    assert text.startswith("# Karşılanmamış Kitle Raporu: Job Simulator") and "%40" in text and "1.000" in text
+    assert render(**args).startswith("# Underserved Audience Report: Job Simulator")
+
+
+def test_turkish_cli_text_prints_on_the_windows_console():
+    for text in TR.values():
+        text.encode("cp1254")  # raises on symbols the console can't show (see CLAUDE.md Gotchas)
