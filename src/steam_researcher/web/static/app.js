@@ -785,7 +785,8 @@ function renderTable() {
       return el("tr", { "data-appid": g.game.appid, onclick: () => selectGame(g.game.appid) },
         el("td", { class: "num" }, g.rank),
         el("td", {}, g.game.name),
-        el("td", { class: "num" }, el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}` }, Math.round(o.score)), delta(g)),
+        el("td", { class: "num" }, scoreAnchor(el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}`,
+          "aria-label": `Score ${Math.round(o.score)}. How it is calculated` }, Math.round(o.score)), g), delta(g)),
         el("td", { class: "num" }, g.reviews.toLocaleString("en-US")),
         el("td", { class: "num" }, `${Math.round(g.rating)}%${adj}`),
         el("td", { class: "num" }, recentText(g)),
@@ -822,6 +823,65 @@ function selectGame(appid) {
   document.querySelector(`#ranking tr[data-appid="${appid}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
+// ---------- score card: how a score was reached (hover or focus any score) ----------
+// All numbers and wording come from the server (scoring.explain); this only lays them out.
+const scoreTip = el("div", { id: "score-tip", class: "score-tip", role: "tooltip", hidden: true });
+document.body.append(scoreTip);
+
+function fillScoreTip(g) {
+  const e = g.score_explained;
+  const row = (cls, label, value, note) => el("div", { class: `tip-row ${cls}` },
+    el("span", {}, label), el("b", {}, value), note ? el("p", {}, note) : null);
+  scoreTip.replaceChildren(
+    el("div", { class: "tip-head" }, el("b", {}, `Opportunity score ${Math.round(e.score)}`), el("span", {}, "/ 100")),
+    el("p", { class: "tip-lead" }, "Proven demand + poor execution = high opportunity. Three parts, each 0-100%:"),
+    ...e.parts.map((p) => el("div", { class: "tip-part" },
+      el("div", { class: "tip-part-head" },
+        el("span", {}, p.label),
+        el("i", {}, `weight ${Math.round(p.weight * 100)}%`),
+        el("b", {}, pct(p.value))),
+      el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(p.value * 100)}%` })),
+      el("p", {}, p.basis))),
+    el("div", { class: "tip-sum" },
+      row("", "Combined (weighted geometric mean)", Math.round(e.combined)),
+      ...e.penalties.map((p) => row("minus", `${p.label} (risk)`, `-${p.points}`, p.reason)),
+      row("total", "Score", Math.round(e.score))),
+    el("p", { class: `tip-note${e.zero_part ? " warn" : ""}` }, e.zero_part
+      ? `${e.zero_part} is 0%, so the score is 0: a good opportunity needs all three parts.`
+      : "If any part is 0%, the score is 0: a good opportunity needs all three parts."),
+  );
+}
+
+function showScoreTip(anchor, g) {
+  if (!g.score_explained) return;
+  fillScoreTip(g);
+  scoreTip.hidden = false;
+  const a = anchor.getBoundingClientRect(), t = scoreTip.getBoundingClientRect(), gap = 10;
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  let left = a.right + gap; // beside the score; flip to the left side when there's no room
+  if (left + t.width > vw - 8) left = Math.max(8, a.left - gap - t.width);
+  let top = a.top + a.height / 2 - t.height / 2;
+  top = Math.max(8, Math.min(top, vh - t.height - 8));
+  scoreTip.style.left = `${left}px`;
+  scoreTip.style.top = `${top}px`;
+}
+
+const hideScoreTip = () => (scoreTip.hidden = true);
+document.addEventListener("keydown", (e) => e.key === "Escape" && hideScoreTip());
+document.addEventListener("scroll", hideScoreTip, true);
+
+// Makes `node` open the score card on hover and keyboard focus.
+function scoreAnchor(node, g) {
+  node.tabIndex = 0;
+  node.setAttribute("aria-describedby", "score-tip");
+  node.classList.add("score-anchor");
+  node.addEventListener("mouseenter", () => showScoreTip(node, g));
+  node.addEventListener("focus", () => showScoreTip(node, g));
+  node.addEventListener("mouseleave", hideScoreTip);
+  node.addEventListener("blur", hideScoreTip);
+  return node;
+}
+
 // ---------- detail panel ----------
 function bar(labelText, value, text) {
   return el("div", { class: "bar" },
@@ -845,7 +905,8 @@ function renderPanel(g) {
       game.developer ? ` · ${game.developer}` : "",
     ),
     el("div", { class: "score-row" },
-      el("div", { class: "score-ring", style: `--p:${o.score};--ring:${scoreColor(o.score)}` }, el("span", {}, Math.round(o.score))),
+      scoreAnchor(el("div", { class: "score-ring", style: `--p:${o.score};--ring:${scoreColor(o.score)}`,
+        "aria-label": `Opportunity score ${Math.round(o.score)}. How it is calculated` }, el("span", {}, Math.round(o.score))), g),
       el("div", { class: "facts" },
         el("div", {}, el("span", {}, "Reviews"), el("b", {}, g.reviews.toLocaleString("en-US"))),
         el("div", {}, el("span", {}, "% positive"), el("b", {}, `${Math.round(g.rating)}%`, adjusted ? ` (${Math.round(o.effective_rating)}% adj.)` : "")),
@@ -859,7 +920,9 @@ function renderPanel(g) {
       bar("Dissatisfaction", o.dissatisfaction),
       bar("Fixability", o.fixability),
     ),
-    o.penalty ? el("div", { class: "penalty" }, `Risk penalty -${Math.round(o.penalty)} (${o.penalized.join(", ")})`) : null,
+    o.penalty ? el("div", { class: "penalty" }, `Risk penalty -${Math.round(o.penalty)} (${
+      (g.score_explained?.penalties || []).map((p) => p.label).join(", ") || o.penalized.join(", ")})`) : null,
+    g.score_explained ? scoreAnchor(el("button", { type: "button", class: "how-scored" }, "How is this score calculated?"), g) : null,
     Object.keys(game.tags || {}).length
       ? el("div", { class: "chips" }, Object.keys(game.tags).slice(0, 10).map((t) => el("span", { class: "chip" }, t)))
       : null,

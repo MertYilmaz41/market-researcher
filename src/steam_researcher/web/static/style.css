@@ -312,7 +312,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 }
 .tooltip[hidden] { display: none; }
 .tooltip b { display: block; font-family: var(--font-display); font-size: var(--fs-base); }
-.tooltip span { color: var(--muted); }
+.tooltip span { display: block; color: var(--muted); }
 
 /* ---------- details panel ---------- */
 .panel h3 { font-size: var(--fs-lg); }
@@ -335,6 +335,40 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .bar .track { height: 6px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
 .bar .fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .bar .val { text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-sm); }
+.how-scored {
+  display: block; margin: -4px 0 var(--s3); padding: 0; border: 0; background: none;
+  color: var(--accent); font: inherit; font-size: var(--fs-sm); cursor: help; text-decoration: underline dotted;
+}
+.score-anchor { cursor: help; }
+.score-anchor:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Score card: from the three parts to the final score */
+.score-tip {
+  position: fixed; z-index: 50; width: min(380px, calc(100vw - 16px)); padding: var(--s3) var(--s4);
+  background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .7); pointer-events: none; font-size: var(--fs-sm);
+}
+.score-tip[hidden] { display: none; }
+.score-tip p { margin: 4px 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
+.tip-head { display: flex; align-items: baseline; gap: 6px; }
+.tip-head b { font-family: var(--font-display); font-size: var(--fs-base); font-weight: 600; }
+.tip-head span { color: var(--muted); font-family: var(--font-mono); }
+.score-tip .tip-lead { margin: 2px 0 var(--s3); }
+.tip-part { margin-bottom: var(--s3); }
+.tip-part-head { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: 4px; }
+.tip-part-head span { font-weight: 500; }
+.tip-part-head i { flex: 1; color: var(--muted); font-style: normal; font-size: var(--fs-xs); }
+.tip-part-head b, .tip-row b { font-family: var(--font-mono); font-weight: 500; }
+.tip-part .track { height: 4px; border-radius: 99px; background: var(--card); overflow: hidden; }
+.tip-part .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.tip-sum { border-top: 1px solid var(--line); padding-top: var(--s2); }
+.tip-row { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s2); padding: 3px 0; }
+.tip-row p { grid-column: 1 / -1; margin: 0; }
+.tip-row.minus b, .tip-row.minus span { color: var(--bad); }
+.tip-row.total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; font-weight: 600; }
+.tip-row.total b { color: var(--accent); }
+.score-tip .tip-note { margin-top: var(--s2); }
+.score-tip .tip-note.warn { color: var(--warn); }
 .penalty { color: var(--bad); font-family: var(--font-mono); font-size: var(--fs-sm); margin: -6px 0 var(--s3); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s3); }

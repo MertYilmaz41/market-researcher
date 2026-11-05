@@ -42,7 +42,11 @@ export function createMap2d(container, { onSelect }) {
       Object.assign(document.createElement("b"), { textContent: g.game.name }),
       Object.assign(document.createElement("span"), {
         textContent: `Score ${Math.round(o.score)} · ${g.reviews.toLocaleString("en-US")} reviews · `
-          + `${Math.round(g.rating)}% pos · fixability ${pct(o.fixability)}`,
+          + `${Math.round(g.rating)}% pos`,
+      }),
+      Object.assign(document.createElement("span"), {
+        textContent: `demand ${pct(o.demand)} · dissatisfaction ${pct(o.dissatisfaction)} · fixability ${pct(o.fixability)}`
+          + (o.penalty ? ` · -${Math.round(o.penalty)} risks` : ""),
       }),
     );
     tooltip.style.left = `${e.clientX - box.left}px`;

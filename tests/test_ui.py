@@ -108,6 +108,14 @@ def test_ui_smoke(base_url, browser):
     assert page.is_visible("#market-strip") and "UNDERSERVED" in page.inner_text("#market-strip").upper()
     assert page.is_visible("#download") and page.is_visible("#download-csv")
 
+    # Hovering a score explains it; moving away hides it.
+    page.hover("#ranking tbody tr:first-child .score-pill")
+    tip = page.inner_text("#score-tip")
+    for text in ["Opportunity score 60", "Demand", "Dissatisfaction", "Fixability", "Combined", "weight 40%"]:
+        assert text in tip
+    page.mouse.move(5, 5)
+    assert page.is_hidden("#score-tip")
+
     # 2D map: a bubble per game; clicking one shows it in the panel.
     assert page.locator(".map2d .bubble").count() == 2
     page.locator(".map2d .bubble").last.click()

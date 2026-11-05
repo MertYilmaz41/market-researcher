@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
-from .. import boxmethod, config, market, notices, pipeline, risk, runs
+from .. import boxmethod, config, market, notices, pipeline, risk, runs, scoring
 from ..http import HttpClient
 from ..models import Analysis
 from ..report import rank, ranking_csv, render, slug
@@ -97,6 +97,7 @@ def game_json(a: Analysis) -> dict:
         has_histogram=a.has_histogram,
         recent_reviews=recent,
         recent_share=recent / total if total else None,
+        score_explained=scoring.explain(a),
     )
     return data
 

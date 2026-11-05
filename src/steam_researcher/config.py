@@ -95,6 +95,16 @@ RISK_PENALTIES = {  # points subtracted per flag; review bombs are handled via a
     "hard_tech": 5,
     "fading_demand": 10,
 }
+RISK_LABELS = {  # how penalized flags are named in the UI
+    "streamer_spike": "Streamer spike",
+    "deep_discount": "Deep discount",
+    "cheap_price": "Very cheap",
+    "netcode": "Online multiplayer",
+    "niche": "Niche audience",
+    "scope_unrealistic": "AAA expectations",
+    "hard_tech": "Hard tech",
+    "fading_demand": "Fading demand",
+}
 EXCLUDE_FLAGS = {"not_game"}
 
 USER_AGENT = "steam-researcher/0.1 (hobby market research CLI)"

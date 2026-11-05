@@ -85,3 +85,34 @@ def test_render_report():
 
 def test_slug():
     assert report.slug("Job Simulator") == "job-simulator"
+
+
+# --- score explanation -------------------------------------------------------------------------
+
+def _analysis_for(g, flags=(), mined=True, adjusted=None):
+    flags = list(flags)
+    m = mining() if mined else None
+    o = scoring.score(g, flags, m, adjusted)
+    return Analysis(game=g, details=None, flags=flags, mining=m, opportunity=o)
+
+
+def test_explain_walks_from_parts_to_score():
+    a = _analysis_for(game(), [flag("netcode"), flag("niche_x")])
+    e = scoring.explain(a)
+    assert [p["label"] for p in e["parts"]] == ["Demand", "Dissatisfaction", "Fixability"]
+    assert [p["weight"] for p in e["parts"]] == [0.40, 0.35, 0.25]
+    assert e["combined"] - 15 == pytest.approx(e["score"])  # only netcode is penalized
+    assert e["penalties"] == [{"code": "netcode", "label": "Online multiplayer", "points": 15, "reason": "netcode"}]
+    assert "1,000 reviews" in e["parts"][0]["basis"] and "40% positive" in e["parts"][1]["basis"]
+    assert e["zero_part"] is None
+
+
+def test_explain_notes_review_bombs_and_unmined_reviews():
+    e = scoring.explain(_analysis_for(game(), mined=False, adjusted=55))
+    assert "55% with review-bomb periods removed" in e["parts"][1]["basis"]
+    assert "assumed" in e["parts"][2]["basis"] and e["parts"][2]["value"] == 0.5
+
+
+def test_explain_names_a_zero_part():
+    e = scoring.explain(_analysis_for(game(pos=900, neg=100)))  # 90% positive: not dissatisfied
+    assert e["zero_part"] == "Dissatisfaction" and e["score"] == 0 and e["combined"] == 0

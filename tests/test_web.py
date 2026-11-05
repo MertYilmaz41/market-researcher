@@ -71,6 +71,7 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
     g = res["games"][0]
     assert g["store_url"].endswith("/app/1/") and g["box"]["gross_mid"] > 0
     assert g["mining"]["categories"][0]["code"] == "bugs" and g["has_histogram"] is True
+    assert [p["label"] for p in g["score_explained"]["parts"]] == ["Demand", "Dissatisfaction", "Fixability"]
     assert res["not_games"] == ["Soundtrack (music)"] and res["n_tag_games"] == 50
     assert any(n["level"] == "success" and "Best Sim" in n["message"] for n in res["notices"])
     assert calls[0][0] == ["Job Simulator"] and calls[0][1][1:3] == (10, 60)
