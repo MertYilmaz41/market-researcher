@@ -101,8 +101,8 @@ export function createMap(container, { onSelect }) {
   );
   ring.visible = false;
   scene.add(ring);
-  const nameTag = label("", "axis-label");
-  nameTag.element.style.cssText = "color:#e6e9f0;font-size:12px;text-transform:none;letter-spacing:0;font-weight:600";
+  // Style via a class: assigning style.cssText would wipe the position:absolute CSS2DObject relies on.
+  const nameTag = label("", "name-tag");
   nameTag.visible = false;
   scene.add(nameTag);
 
@@ -186,7 +186,7 @@ export function createMap(container, { onSelect }) {
     const b = document.createElement("b");
     b.textContent = g.game.name;
     const s = document.createElement("span");
-    s.textContent = `Score ${Math.round(g.opportunity.score)} · ${g.reviews.toLocaleString()} reviews · ${Math.round(g.rating)}% pos`;
+    s.textContent = `Score ${Math.round(g.opportunity.score)} · ${g.reviews.toLocaleString("en-US")} reviews · ${Math.round(g.rating)}% pos`;
     tooltip.append(b, s);
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y}px`;
