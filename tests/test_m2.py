@@ -261,3 +261,35 @@ def test_rating_source_text():
     assert rating_source_text(_game()) == "SteamSpy estimate"
     assert rating_source_text(_game(rating_source="steam", steamspy_rating=31)) == "Steam's own numbers"
     assert rating_source_text(_game(rating_source="steam", steamspy_rating=40)) == "Steam's own numbers (SteamSpy says 40%)"
+
+
+# --- "is it already fixed?" ------------------------------------------------------------------
+
+def _rated(old: tuple[int, int], new: tuple[int, int], old_months=24) -> list[HistPoint]:
+    """old_months of (up, down) per month, then 12 recent months of (up, down)."""
+    pts = [old] * old_months + [new] * 12
+    n = len(pts)
+    return [HistPoint(date=NOW - (n - 1 - i) * MONTH, up=u, down=d) for i, (u, d) in enumerate(pts)]
+
+
+def test_recent_rating():
+    assert risk.recent_rating(_rated((10, 90), (8, 2)), NOW) == 80
+    assert risk.recent_rating([], NOW) is None
+
+
+def test_much_better_lately_is_flagged_and_costs_points():
+    from steam_researcher import scoring
+
+    flags = risk.check_recovered(_rated((40, 60), (8, 2)), NOW)  # 40% all along, 80% lately
+    assert [f.code for f in flags] == ["recovered"]
+    assert "80% positive in the last 12 months" in flags[0].message
+    g = Game(appid=1, name="x", positive=4000, negative=6000, price_cents=999)
+    assert scoring.score(g, flags, None).penalty == 20
+
+
+def test_steady_or_thin_recent_rating_is_not_flagged():
+    assert risk.check_recovered(_rated((40, 60), (5, 5)), NOW) == []  # 50% lately: +6 points, under 70
+    assert risk.check_recovered(_rated((40, 60), (3, 0)), NOW) == []  # 36 recent reviews: too few to judge
+    assert risk.check_recovered([], NOW) == []
+    # reaching 70%+ lately is enough even when the all-time rating is close
+    assert risk.check_recovered(_rated((60, 40), (6, 2)), NOW)[0].code == "recovered"

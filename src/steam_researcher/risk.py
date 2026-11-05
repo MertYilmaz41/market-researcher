@@ -78,6 +78,31 @@ def recent_activity(hist: list[HistPoint], now: float | None = None) -> tuple[in
     return recent, sum(p.total for p in hist), (now - hist[0].date) / YEAR
 
 
+def recent_rating(hist: list[HistPoint], now: float | None = None) -> float | None:
+    """% positive of the reviews from the last 12 months (histogram, all languages); None if none."""
+    now = time.time() if now is None else now
+    recent = [p for p in hist if p.date >= now - YEAR]
+    total = sum(p.total for p in recent)
+    return 100 * sum(p.up for p in recent) / total if total else None
+
+
+def check_recovered(hist: list[HistPoint], now: float | None = None) -> list[RiskFlag]:
+    """Players rate it much better lately: the problems may already be fixed (by a patch or an update),
+    so the audience is no longer waiting for someone else to fix them."""
+    recent, total, _ = recent_activity(hist, now)
+    lately = recent_rating(hist, now)
+    if lately is None or recent < config.RECOVERED_MIN_RECENT:
+        return []
+    overall = 100 * sum(p.up for p in hist) / total
+    if lately < overall + config.RECOVERED_DELTA and lately < config.MAX_RATING:
+        return []
+    return [RiskFlag(
+        code="recovered", severity="warn",
+        message=f"Rated {lately:.0f}% positive in the last 12 months vs {overall:.0f}% all time "
+        f"({recent:,} recent reviews): the problems may already be fixed.",
+    )]
+
+
 def check_fading(hist: list[HistPoint], now: float | None = None) -> list[RiskFlag]:
     """An old game whose audience has mostly moved on: the demand is history, not a market."""
     recent, total, age = recent_activity(hist, now)
@@ -165,6 +190,7 @@ def assess(game: Game, details: AppDetails | None, hist: list[HistPoint]) -> lis
         check_listing(details)
         + check_spikes(hist)
         + check_fading(hist)
+        + check_recovered(hist)
         + check_discount(game, details)
         + check_complexity(details, game.tags)
         + check_niche(game.tags)

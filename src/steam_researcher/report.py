@@ -66,9 +66,12 @@ def rating_source_text(g: Game) -> str:
 
 
 def recent_text(a: Analysis) -> str:
-    """Reviews in the last 12 months and their share of all reviews (English histogram)."""
+    """Reviews in the last 12 months, their share of all reviews and their % positive (histogram)."""
     recent, total, _ = risk.recent_activity(a.histogram)
-    return f"{recent:,} ({recent / total:.0%})" if total else "-"
+    if not total:
+        return "-"
+    lately = risk.recent_rating(a.histogram)
+    return f"{recent:,} ({recent / total:.0%})" + (f", {lately:.0f}% positive" if lately is not None else "")
 
 
 def risk_codes(a: Analysis) -> str:
@@ -128,14 +131,15 @@ def ranking_csv(ranked: list[Analysis], changes: dict[int, float | None] | None 
     out = io.StringIO()
     w = csv.writer(out, lineterminator="\n")
     w.writerow(["rank", "appid", "name", "score", "score_change", "reviews", "pct_positive",
-                "reviews_last_12_months", "est_gross_x45", "top_complaint", "risks", "store_url"])
+                "reviews_last_12_months", "pct_positive_last_12_months", "est_gross_x45", "top_complaint", "risks", "store_url"])
     for i, a in enumerate(ranked, 1):
         change = changes.get(a.game.appid, "")
         recent, total, _ = risk.recent_activity(a.histogram)
+        lately = risk.recent_rating(a.histogram)
         w.writerow([
             i, a.game.appid, a.game.name, round(a.opportunity.score),
             "new" if a.game.appid in changes and change is None else ("" if change == "" else round(change)),
-            a.game.reviews, round(a.game.rating), recent if total else "",
+            a.game.reviews, round(a.game.rating), recent if total else "", "" if lately is None else round(lately),
             round(box(a).gross_mid) if a.game.base_price else "", top_complaint(a), risk_codes(a), a.game.store_url,
         ])
     return out.getvalue()

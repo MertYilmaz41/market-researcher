@@ -803,7 +803,8 @@ const sortValue = {
   risks: (g) => riskCodes(g).length,
 };
 
-const recentText = (g) => g.recent_share == null ? "-" : `${g.recent_reviews.toLocaleString("en-US")} (${pct(g.recent_share)})`;
+const recentText = (g) => g.recent_share == null ? "-"
+  : `${g.recent_reviews.toLocaleString("en-US")} (${pct(g.recent_share)})` + (g.recent_rating == null ? "" : `, ${Math.round(g.recent_rating)}% pos`);
 
 // Score change since the previous run with the same tags and filters (only present when one exists).
 function delta(g) {

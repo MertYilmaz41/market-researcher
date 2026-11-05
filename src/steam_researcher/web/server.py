@@ -109,6 +109,7 @@ def game_json(a: Analysis) -> dict:
         has_histogram=a.has_histogram,
         recent_reviews=recent,
         recent_share=recent / total if total else None,
+        recent_rating=risk.recent_rating(a.histogram),
         score_explained=scoring.explain(a),
     )
     return data

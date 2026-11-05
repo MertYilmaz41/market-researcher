@@ -86,6 +86,8 @@ NICHE_TAGS = {"VR", "Hentai", "Sexual Content", "NSFW", "Nudity", "Visual Novel"
 SCOPE_MIN_SHARE = 0.10  # AAA comparisons in >= 10% of negative reviews
 FADING_SHARE = 0.05  # < 5% of all reviews in the last 12 months...
 FADING_MIN_AGE_YEARS = 2  # ...for a game at least this old = fading demand
+RECOVERED_MIN_RECENT = 50  # reviews in the last 12 months needed to judge the recent rating (30 is +-17 points of noise)
+RECOVERED_DELTA = 15  # ...which must beat the all-time rating by this many points (or reach MAX_RATING)
 HARD_TAGS = {"Physics", "Open World", "MMORPG", "Massively Multiplayer"}
 
 # Opportunity score: weighted geometric mean of [0,1] parts, x100, minus risk penalties
@@ -102,6 +104,7 @@ RISK_PENALTIES = {  # points subtracted per flag; review bombs are handled via a
     "scope_unrealistic": 10,
     "hard_tech": 5,
     "fading_demand": 10,
+    "recovered": 20,
 }
 RISK_LABELS = {  # how penalized flags are named in the UI
     "streamer_spike": "Streamer spike",
@@ -112,6 +115,7 @@ RISK_LABELS = {  # how penalized flags are named in the UI
     "scope_unrealistic": "AAA expectations",
     "hard_tech": "Hard tech",
     "fading_demand": "Fading demand",
+    "recovered": "Already improved",
 }
 EXCLUDE_FLAGS = {"not_game"}
 
