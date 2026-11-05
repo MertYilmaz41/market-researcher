@@ -9,6 +9,7 @@ from statistics import median
 from pydantic import BaseModel
 
 from . import boxmethod, config
+from .i18n import _
 from .models import Game
 from .report import money
 
@@ -40,10 +41,10 @@ def market_stats(games: list[Game], min_reviews: int, lo: float, hi: float) -> M
 
 
 def summary(m: MarketStats) -> str:
-    """One line for the CLI, the report and notices (ASCII only: the Windows console is cp1254)."""
-    return (f"{m.n_games:,} games, {m.n_demand:,} with demand, {m.n_underserved:,} underserved, "
-            f"{m.n_well_served:,} well served (gap {m.gap:.0%}), "
-            f"{money(m.underserved_gross)} underserved gross")
+    """One line for the CLI and the report (no symbols outside cp1254: the Windows console)."""
+    return _("{games:,} games, {demand:,} with demand, {under:,} underserved, {well:,} well served "
+             "(gap {gap:.0%}), {gross} underserved gross", games=m.n_games, demand=m.n_demand,
+             under=m.n_underserved, well=m.n_well_served, gap=m.gap, gross=money(m.underserved_gross))
 
 
 class TagMarket(BaseModel):

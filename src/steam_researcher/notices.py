@@ -1,7 +1,8 @@
 """User-facing messages, shared by the CLI and the web UI.
 
 Every situation where a user might wonder "what happened / what do I do now" gets a Notice here,
-so both front ends say the same thing. Add new cases here, not ad hoc in the UI.
+so both front ends say the same thing. Add new cases here, not ad hoc in the UI. Text goes through
+i18n._ (add the Turkish to i18n_tr.TR; tests/test_i18n.py checks it).
 """
 
 import difflib
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from . import config
 from .http import RetryableStatus
+from .i18n import _
 from .models import Analysis
 
 Level = Literal["success", "info", "warning", "error"]
@@ -37,29 +39,30 @@ def for_filters(min_reviews: int, lo: float, hi: float, max_games: int, reviews:
     out = []
     if min_reviews < config.MIN_REVIEWS:
         out.append(Notice(
-            level="warning", title="Demand not proven",
-            message=f"Games with fewer than {config.MIN_REVIEWS} reviews don't prove that players want the idea.",
-            hint=f"The method recommends at least {config.MIN_REVIEWS} reviews, ideally {config.IDEAL_REVIEWS}+.",
+            level="warning", title=_("Demand not proven"),
+            message=_("Games with fewer than {n} reviews don't prove that players want the idea.", n=config.MIN_REVIEWS),
+            hint=_("The method recommends at least {n} reviews, ideally {ideal}+.",
+                   n=config.MIN_REVIEWS, ideal=config.IDEAL_REVIEWS),
         ))
     if hi > config.MAX_RATING:
         out.append(Notice(
-            level="info", title="Above 70% isn't underserved",
-            message=f"Games above {config.MAX_RATING:g}% positive satisfied their players, so they score 0.",
-            hint=f"Keep '% positive to' at {config.MAX_RATING:g} or lower to focus on disappointed audiences.",
+            level="info", title=_("Above 70% isn't underserved"),
+            message=_("Games above {max:g}% positive satisfied their players, so they score 0.", max=config.MAX_RATING),
+            hint=_("Keep '% positive to' at {max:g} or lower to focus on disappointed audiences.", max=config.MAX_RATING),
         ))
     if lo < config.MIN_RATING:
         out.append(Notice(
-            level="info", title="Very low ratings included",
-            message=f"Ratings under {config.MIN_RATING:g}% are often troll-bombed or broken listings.",
-            hint=f"The method starts at {config.MIN_RATING:g}%.",
+            level="info", title=_("Very low ratings included"),
+            message=_("Ratings under {min:g}% are often troll-bombed or broken listings.", min=config.MIN_RATING),
+            hint=_("The method starts at {min:g}%.", min=config.MIN_RATING),
         ))
     seconds = max_games * SECONDS_PER_GAME * max(1.0, reviews / 200)
     if seconds > 60:
         out.append(Notice(
-            level="info", title="This may take a while",
-            message=f"The first run of a tag with these settings can take about {round(seconds / 60)} min "
-                    "because Steam and SteamSpy limit request speed.",
-            hint="Later runs of the same tag load from the cache in seconds.",
+            level="info", title=_("This may take a while"),
+            message=_("The first run of a tag with these settings can take about {min} min "
+                      "because Steam and SteamSpy limit request speed.", min=round(seconds / 60)),
+            hint=_("Later runs of the same tag load from the cache in seconds."),
         ))
     return out
 
@@ -76,112 +79,115 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
 
     if result.n_tag_games == 0:  # only possible with several tags: no game has all of them
         return [Notice(
-            level="warning", title="No game has all these tags",
-            message=f"No game on SteamSpy is tagged {tag}.",
-            hint="Remove a tag or pick a broader one.",
+            level="warning", title=_("No game has all these tags"),
+            message=_("No game on SteamSpy is tagged {tag}.", tag=tag),
+            hint=_("Remove a tag or pick a broader one."),
         )]
 
     if result.n_tag_games > BROAD_TAG_GAMES:
         out.append(Notice(
-            level="info", title="Very broad tag",
-            message=f"'{tag}' has {result.n_tag_games:,} games. The method works best on specific genres "
-                    "with a clear player fantasy.",
-            hint=f"Try a narrower tag, e.g. {TAG_EXAMPLES}.",
+            level="info", title=_("Very broad tag"),
+            message=_("'{tag}' has {n:,} games. The method works best on specific genres "
+                      "with a clear player fantasy.", tag=tag, n=result.n_tag_games),
+            hint=_("Try a narrower tag, e.g. {examples}.", examples=TAG_EXAMPLES),
         ))
 
     m = result.market
     if m and m.n_underserved + m.n_well_served >= 5 and m.gap < config.LOW_GAP:
         out.append(Notice(
-            level="info", title="Audience already well served",
-            message=f"Only {m.n_underserved:,} of the {m.n_underserved + m.n_well_served:,} rated games with demand "
-                    f"are underserved; {m.n_well_served:,} are {config.WELL_SERVED_RATING}%+ positive.",
-            hint="Players here already have good games. Compare tags in the Markets view (sr markets).",
+            level="info", title=_("Audience already well served"),
+            message=_("Only {under:,} of the {rated:,} rated games with demand are underserved; "
+                      "{well:,} are {good}%+ positive.", under=m.n_underserved,
+                      rated=m.n_underserved + m.n_well_served, well=m.n_well_served, good=config.WELL_SERVED_RATING),
+            hint=_("Players here already have good games. Compare tags in the Markets view (sr markets)."),
         ))
 
     if n_cand == 0:
         if result.n_enough_reviews == 0:
             out.append(Notice(
-                level="warning", title="No games with enough reviews",
-                message=f"None of the {result.n_tag_games:,} games tagged '{tag}' has {min_reviews:,}+ reviews.",
-                hint="Lower 'Minimum reviews' in Filters, or try a more popular tag.",
+                level="warning", title=_("No games with enough reviews"),
+                message=_("None of the {n:,} games tagged '{tag}' has {min:,}+ reviews.",
+                          n=result.n_tag_games, tag=tag, min=min_reviews),
+                hint=_("Lower 'Minimum reviews' in Filters, or try a more popular tag."),
             ))
         else:
             out.append(Notice(
-                level="warning", title="No games in the rating range",
-                message=f"{result.n_enough_reviews:,} games have {min_reviews:,}+ reviews, but none is "
-                        f"{lo:g}-{hi:g}% positive. Players seem happy with this genre.",
-                hint="Widen the '% positive' range in Filters, or try another tag.",
+                level="warning", title=_("No games in the rating range"),
+                message=_("{n:,} games have {min:,}+ reviews, but none is {lo:g}-{hi:g}% positive. "
+                          "Players seem happy with this genre.", n=result.n_enough_reviews, min=min_reviews, lo=lo, hi=hi),
+                hint=_("Widen the '% positive' range in Filters, or try another tag."),
             ))
         return out
 
     if not ranked:
         out.append(Notice(
-            level="warning", title="Nothing left to rank",
-            message="Every candidate turned out to be DLC, a soundtrack or failed to load.",
-            hint="Try another tag or wider filters.",
+            level="warning", title=_("Nothing left to rank"),
+            message=_("Every candidate turned out to be DLC, a soundtrack or failed to load."),
+            hint=_("Try another tag or wider filters."),
         ))
     elif n_cand < FEW_CANDIDATES:
         out.append(Notice(
-            level="info", title="Few candidates",
-            message=f"Only {n_cand} game(s) passed the filters.",
-            hint="Try a related tag or a wider '% positive' range for more to compare.",
+            level="info", title=_("Few candidates"),
+            message=_("Only {n} game(s) passed the filters.", n=n_cand),
+            hint=_("Try a related tag or a wider '% positive' range for more to compare."),
         ))
 
     if n_cand > max_games:
         out.append(Notice(
-            level="info", title="Not every candidate analyzed",
-            message=f"Analyzed the top {max_games} of {n_cand} candidates (by review count).",
-            hint="Raise 'Games to analyze' in Filters to include more.",
+            level="info", title=_("Not every candidate analyzed"),
+            message=_("Analyzed the top {n} of {total} candidates (by review count).", n=max_games, total=n_cand),
+            hint=_("Raise 'Games to analyze' in Filters to include more."),
         ))
 
     if result.failed:
-        names = ", ".join(name for name, _ in result.failed[:5])
-        more = f" and {len(result.failed) - 5} more" if len(result.failed) > 5 else ""
+        names = ", ".join(name for name, _reason in result.failed[:5])
+        more = _(" and {n} more", n=len(result.failed) - 5) if len(result.failed) > 5 else ""
         out.append(Notice(
-            level="warning", title=f"{len(result.failed)} game(s) couldn't be analyzed",
-            message=f"Skipped: {names}{more}. Reason: {result.failed[0][1]}",
-            hint="Run again later; games that loaded are cached.",
+            level="warning", title=_("{n} game(s) couldn't be analyzed", n=len(result.failed)),
+            message=_("Skipped: {names}{more}. Reason: {reason}", names=names, more=more, reason=result.failed[0][1]),
+            hint=_("Run again later; games that loaded are cached."),
         ))
 
     outside = [a for a in ranked if a.game.rating_source != "steamspy" and not lo <= a.game.rating <= hi]
     if outside:
-        names = ", ".join(f"{a.game.name} ({a.game.rating:.0f}%)" for a in outside[:5])
+        names = ", ".join(_("{name} ({rating:.0f}%)", name=a.game.name, rating=a.game.rating) for a in outside[:5])
         out.append(Notice(
-            level="info", title="Steam rates some games differently",
-            message=f"SteamSpy put {len(outside)} game(s) in {lo:g}-{hi:g}% positive, but Steam's own numbers "
-                    f"don't: {names}. They stay in the ranking, scored on Steam's numbers.",
+            level="info", title=_("Steam rates some games differently"),
+            message=_("SteamSpy put {n} game(s) in {lo:g}-{hi:g}% positive, but Steam's own numbers "
+                      "don't: {names}. They stay in the ranking, scored on Steam's numbers.",
+                      n=len(outside), lo=lo, hi=hi, names=names),
         ))
 
     no_reviews = [a for a in ranked if a.review_error]
     if no_reviews:
         out.append(Notice(
-            level="warning", title="Review texts unavailable",
-            message=f"Couldn't load review texts for {len(no_reviews)} game(s), so their complaints weren't "
-                    "mined and fixability was assumed to be 50%.",
-            hint="Run again later to fill them in.",
+            level="warning", title=_("Review texts unavailable"),
+            message=_("Couldn't load review texts for {n} game(s), so their complaints weren't "
+                      "mined and fixability was assumed to be 50%.", n=len(no_reviews)),
+            hint=_("Run again later to fill them in."),
         ))
 
     if ranked:
         best = ranked[0]
         if best.opportunity.score <= 0:
             out.append(Notice(
-                level="warning", title="No real opportunity found",
-                message="Every analyzed game is above 70% positive once review bombs are removed, "
-                        "so none shows a disappointed audience.",
-                hint=f"Try another tag, e.g. {TAG_EXAMPLES}.",
+                level="warning", title=_("No real opportunity found"),
+                message=_("Every analyzed game is above 70% positive once review bombs are removed, "
+                          "so none shows a disappointed audience."),
+                hint=_("Try another tag, e.g. {examples}.", examples=TAG_EXAMPLES),
             ))
         else:
             if best.opportunity.score < WEAK_SCORE:
                 out.append(Notice(
-                    level="info", title="Only weak opportunities",
-                    message=f"The best score is {best.opportunity.score:.0f}/100.",
-                    hint="Compare with another tag before committing to this genre.",
+                    level="info", title=_("Only weak opportunities"),
+                    message=_("The best score is {score:.0f}/100.", score=best.opportunity.score),
+                    hint=_("Compare with another tag before committing to this genre."),
                 ))
             out.append(Notice(
-                level="success", title="Analysis complete",
-                message=f"Ranked {len(ranked)} game(s). Top opportunity: {best.game.name} "
-                        f"(score {best.opportunity.score:.0f}).",
-                hint="Click a game on the map or in the table for details.",
+                level="success", title=_("Analysis complete"),
+                message=_("Ranked {n} game(s). Top opportunity: {name} (score {score:.0f}).",
+                          n=len(ranked), name=best.game.name, score=best.opportunity.score),
+                hint=_("Click a game on the map or in the table for details."),
             ))
     return out
 
@@ -195,46 +201,48 @@ def for_game(a: Analysis) -> list[Notice]:
     if "not_game" in codes:
         kind = a.details.type if a.details else "non-game"
         out.append(Notice(
-            level="error", title="Not a game",
-            message=f"AppID {g.appid} is a {kind}, not a game, so this analysis doesn't apply.",
-            hint="Use the base game's AppID from its Steam store page.",
+            level="error", title=_("Not a game"),
+            message=_("AppID {appid} is a {kind}, not a game, so this analysis doesn't apply.", appid=g.appid, kind=kind),
+            hint=_("Use the base game's AppID from its Steam store page."),
         ))
     if "unlisted" in codes:
         out.append(Notice(
-            level="info", title="No store page",
-            message="This game is delisted or region-locked, so price and category data are missing.",
-            hint="Its audience may be orphaned; check the game manually.",
+            level="info", title=_("No store page"),
+            message=_("This game is delisted or region-locked, so price and category data are missing."),
+            hint=_("Its audience may be orphaned; check the game manually."),
         ))
     if g.reviews < config.MIN_REVIEWS:
         out.append(Notice(
-            level="warning", title="Demand not proven",
-            message=f"Only {g.reviews:,} reviews; the method needs {config.MIN_REVIEWS}+ to show real demand.",
-            hint="Treat the score as unreliable.",
+            level="warning", title=_("Demand not proven"),
+            message=_("Only {n:,} reviews; the method needs {min}+ to show real demand.",
+                      n=g.reviews, min=config.MIN_REVIEWS),
+            hint=_("Treat the score as unreliable."),
         ))
     if o.effective_rating > config.MAX_RATING:
         bombed = round(o.effective_rating) != round(g.rating)
-        detail = (f"{g.rating:.0f}% positive overall, but {o.effective_rating:.0f}% once review bombs are removed"
-                  if bombed else f"{g.rating:.0f}% positive")
+        detail = (_("{rating:.0f}% positive overall, but {adjusted:.0f}% once review bombs are removed",
+                    rating=g.rating, adjusted=o.effective_rating)
+                  if bombed else _("{rating:.0f}% positive", rating=g.rating))
         out.append(Notice(
-            level="info", title="Players are satisfied",
-            message=f"This game is {detail}, so it isn't an underserved audience (score 0).",
-            hint="Look for games under 70% positive.",
+            level="info", title=_("Players are satisfied"),
+            message=_("This game is {detail}, so it isn't an underserved audience (score 0).", detail=detail),
+            hint=_("Look for games under 70% positive."),
         ))
     if not g.base_price:
         out.append(Notice(
-            level="info", title="Free game",
-            message="It's free to play, so the Box Method revenue estimate doesn't apply.",
+            level="info", title=_("Free game"),
+            message=_("It's free to play, so the Box Method revenue estimate doesn't apply."),
         ))
     if a.review_error:
         out.append(Notice(
-            level="warning", title="Review texts unavailable",
-            message="Complaints couldn't be mined; fixability was assumed to be 50%.",
-            hint="Try again later.",
+            level="warning", title=_("Review texts unavailable"),
+            message=_("Complaints couldn't be mined; fixability was assumed to be 50%."),
+            hint=_("Try again later."),
         ))
     elif a.mining and a.mining.n_negative == 0:
         out.append(Notice(
-            level="info", title="No negative reviews to mine",
-            message="There are no English negative reviews, so there are no complaints to learn from.",
+            level="info", title=_("No negative reviews to mine"),
+            message=_("There are no English negative reviews, so there are no complaints to learn from."),
         ))
     return out
 
@@ -246,34 +254,35 @@ def _host(exc: BaseException) -> str:
         return exc.request.url.host  # httpx errors carry the request
     except (AttributeError, RuntimeError):
         m = re.search(r"https?://([^/\s'\"]+)", str(exc))
-        return m.group(1) if m else "the data service"
+        return m.group(1) if m else _("the data service")
 
 
 def friendly_error(exc: BaseException) -> Notice:
     host = _host(exc)
     if isinstance(exc, httpx.TimeoutException):
-        return Notice(level="error", title=f"{host} timed out",
-                      message=f"{host} didn't answer in time.",
-                      hint="Check your internet connection and try again.")
+        return Notice(level="error", title=_("{host} timed out", host=host),
+                      message=_("{host} didn't answer in time.", host=host),
+                      hint=_("Check your internet connection and try again."))
     if isinstance(exc, httpx.TransportError):
-        return Notice(level="error", title=f"Can't reach {host}",
-                      message=f"The connection to {host} failed.",
-                      hint="Check your internet connection and try again.")
+        return Notice(level="error", title=_("Can't reach {host}", host=host),
+                      message=_("The connection to {host} failed.", host=host),
+                      hint=_("Check your internet connection and try again."))
     if isinstance(exc, RetryableStatus):
-        return Notice(level="error", title=f"{host} is busy",
-                      message=f"{host} is rate-limiting or temporarily down ({exc}).",
-                      hint="Wait a minute and try again. Data already downloaded is kept in the cache.")
+        return Notice(level="error", title=_("{host} is busy", host=host),
+                      message=_("{host} is rate-limiting or temporarily down ({error}).", host=host, error=exc),
+                      hint=_("Wait a minute and try again. Data already downloaded is kept in the cache."))
     if isinstance(exc, httpx.HTTPStatusError):
-        return Notice(level="error", title=f"{host} refused the request",
-                      message=f"{host} answered HTTP {exc.response.status_code}.",
-                      hint="Try again later. If it keeps happening, the service may have changed.")
+        return Notice(level="error", title=_("{host} refused the request", host=host),
+                      message=_("{host} answered HTTP {status}.", host=host, status=exc.response.status_code),
+                      hint=_("Try again later. If it keeps happening, the service may have changed."))
     if isinstance(exc, RuntimeError) and ("redirected" in str(exc) or "did not return JSON" in str(exc)):
-        return Notice(level="error", title=f"Unexpected answer from {host}",
-                      message=f"{host} returned something other than the expected data. The service may have changed.",
-                      hint="Try again later. If it persists, the data source needs an update.")
-    return Notice(level="error", title="Unexpected error",
+        return Notice(level="error", title=_("Unexpected answer from {host}", host=host),
+                      message=_("{host} returned something other than the expected data. "
+                                "The service may have changed.", host=host),
+                      hint=_("Try again later. If it persists, the data source needs an update."))
+    return Notice(level="error", title=_("Unexpected error"),
                   message=f"{type(exc).__name__}: {exc}",
-                  hint="Try again. If it keeps happening, run the CLI with SR_DEBUG=1 for details.")
+                  hint=_("Try again. If it keeps happening, run the CLI with SR_DEBUG=1 for details."))
 
 
 def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
@@ -281,15 +290,17 @@ def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
     # A real Steam tag that SteamSpy can't search (known: Steam's catalog, which may gain new tags).
     # Spelling suggestions would mislead here (Incremental -> Instrumental Music), so none are given.
     if fold in {k.casefold() for k in [*known, *config.STEAMSPY_UNSEARCHABLE_TAGS]}:
-        return Notice(level="error", title="Tag can't be searched",
-                      message=f"'{tag}' is a Steam tag, but SteamSpy (the data source) can't search it.",
-                      hint=f"Pick a related tag instead, e.g. {TAG_EXAMPLES}.")
+        return Notice(level="error", title=_("Tag can't be searched"),
+                      message=_("'{tag}' is a Steam tag, but SteamSpy (the data source) can't search it.", tag=tag),
+                      hint=_("Pick a related tag instead, e.g. {examples}.", examples=TAG_EXAMPLES))
     by_fold = {k.casefold(): k for k in known}
     close = difflib.get_close_matches(fold, list(by_fold), n=3, cutoff=0.6)
     names = [by_fold[c] for c in close]
-    hint = (f"Did you mean {' or '.join([', '.join(names[:-1]), names[-1]] if len(names) > 1 else names)}?" if close
-            else f"Check the spelling. Examples: {TAG_EXAMPLES}.")
-    return Notice(level="error", title="Tag not found", message=f"SteamSpy has no games tagged '{tag}'.", hint=hint)
+    joined = _(" or ").join([", ".join(names[:-1]), names[-1]] if len(names) > 1 else names)
+    hint = (_("Did you mean {names}?", names=joined) if close
+            else _("Check the spelling. Examples: {examples}.", examples=TAG_EXAMPLES))
+    return Notice(level="error", title=_("Tag not found"),
+                  message=_("SteamSpy has no games tagged '{tag}'.", tag=tag), hint=hint)
 
 
 def known_tags(http) -> list[str]:

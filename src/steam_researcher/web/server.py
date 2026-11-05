@@ -1,5 +1,6 @@
 """FastAPI backend for the web UI. Display-only: all logic lives in `pipeline`/`report`/`notices`."""
 
+import contextvars
 import hashlib
 import threading
 import uuid
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .. import boxmethod, config, market, notices, pipeline, risk, runs, scoring
 from ..http import HttpClient
+from ..i18n import LANGS, N_, _, use
 from ..models import Analysis
 from ..report import rank, ranking_csv, rating_source_text, render, slug
 from ..sources import steam_store
@@ -34,13 +36,21 @@ async def _revalidate_page_files(request: Request, call_next):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
+@app.middleware("http")
+async def _language(request: Request, call_next):
+    """The interface language for this request: the page sends X-Lang; download links use ?lang=."""
+    lang = request.query_params.get("lang") or request.headers.get("x-lang") or "en"
+    with use(lang if lang in LANGS else "en"):
+        return await call_next(request)
+
+
 FIELD_LABELS = {
-    "tags": "Steam tags",
-    "min_reviews": "Minimum reviews",
-    "lo": "% positive from",
-    "hi": "% positive to",
-    "max_games": "Games to analyze",
-    "reviews": "Reviews mined per game",
+    "tags": N_("Steam tags"),
+    "min_reviews": N_("Minimum reviews"),
+    "lo": N_("% positive from"),
+    "hi": N_("% positive to"),
+    "max_games": N_("Games to analyze"),
+    "reviews": N_("Reviews mined per game"),
 }
 
 
@@ -52,7 +62,7 @@ class MarketRunRequest(BaseModel):
     @model_validator(mode="after")
     def _range(self):
         if self.lo > self.hi:
-            raise ValueError("'% positive from' must not be higher than '% positive to'")
+            raise ValueError(N_("'% positive from' must not be higher than '% positive to'"))
         return self
 
 
@@ -67,11 +77,11 @@ async def _readable_validation(request: Request, exc: RequestValidationError) ->
     """Turn pydantic's error list into one sentence a user understands."""
     parts = []
     for err in exc.errors():
-        field = next((FIELD_LABELS[p] for p in reversed(err.get("loc", ())) if p in FIELD_LABELS), None)
-        msg = err.get("msg", "invalid value").removeprefix("Value error, ")
+        field = next((_(FIELD_LABELS[p]) for p in reversed(err.get("loc", ())) if p in FIELD_LABELS), None)
+        msg = _(err.get("msg", "invalid value").removeprefix("Value error, "))  # pydantic's own stay English
         parts.append(f"{field}: {msg}" if field else msg)
-    notice = notices.Notice(level="error", title="Check the filters", message="; ".join(parts),
-                            hint="Fix the highlighted values and try again.")
+    notice = notices.Notice(level="error", title=_("Check the filters"), message="; ".join(parts),
+                            hint=_("Fix the highlighted values and try again."))
     return JSONResponse(status_code=422, content={"detail": notice.message, "notice": notice.model_dump()})
 
 
@@ -80,7 +90,7 @@ class Job:
     kind: str  # "tag" | "market"
     request: TagRunRequest | MarketRunRequest
     status: str = "running"  # running | done | error | cancelled
-    message: str = "Starting..."
+    message: str = N_("Starting...")  # translated when it is set (the job runs in its starter's language)
     done: int = 0
     total: int = 0
     result: pipeline.TagResult | pipeline.MarketsResult | None = None
@@ -96,8 +106,16 @@ def game_json(a: Analysis) -> dict:
     """Everything the frontend needs for one game; no math happens in JS."""
     g = a.game
     box = boxmethod.estimate(g.reviews, g.base_price)
-    recent, total, _ = risk.recent_activity(a.histogram)
+    recent, total, _age = risk.recent_activity(a.histogram)
     data = a.model_dump(mode="json")
+    # Text in the request's language: flag messages, complaint names, design pillars, trends.
+    for flag, out in zip(a.flags, data["flags"]):
+        out["message"] = flag.text()
+        out["label"] = _(config.RISK_LABELS.get(flag.code, flag.code))
+    for c in (data.get("mining") or {}).get("categories", []):
+        c["trend_kind"] = "still" if c["trend"].startswith("still") else ("fading" if c["trend"] else "")
+        c["label"], c["pillar"] = _(c["label"]), _(c["pillar"])
+        c["trend"] = _(c["trend"]) if c["trend"] else ""
     data.update(
         store_url=g.store_url,
         reviews=g.reviews,
@@ -165,8 +183,8 @@ def _job(job_id: str, kind: str = "tag") -> Job:
             with _lock:
                 _jobs[job_id] = job
     if job is None or job.kind != kind:
-        raise HTTPException(404, "This run no longer exists. It may have been deleted, or the server "
-                                 "was restarted while it was running.")
+        raise HTTPException(404, _("This run no longer exists. It may have been deleted, or the server "
+                                   "was restarted while it was running."))
     return job
 
 
@@ -203,8 +221,9 @@ def tags():
 def _start(kind: str, req: TagRunRequest | MarketRunRequest) -> str:
     job_id = uuid.uuid4().hex
     with _lock:
-        _jobs[job_id] = Job(kind=kind, request=req)
-    threading.Thread(target=_run, args=(job_id,), daemon=True).start()
+        _jobs[job_id] = Job(kind=kind, request=req, message=_(Job.message))
+    # The job runs in the language of the request that started it (progress messages, errors).
+    threading.Thread(target=contextvars.copy_context().run, args=(_run, job_id), daemon=True).start()
     return job_id
 
 
@@ -285,7 +304,7 @@ def _cancel(job: Job) -> dict:
     """Stops a running job at its next step; the UI is free at once. A finished job is left as is."""
     with _lock:
         if job.status == "running":
-            job.status, job.message = "cancelled", "Cancelled"
+            job.status, job.message = "cancelled", _("Cancelled")
         return {"status": job.status}
 
 
@@ -307,7 +326,7 @@ def list_runs() -> dict:
 @app.delete("/api/runs/{run_id}")
 def delete_run(run_id: str) -> dict:
     if not _runs.delete(run_id):
-        raise HTTPException(404, "This run doesn't exist.")
+        raise HTTPException(404, _("This run doesn't exist."))
     with _lock:
         _jobs.pop(run_id, None)
     return {"deleted": run_id}
@@ -317,7 +336,7 @@ def delete_run(run_id: str) -> dict:
 def tag_run_csv(job_id: str) -> PlainTextResponse:
     job = _job(job_id)
     if job.result is None:
-        raise HTTPException(409, "The run hasn't finished yet.")
+        raise HTTPException(409, _("The run hasn't finished yet."))
     ranked = rank(job.result.analyses)
     text = ranking_csv(ranked, _score_changes(job_id, ranked))
     return PlainTextResponse(text, media_type="text/csv", headers={
@@ -328,7 +347,7 @@ def tag_run_csv(job_id: str) -> PlainTextResponse:
 def tag_run_report(job_id: str) -> PlainTextResponse:
     job = _job(job_id)
     if job.result is None:
-        raise HTTPException(409, "The run hasn't finished yet.")
+        raise HTTPException(409, _("The run hasn't finished yet."))
     r, res = job.request, job.result
     label = pipeline.tag_label(r.tags)
     text = render(tag=label, analyses=res.analyses, n_candidates=len(res.candidates),
@@ -342,7 +361,7 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
 @app.get("/api/games/{appid}")
 def game(appid: int, reviews: int = 300):
     if appid <= 0:
-        raise HTTPException(422, "AppID must be a positive number.")
+        raise HTTPException(422, _("AppID must be a positive number."))
     try:
         a = pipeline.analyze_game(HttpClient(), appid, max(10, min(reviews, 1000)))
     except Exception as e:
@@ -350,10 +369,10 @@ def game(appid: int, reviews: int = 300):
         return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
     if a is None:
         notice = notices.Notice(
-            level="error", title="Game not found",
-            message=f"SteamSpy has no data for AppID {appid}.",
-            hint="Check the number on the game's Steam store page (store.steampowered.com/app/<AppID>/). "
-                 "Unreleased or very new games may not be listed yet.",
+            level="error", title=_("Game not found"),
+            message=_("SteamSpy has no data for AppID {appid}.", appid=appid),
+            hint=_("Check the number on the game's Steam store page (store.steampowered.com/app/<AppID>/). "
+                   "Unreleased or very new games may not be listed yet."),
         )
         return JSONResponse(status_code=404, content={"detail": notice.message, "notice": notice.model_dump()})
     data = game_json(a)

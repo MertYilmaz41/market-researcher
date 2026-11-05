@@ -335,3 +335,38 @@ def test_page_versions_its_scripts(client):
     for f in ["palette.js", "map2d.js", "map3d.js"]:  # imported by the scripts: versioned via the import map
         assert f'"/static/{f}": "/static/{f}?v={v}"' in html
     assert client.get(f"/static/app.js?v={v}").status_code == 200
+
+
+def test_turkish_results_follow_the_request_language(client, monkeypatch):
+    from steam_researcher.i18n import _
+
+    seen = []
+
+    def fake_run_tag(http, tags, *args):
+        seen.append(_("Analyzing games"))  # the job thread runs in the language that started it
+        return fake_result()
+
+    monkeypatch.setattr(pipeline, "run_tag", fake_run_tag)
+    tr = {"X-Lang": "tr"}
+    started = client.post("/api/tag-runs", json={"tags": ["X"], "min_reviews": 20}, headers=tr).json()
+    assert started["notices"][0]["title"] == "Talep kanıtlanmadı"
+    run_id = started["id"]
+    job = client.get(f"/api/tag-runs/{run_id}", headers=tr).json()
+    while job["status"] == "running":
+        time.sleep(0.02)
+        job = client.get(f"/api/tag-runs/{run_id}", headers=tr).json()
+    assert seen == ["Oyunlar analiz ediliyor"]
+    parts = job["result"]["games"][0]["score_explained"]["parts"]
+    assert [p["label"] for p in parts] == ["Talep", "Memnuniyetsizlik", "Düzeltilebilirlik"]
+    assert any(n["title"] == "Analiz tamamlandı" for n in job["result"]["notices"])
+    # the same saved result, asked for in English (or an unknown language), comes back in English
+    for headers in ({}, {"X-Lang": "xx"}):
+        en = client.get(f"/api/tag-runs/{run_id}", headers=headers).json()["result"]
+        assert en["games"][0]["score_explained"]["parts"][0]["label"] == "Demand"
+
+
+def test_turkish_validation_and_game_not_found(client, monkeypatch):
+    res = client.post("/api/tag-runs?lang=tr", json={"tags": ["X"], "max_games": 99})
+    assert res.json()["detail"].startswith("Analiz edilecek oyun:")
+    monkeypatch.setattr(pipeline, "analyze_game", lambda *a: None)
+    assert client.get("/api/games/6", headers={"X-Lang": "tr"}).json()["notice"]["title"] == "Oyun bulunamadı"

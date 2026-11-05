@@ -3,6 +3,7 @@
 import math
 
 from . import config
+from .i18n import N_, _
 from .models import Analysis, Game, MiningResult, Opportunity, RiskFlag
 
 
@@ -52,32 +53,34 @@ def score(
     )
 
 
-PART_LABELS = {"demand": "Demand", "dissatisfaction": "Dissatisfaction", "fixability": "Fixability"}
+PART_LABELS = {"demand": N_("Demand"), "dissatisfaction": N_("Dissatisfaction"), "fixability": N_("Fixability")}
 
 
 def explain(a: Analysis) -> dict:
-    """How a game's score was reached, in plain words, for the web UI's score card."""
+    """How a game's score was reached, in plain words (current language), for the web UI's score card."""
     o, g = a.opportunity, a.game
     lo_reviews, hi_reviews = round(10 ** config.DEMAND_LOG_MIN), round(10 ** config.DEMAND_LOG_MAX)
-    rating = f"{g.rating:.0f}% positive"
+    rating = _("{rating:.0f}% positive", rating=g.rating)
     if round(o.effective_rating) != round(g.rating):
-        rating += f" ({o.effective_rating:.0f}% with review-bomb periods removed)"
+        rating += _(" ({adjusted:.0f}% with review-bomb periods removed)", adjusted=o.effective_rating)
     mined = a.mining is not None and bool(a.mining.categories)
     basis = {
-        "demand": f"{g.reviews:,} reviews. Log scale: {lo_reviews} reviews = 0%, {hi_reviews:,}+ = 100%.",
-        "dissatisfaction": f"{rating}. {config.MAX_RATING:g}%+ positive = 0%, {config.MIN_RATING:g}% = 100%.",
-        "fixability": (f"{o.fixability:.0%} of complaint mentions are things a small team can fix "
-                       "(bugs, UI, performance...), not scope or genre." if mined else
-                       f"Reviews couldn't be mined, so {config.DEFAULT_FIXABILITY:.0%} is assumed."),
+        "demand": _("{n:,} reviews. Log scale: {lo} reviews = 0%, {hi:,}+ = 100%.",
+                    n=g.reviews, lo=lo_reviews, hi=hi_reviews),
+        "dissatisfaction": _("{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%.",
+                             rating=rating, max=config.MAX_RATING, min=config.MIN_RATING),
+        "fixability": (_("{fix:.0%} of complaint mentions are things a small team can fix "
+                         "(bugs, UI, performance...), not scope or genre.", fix=o.fixability) if mined else
+                       _("Reviews couldn't be mined, so {fix:.0%} is assumed.", fix=config.DEFAULT_FIXABILITY)),
     }
-    parts = [{"key": k, "label": PART_LABELS[k], "value": getattr(o, k), "weight": w, "basis": basis[k]}
+    parts = [{"key": k, "label": _(PART_LABELS[k]), "value": getattr(o, k), "weight": w, "basis": basis[k]}
              for k, w in config.SCORE_WEIGHTS.items()]
-    reasons = {f.code: f.message for f in a.flags}
+    reasons = {f.code: f.text() for f in a.flags}
     return {
         "score": o.score,
         "parts": parts,
         "combined": combine({p["key"]: p["value"] for p in parts}),
-        "penalties": [{"code": c, "label": config.RISK_LABELS.get(c, c), "points": config.RISK_PENALTIES[c],
+        "penalties": [{"code": c, "label": _(config.RISK_LABELS.get(c, c)), "points": config.RISK_PENALTIES[c],
                        "reason": reasons.get(c, "")} for c in o.penalized],
         "zero_part": next((p["label"] for p in parts if p["value"] == 0), None),
     }

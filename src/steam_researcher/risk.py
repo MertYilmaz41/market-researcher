@@ -5,6 +5,7 @@ import time
 from statistics import median
 
 from . import config
+from .i18n import N_
 from .models import AppDetails, Game, HistPoint, MiningResult, RiskFlag
 
 
@@ -35,24 +36,27 @@ def check_spikes(hist: list[HistPoint]) -> list[RiskFlag]:
         share = p.total / total
         neg = p.down / p.total
         if neg >= config.SPIKE_BOMB_NEGATIVE_SHARE:
-            flags.append(RiskFlag(
-                code="review_bomb", severity="high",
-                message=f"{_period(p.date)}: {p.total:,} reviews ({share:.0%} of all), "
-                f"{neg:.0%} negative. Likely a review bomb or controversy, not poor execution.",
+            flags.append(RiskFlag.make(
+                "review_bomb", "high",
+                N_("{period}: {n:,} reviews ({share:.0%} of all), {neg:.0%} negative. "
+                   "Likely a review bomb or controversy, not poor execution."),
+                period=_period(p.date), n=p.total, share=share, neg=neg,
             ))
         else:
-            flags.append(RiskFlag(
-                code="streamer_spike", severity="warn",
-                message=f"{_period(p.date)}: {p.total:,} reviews ({share:.0%} of all) in one period. "
-                "Check whether a streamer/viral moment drove demand.",
+            flags.append(RiskFlag.make(
+                "streamer_spike", "warn",
+                N_("{period}: {n:,} reviews ({share:.0%} of all) in one period. "
+                   "Check whether a streamer/viral moment drove demand."),
+                period=_period(p.date), n=p.total, share=share,
             ))
     if spikes:
         up = sum(p.up for p in hist) - sum(p.up for p in spikes)
         rest = total - sum(p.total for p in spikes)
         if rest:
-            flags.append(RiskFlag(
-                code="rating_without_spikes", severity="info",
-                message=f"Excluding spike periods: {rest:,} reviews, {100 * up / rest:.0f}% positive.",
+            flags.append(RiskFlag.make(
+                "rating_without_spikes", "info",
+                N_("Excluding spike periods: {n:,} reviews, {rating:.0f}% positive."),
+                n=rest, rating=100 * up / rest,
             ))
     return flags
 
@@ -96,10 +100,11 @@ def check_recovered(hist: list[HistPoint], now: float | None = None) -> list[Ris
     overall = 100 * sum(p.up for p in hist) / total
     if lately < overall + config.RECOVERED_DELTA and lately < config.MAX_RATING:
         return []
-    return [RiskFlag(
-        code="recovered", severity="warn",
-        message=f"Rated {lately:.0f}% positive in the last 12 months vs {overall:.0f}% all time "
-        f"({recent:,} recent reviews): the problems may already be fixed.",
+    return [RiskFlag.make(
+        "recovered", "warn",
+        N_("Rated {lately:.0f}% positive in the last 12 months vs {overall:.0f}% all time "
+           "({n:,} recent reviews): the problems may already be fixed."),
+        lately=lately, overall=overall, n=recent,
     )]
 
 
@@ -108,10 +113,10 @@ def check_fading(hist: list[HistPoint], now: float | None = None) -> list[RiskFl
     recent, total, age = recent_activity(hist, now)
     if not total or age < config.FADING_MIN_AGE_YEARS or recent / total >= config.FADING_SHARE:
         return []
-    return [RiskFlag(
-        code="fading_demand", severity="warn",
-        message=f"Only {recent / total:.1%} of its reviews ({recent:,}) came in the last 12 months. "
-        "The audience may have moved on.",
+    return [RiskFlag.make(
+        "fading_demand", "warn",
+        N_("Only {share:.1%} of its reviews ({n:,}) came in the last 12 months. The audience may have moved on."),
+        share=recent / total, n=recent,
     )]
 
 
@@ -121,14 +126,14 @@ def check_discount(game: Game, details: AppDetails | None) -> list[RiskFlag]:
     final = (details.price_final_cents if details else game.price_cents) / 100
     flags = []
     if discount >= config.DEEP_DISCOUNT_PERCENT:
-        flags.append(RiskFlag(
-            code="deep_discount", severity="warn",
-            message=f"Currently {discount}% off. Review counts may be inflated by deep sales.",
+        flags.append(RiskFlag.make(
+            "deep_discount", "warn",
+            N_("Currently {discount}% off. Review counts may be inflated by deep sales."), discount=discount,
         ))
     if 0 < final < config.CHEAP_PRICE_USD:
-        flags.append(RiskFlag(
-            code="cheap_price", severity="warn",
-            message=f"Sells for ${final:.2f}. Low price inflates units and reviews.",
+        flags.append(RiskFlag.make(
+            "cheap_price", "warn",
+            N_("Sells for ${price:.2f}. Low price inflates units and reviews."), price=final,
         ))
     return flags
 
@@ -139,15 +144,14 @@ def check_complexity(details: AppDetails | None, tags: dict[str, int]) -> list[R
         online = [config.NETCODE_CATEGORY_IDS[c] for c in details.category_ids
                   if c in config.NETCODE_CATEGORY_IDS]
         if online:
-            flags.append(RiskFlag(
-                code="netcode", severity="warn",
-                message=f"Online multiplayer ({', '.join(online)}): needs netcode, hard for small teams.",
+            flags.append(RiskFlag.make(
+                "netcode", "warn",
+                N_("Online multiplayer ({modes}): needs netcode, hard for small teams."), modes=", ".join(online),
             ))
     hard = sorted(config.HARD_TAGS & tags.keys())
     if hard:
-        flags.append(RiskFlag(
-            code="hard_tech", severity="info",
-            message=f"Tags {', '.join(hard)}: technically demanding to do well.",
+        flags.append(RiskFlag.make(
+            "hard_tech", "info", N_("Tags {tags}: technically demanding to do well."), tags=", ".join(hard),
         ))
     return flags
 
@@ -156,20 +160,19 @@ def check_niche(tags: dict[str, int]) -> list[RiskFlag]:
     niche = sorted(config.NICHE_TAGS & tags.keys())
     if not niche:
         return []
-    return [RiskFlag(
-        code="niche", severity="warn",
-        message=f"Tags {', '.join(niche)}: niche audience, harder to reach and market to.",
+    return [RiskFlag.make(
+        "niche", "warn", N_("Tags {tags}: niche audience, harder to reach and market to."), tags=", ".join(niche),
     )]
 
 
 def check_listing(details: AppDetails | None) -> list[RiskFlag]:
     if details is None:
-        return [RiskFlag(
-            code="unlisted", severity="info",
-            message="No store data (delisted or region-locked). The audience may be orphaned; verify manually.",
+        return [RiskFlag.make(
+            "unlisted", "info",
+            N_("No store data (delisted or region-locked). The audience may be orphaned; verify manually."),
         )]
     if details.type != "game":
-        return [RiskFlag(code="not_game", severity="high", message=f"Store type is {details.type!r}, not a game.")]
+        return [RiskFlag.make("not_game", "high", N_("Store type is '{type}', not a game."), type=details.type)]
     return []
 
 
@@ -178,10 +181,11 @@ def check_scope(mining: MiningResult) -> list[RiskFlag]:
     scope = next((c for c in mining.categories if c.code == "scope_unrealistic"), None)
     if scope is None or scope.share < config.SCOPE_MIN_SHARE:
         return []
-    return [RiskFlag(
-        code="scope_unrealistic", severity="warn",
-        message=f"{scope.share:.0%} of negative reviews compare it to AAA games (GTA etc.). "
-        "Part of the disappointment is scope an indie can't deliver.",
+    return [RiskFlag.make(
+        "scope_unrealistic", "warn",
+        N_("{share:.0%} of negative reviews compare it to AAA games (GTA etc.). "
+           "Part of the disappointment is scope an indie can't deliver."),
+        share=scope.share,
     )]
 
 

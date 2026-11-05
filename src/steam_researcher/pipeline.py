@@ -9,6 +9,7 @@ import httpx
 from . import config, risk, scoring
 from .market import MarketStats, TagMarket, market_stats
 from .http import HttpClient, RetryableStatus
+from .i18n import _
 from .mining import mine
 from .discover import filter_candidates
 from .models import Analysis, Game, HistPoint, Review
@@ -138,7 +139,7 @@ def _games_for_tag(http: HttpClient, tag: str, on_step: Callable[[str, int, int]
 
     def page(done: int, total: int) -> None:
         if on_step:
-            on_step(f"Listing games tagged {tag} from the Steam store", done, total)  # done/total: pages
+            on_step(_("Listing games tagged {tag} from the Steam store", tag=tag), done, total)  # done/total: pages
 
     return steam_search.games_by_tag(http, tag_id, page)
 
@@ -206,20 +207,20 @@ def run_tag(
 
         def checking(g: Game) -> None:
             if on_step:
-                on_step(f"Checking store type: {g.name}", done(), n_check)
+                on_step(_("Checking store type: {name}", name=g.name), done(), n_check)
 
         def start(g: Game) -> None:
             futures[pool.submit(analyze_game, http, g.appid, review_limit)] = g
 
         hits, result.not_games, unlisted = verify_games(http, by_demand, max_games, checking, start)
         result.unlisted = [g.name for g in hits if g.appid in unlisted]
-        pending, message = set(futures), "Analyzing games"
+        pending, message = set(futures), _("Analyzing games")
         while pending:
             # Wake at least every second, so on_step can show progress and cancel a run even while
             # one of Steam's slow review pages holds up a game.
             finished, pending = wait(pending, timeout=1, return_when=FIRST_COMPLETED)
             if finished:
-                message = f"Analyzed {futures[next(iter(finished))].name}"
+                message = _("Analyzed {name}", name=futures[next(iter(finished))].name)
             if on_step:
                 on_step(message, len(futures) - len(pending), len(hits))
     except BaseException:
@@ -263,7 +264,7 @@ def run_markets(
     result = MarketsResult(rows=[], skipped=[t for t in names if t.casefold() in _UNSEARCHABLE])
     for i, tag in enumerate(tags):
         if on_step:
-            on_step(f"Reading tag {tag}", i, len(tags))
+            on_step(_("Reading tag {tag}", tag=tag), i, len(tags))
         try:
             games = steamspy.games_by_tag(http, tag)
         except Exception as e:  # one broken tag must not sink the whole sweep

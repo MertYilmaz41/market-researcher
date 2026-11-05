@@ -106,7 +106,11 @@ RISK_PENALTIES = {  # points subtracted per flag; review bombs are handled via a
     "fading_demand": 10,
     "recovered": 20,
 }
-RISK_LABELS = {  # how penalized flags are named in the UI
+RISK_LABELS = {  # how flags are named in the UI (English; i18n_tr has the Turkish)
+    "review_bomb": "Review bomb",
+    "rating_without_spikes": "Rating without spikes",
+    "unlisted": "No store page",
+    "not_game": "Not a game",
     "streamer_spike": "Streamer spike",
     "deep_discount": "Deep discount",
     "cheap_price": "Very cheap",

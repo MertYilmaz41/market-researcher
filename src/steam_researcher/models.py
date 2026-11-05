@@ -86,7 +86,21 @@ class Review(BaseModel):
 class RiskFlag(BaseModel):
     code: str  # e.g. "review_bomb", "streamer_spike", "deep_discount", "netcode", "niche"
     severity: str  # "info" | "warn" | "high"
-    message: str
+    message: str  # in English
+    # The English template and its values, so the message can be shown in any language later
+    # (flags are stored in saved runs). Runs saved before Nov 2026 have neither: text() uses message.
+    template: str = ""
+    params: dict = {}
+
+    @classmethod
+    def make(cls, code: str, severity: str, template: str, **params) -> "RiskFlag":
+        return cls(code=code, severity=severity, message=template.format(**params), template=template, params=params)
+
+    def text(self) -> str:
+        """The message in the current interface language."""
+        from .i18n import _
+
+        return _(self.template, **self.params) if self.template else self.message
 
 
 class CategoryResult(BaseModel):

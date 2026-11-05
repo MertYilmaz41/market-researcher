@@ -9,6 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from . import boxmethod, config, risk
+from .i18n import N_, _
 from .models import Analysis, Game
 
 _env = Environment(
@@ -54,26 +55,28 @@ def top_complaint(a: Analysis) -> str:
     return f"{c.label} ({c.share:.0%})"
 
 
-SOURCE_NAMES = {"steam": "Steam's own numbers", "histogram": "Steam's review histogram", "steamspy": "SteamSpy estimate"}
+SOURCE_NAMES = {"steam": N_("Steam's own numbers"), "histogram": N_("Steam's review histogram"),
+                "steamspy": N_("SteamSpy estimate")}
 
 
 def rating_source_text(g: Game) -> str:
     """Where the review count and % positive come from, and SteamSpy's figure when it differs."""
-    text = SOURCE_NAMES.get(g.rating_source, g.rating_source)
+    text = _(SOURCE_NAMES.get(g.rating_source, g.rating_source))
     if g.steamspy_rating is not None and abs(g.steamspy_rating - g.rating) >= 3:
-        text += f" (SteamSpy says {g.steamspy_rating:.0f}%)"
+        text += _(" (SteamSpy says {rating:.0f}%)", rating=g.steamspy_rating)
     if g.offtopic_reviews:
-        text += f"; {g.offtopic_reviews:,} reviews from review-bomb periods count toward demand, not % positive"
+        text += _("; {n:,} reviews from review-bomb periods count toward demand, not % positive", n=g.offtopic_reviews)
     return text
 
 
 def recent_text(a: Analysis) -> str:
     """Reviews in the last 12 months, their share of all reviews and their % positive (histogram)."""
-    recent, total, _ = risk.recent_activity(a.histogram)
+    recent, total, _age = risk.recent_activity(a.histogram)
     if not total:
         return "-"
     lately = risk.recent_rating(a.histogram)
-    return f"{recent:,} ({recent / total:.0%})" + (f", {lately:.0f}% positive" if lately is not None else "")
+    text = _("{n:,} ({share:.0%})", n=recent, share=recent / total)
+    return text + (_(", {rating:.0f}% positive", rating=lately) if lately is not None else "")
 
 
 def risk_codes(a: Analysis) -> str:
@@ -136,7 +139,7 @@ def ranking_csv(ranked: list[Analysis], changes: dict[int, float | None] | None 
                 "reviews_last_12_months", "pct_positive_last_12_months", "est_gross_x45", "top_complaint", "risks", "store_url"])
     for i, a in enumerate(ranked, 1):
         change = changes.get(a.game.appid, "")
-        recent, total, _ = risk.recent_activity(a.histogram)
+        recent, total, _age = risk.recent_activity(a.histogram)
         lately = risk.recent_rating(a.histogram)
         w.writerow([
             i, a.game.appid, a.game.name, round(a.opportunity.score),
