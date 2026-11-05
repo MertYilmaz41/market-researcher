@@ -62,6 +62,8 @@ REVIEWS_API = "https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1
 # store.steampowered.com/appreviews was retired in Oct 2026 (redirects to the homepage).
 # Its replacement takes protobuf-style params in `input_json`; review_type is numeric.
 REVIEW_TYPES = {"all": 0, "positive": 1, "negative": 2}
+# `filter` is numeric too: strings ("recent") are silently ignored and give most-helpful order.
+REVIEW_ORDERS = {"all": 0, "recent": 1}  # 0 = most helpful first, 1 = newest first
 
 
 def parse_reviews(data: dict) -> list[Review]:
@@ -71,7 +73,9 @@ def parse_reviews(data: dict) -> list[Review]:
             text=r.get("review", ""),
             voted_up=bool(r.get("voted_up")),
             votes_up=r.get("votes_up", 0),
-            playtime_minutes=(r.get("author") or {}).get("playtime_forever", 0),
+            # playtime when the review was written; total playtime only if that's missing
+            playtime_minutes=(r.get("author") or {}).get("playtime_at_review")
+            or (r.get("author") or {}).get("playtime_forever", 0),
             timestamp=r.get("timestamp_created", 0),
         )
         for r in data.get("reviews") or []
@@ -92,7 +96,7 @@ def reviews(
     while len(out) < limit:
         query = {
             "appid": appid,
-            "filter": order,
+            "filter": REVIEW_ORDERS[order],
             "day_range": 0,  # 0 = all time; the default is only the last 30 days
             "review_type": REVIEW_TYPES[review_type],
             "language": language,

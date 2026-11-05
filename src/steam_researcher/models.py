@@ -87,13 +87,27 @@ class CategoryResult(BaseModel):
     pillar: str
     fixable: bool
     count: int  # negative reviews mentioning this category
-    share: float  # count / negative reviews analyzed
+    share: float  # playtime-weighted share of negative reviews analyzed
     quotes: list[str] = []
+    recent_share: float | None = None  # share of the sample's negative reviews from the last 12 months
+
+    @computed_field
+    @property
+    def trend(self) -> str:
+        """Is this complaint still made lately? Empty when too few recent reviews to tell."""
+        if self.recent_share is None:
+            return ""
+        if self.recent_share >= 0.75 * self.share:
+            return "still common lately"
+        if self.recent_share <= 0.4 * self.share:
+            return "rarely mentioned lately"
+        return "less common lately"
 
 
 class MiningResult(BaseModel):
     n_negative: int
     n_positive: int
+    n_recent_negative: int = 0  # negative reviews in the sample from the last 12 months
     categories: list[CategoryResult]  # most mentioned first
     idea_praise_share: float  # negative reviews that still praise the idea/potential
     fixability: float  # share of complaint mentions a small team can fix

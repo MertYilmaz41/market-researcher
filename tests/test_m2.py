@@ -125,7 +125,10 @@ def test_reviews_paging_stops_at_limit(tmp_path, monkeypatch):
     got = steam_store.reviews(http, 1, limit=250)
     assert len(got) == 250 and len({r.recommendation_id for r in got}) == 250
     # numeric review_type and all-time range are what the new endpoint needs
-    assert all(q["review_type"] == 2 and q["day_range"] == 0 for q in seen)
+    assert all(q["review_type"] == 2 and q["day_range"] == 0 and q["filter"] == 0 for q in seen)
+    seen.clear()
+    steam_store.reviews(http, 1, limit=10, order="recent")
+    assert seen[0]["filter"] == 1  # numeric: the string "recent" is ignored by the API
 
 
 def test_reviews_redirect_is_clear_error(tmp_path, monkeypatch):
@@ -172,3 +175,28 @@ def test_fading_demand_costs_points():
     g = Game(appid=1, name="x", positive=4000, negative=4000, price_cents=999)
     flag = risk.check_fading(_months([500] * 36 + [1] * 12), NOW)
     assert scoring.score(g, flag, None).penalty == 10
+
+
+def test_reviews_use_playtime_at_review():
+    data = {"reviews": [
+        {"recommendationid": "1", "review": "x", "author": {"playtime_forever": 900, "playtime_at_review": 25}},
+        {"recommendationid": "2", "review": "y", "author": {"playtime_forever": 900}},
+    ]}
+    assert [r.playtime_minutes for r in steam_store.parse_reviews(data)] == [25, 900]
+
+
+def test_review_sample_mixes_helpful_and_newest(monkeypatch):
+    from steam_researcher import pipeline
+    from steam_researcher.models import Review
+
+    calls = []
+
+    def reviews(http, appid, kind, limit, order="all"):
+        calls.append((order, limit))
+        ids = ["a", "b", "c"] if order == "all" else ["c", "d"]  # "c" is in both
+        return [Review(recommendation_id=i, text=i, voted_up=False) for i in ids][:limit]
+
+    monkeypatch.setattr(steam_store, "reviews", reviews)
+    got = pipeline.review_sample(None, 1, "negative", 5)
+    assert calls == [("all", 3), ("recent", 2)]
+    assert [r.recommendation_id for r in got] == ["a", "b", "c", "d"]

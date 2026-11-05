@@ -134,6 +134,10 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
   - Nov 2026, complaint precision/recall: 90%/87% on the tuning set, 86%/62% held-out (it was 86%/53% before tuning).
   - `tests/test_miner_accuracy.py` keeps floors just under these scores. Re-run it after every lexicon change.
   - New samples come from `scripts/sample_reviews.py <appid>...`; their `labels` are filled in by hand.
+- **Sample:**
+  - `pipeline.review_sample` mines half the most helpful reviews and half the newest, deduped.
+  - Reviews written under `SHORT_PLAYTIME_MINUTES` (2 h) count half in `share` and `fixability`. They aren't skipped, because most are real crash-on-launch reports. `count` stays raw.
+  - `CategoryResult.recent_share`/`trend` ("still common lately" / "rarely mentioned lately") need at least `RECENT_MIN_NEGATIVE` sampled negative reviews from the last 12 months.
 - **Negation gotcha:** the negation check also discards "no optimization", which is a real complaint. Such phrases need their own pattern that starts at the negation word ("(?:no|not) optimi[sz]\w*").
 - "crashed into" (driving games) is not counted as a bug.
 
@@ -150,7 +154,7 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 - **Steam store endpoints:**
   - Work from this machine: `api/appdetails?appids=` (type, price, categories) and `appreviewhistogram/{appid}` (monthly up/down rollups, used to detect streamer spikes).
   - Store search, `search/results/?tags=<tagid>&infinite=1` (`sources/steam_search.py`, used only for `STEAMSPY_UNSEARCHABLE_TAGS`): JSON whose `results_html` rows carry the appid, title, "N% of the M user reviews" and `data-price-final` (cents). It can't sort by review count (`Reviews_DESC` sorts by % positive), so a tag is read page by page, 100 rows each. It is stricter than the rest of the store: HTTP 429 after ~30 pages at 1.5 s, so `http.URL_INTERVAL` paces it at 3 s/page, and a 429 retries with 10-60 s waits. Incremental (~9,300 games) takes ~5 min the first time, then comes from the cache. The parser reads HTML, so a Steam layout change breaks it; `test_parse_search_page` pins the format.
-  - Retired: `store.steampowered.com/appreviews` (review texts) has redirected to the homepage since about Oct 2026. Use its replacement, `api.steampowered.com/IUserReviewsService/GetAppReviews/v1/`. It needs no key, and parameters go in `input_json`. Gotchas: `review_type` is numeric (1 = positive, 2 = negative; strings are silently ignored), and `day_range` must be 0 for all-time results (the default is 30 days, and `filter:"all"` is capped at 365). Don't spoof browser User-Agents.
+  - Retired: `store.steampowered.com/appreviews` (review texts) has redirected to the homepage since about Oct 2026. Use its replacement, `api.steampowered.com/IUserReviewsService/GetAppReviews/v1/`. It needs no key, and parameters go in `input_json`. Gotchas: `review_type` is numeric (1 = positive, 2 = negative; strings are silently ignored), so is `filter` (0 = most helpful, 1 = newest first; "recent" is ignored), and `day_range` must be 0 for all-time results (the default is 30 days, and `filter:"all"` is capped at 365). Don't spoof browser User-Agents.
 - **Review mining is keyword-only** (the user's choice: no LLM). An LLM miner may be added later behind the same interface.
 
 ## Gotchas

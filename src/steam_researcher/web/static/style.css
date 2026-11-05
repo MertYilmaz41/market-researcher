@@ -392,6 +392,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .complaint summary::-webkit-details-marker { display: none; }
 .complaint .pillar { color: var(--good); font-size: var(--fs-sm); margin: 3px 0 0 140px; }
 .complaint .pillar.unfixable { color: var(--muted); font-style: italic; }
+.complaint .trend { font-size: var(--fs-xs); margin: 2px 0 0 140px; color: var(--muted); }
+.complaint .trend.still { color: var(--text); }
 .complaint blockquote {
   margin: var(--s2) 0 0 0; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--bg-2);
   border-radius: 0 var(--r-sm) var(--r-sm) 0; color: var(--text-2); font-size: var(--fs-sm); font-style: italic; line-height: 1.65;

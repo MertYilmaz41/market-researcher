@@ -1,8 +1,10 @@
 """Keyword-based review miner: complaint categories, quotes, core fantasy phrases."""
 
 import re
+import time
 from collections import Counter
 
+from .. import config
 from ..models import CategoryResult, MiningResult, Review
 from .lexicon import CATEGORIES, IDEA_PRAISE, NEGATION
 
@@ -114,21 +116,36 @@ def liked_things(positive: list[str], top: int = 8) -> list[tuple[str, int]]:
     return counts.most_common(top)
 
 
-def mine(negative: list[Review], positive: list[Review], quotes_per_category: int = 3) -> MiningResult:
+def weight(review: Review) -> float:
+    """Reviews written after only a short playtime count less (0 = playtime unknown: full weight)."""
+    short = 0 < review.playtime_minutes < config.SHORT_PLAYTIME_MINUTES
+    return config.SHORT_PLAYTIME_WEIGHT if short else 1.0
+
+
+def mine(negative: list[Review], positive: list[Review], quotes_per_category: int = 3,
+         now: float | None = None) -> MiningResult:
     neg_clean = [clean(r.text) for r in negative]
     pos_clean = [clean(r.text) for r in positive]
+    since = (now or time.time()) - 365 * 24 * 3600
 
     counts: Counter[str] = Counter()
+    weighted: Counter[str] = Counter()
+    recent: Counter[str] = Counter()
     quotes: dict[str, list[tuple[int, str]]] = {c.code: [] for c in CATEGORIES}
-    idea = 0
+    idea = n_recent = 0
     for review, text in zip(negative, neg_clean):
+        is_recent = review.timestamp >= since
+        n_recent += is_recent
         for code, m in _hits(text).items():
             counts[code] += 1
+            weighted[code] += weight(review)
+            recent[code] += is_recent
             quotes[code].append((review.votes_up, _quote(m, text)))
         if _IDEA.search(text):
             idea += 1
 
     n = len(negative) or 1
+    total_weight = sum(weight(r) for r in negative) or 1
     categories = []
     for cat in CATEGORIES:
         if not counts[cat.code]:
@@ -137,15 +154,17 @@ def mine(negative: list[Review], positive: list[Review], quotes_per_category: in
         uniq = list(dict.fromkeys(q for _, q in best if len(q) > 25))[:quotes_per_category]
         categories.append(CategoryResult(
             code=cat.code, label=cat.label, pillar=cat.pillar, fixable=cat.fixable,
-            count=counts[cat.code], share=counts[cat.code] / n, quotes=uniq,
+            count=counts[cat.code], share=weighted[cat.code] / total_weight, quotes=uniq,
+            recent_share=recent[cat.code] / n_recent if n_recent >= config.RECENT_MIN_NEGATIVE else None,
         ))
-    categories.sort(key=lambda c: -c.count)
+    categories.sort(key=lambda c: -c.share)
 
-    total_mentions = sum(c.count for c in categories)
-    fixable_mentions = sum(c.count for c in categories if c.fixable)
+    total_mentions = sum(weighted[c.code] for c in categories)
+    fixable_mentions = sum(weighted[c.code] for c in categories if c.fixable)
     return MiningResult(
         n_negative=len(negative),
         n_positive=len(positive),
+        n_recent_negative=n_recent,
         categories=categories,
         idea_praise_share=idea / n if negative else 0.0,
         fixability=fixable_mentions / total_mentions if total_mentions else 0.0,

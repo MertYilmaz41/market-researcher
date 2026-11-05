@@ -11,7 +11,7 @@ from .market import MarketStats, TagMarket, market_stats
 from .http import HttpClient, RetryableStatus
 from .mining import mine
 from .discover import filter_candidates
-from .models import Analysis, Game
+from .models import Analysis, Game, Review
 from .notices import BROAD_TAG_GAMES, friendly_error
 from .sources import steam_search, steam_store, steamspy
 
@@ -46,6 +46,15 @@ def verify_games(
     return hits, not_games, unlisted
 
 
+def review_sample(http: HttpClient, appid: int, kind: str, limit: int) -> list[Review]:
+    """Half the most helpful reviews of all time, half the newest: helpful reviews are often
+    years old, so they alone miss what players say about the game as it is now."""
+    helpful = steam_store.reviews(http, appid, kind, limit=limit - limit // 2)
+    newest = steam_store.reviews(http, appid, kind, limit=limit // 2, order="recent")
+    seen = {r.recommendation_id for r in helpful}
+    return helpful + [r for r in newest if r.recommendation_id not in seen]
+
+
 def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analysis | None:
     """Everything known about one game: data, risks, mined reviews, opportunity score."""
     game = steamspy.game_details(http, appid)
@@ -56,8 +65,8 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
 
     mining, review_error = None, None
     try:
-        negative = steam_store.reviews(http, appid, "negative", limit=review_limit)
-        positive = steam_store.reviews(http, appid, "positive", limit=review_limit)
+        negative = review_sample(http, appid, "negative", review_limit)
+        positive = review_sample(http, appid, "positive", review_limit)
         mining = mine(negative, positive)
     except (RuntimeError, httpx.HTTPError, RetryableStatus) as e:
         # Steam's review API is sometimes very slow; still rank the game on its other data.

@@ -34,10 +34,10 @@ Analyzed the {{ analyses|length }} highest-demand of {{ n_candidates }} candidat
 {% if a.mining and a.mining.n_negative %}
 ### What went wrong ({{ a.mining.n_negative }} negative reviews)
 
-| Complaint | % of neg. | Design pillar |
-|---|--:|---|
+| Complaint | % of neg. | Lately | Design pillar |
+|---|--:|---|---|
 {% for c in a.mining.categories -%}
-| {{ c.label }} | {{ pct(c.share) }} | {{ c.pillar if c.fixable else "*" ~ c.pillar ~ "*" }} |
+| {{ c.label }} | {{ pct(c.share) }} | {{ c.trend or "-" }} | {{ c.pillar if c.fixable else "*" ~ c.pillar ~ "*" }} |
 {% endfor %}
 {% for c in a.mining.categories[:3] if c.quotes %}
 **{{ c.label }}:**

@@ -348,11 +348,13 @@ def _print_mining(m: MiningResult) -> None:
     table = Table(title=f"What went wrong ({m.n_negative} negative reviews)")
     table.add_column("Complaint")
     table.add_column("% of neg.", justify="right")
+    table.add_column(f"Lately ({m.n_recent_negative} from last 12 mo)")
     table.add_column("Design pillar (do this instead)")
     for c in m.categories:
         pillar = c.pillar if c.fixable else f"[dim]{c.pillar}[/]"
-        table.add_row(c.label, f"{c.share:.0%}", pillar)
+        table.add_row(c.label, f"{c.share:.0%}", c.trend or "-", pillar)
     console.print(table)
+    console.print("[dim]Half most helpful, half newest reviews; reviews written under 2 h of play count half.[/]")
 
     for c in m.categories[:3]:
         console.print(f"[bold]{c.label}[/] - what players say:")

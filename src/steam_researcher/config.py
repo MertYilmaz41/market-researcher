@@ -60,6 +60,14 @@ TTL_HISTOGRAM = 24 * 3600
 TTL_APPDETAILS = 7 * 24 * 3600
 TTL_REVIEWS = 24 * 3600
 
+# Review sample for mining: half most helpful (all time), half newest.
+# Reviews written after under SHORT_PLAYTIME_MINUTES count SHORT_PLAYTIME_WEIGHT in complaint shares:
+# they are mostly real (crash-on-launch) bug reports, so they are down-weighted, not skipped
+# (measured on the labeled reviews: 9 of 13 complaints under 30 min were bugs).
+SHORT_PLAYTIME_MINUTES = 120
+SHORT_PLAYTIME_WEIGHT = 0.5
+RECENT_MIN_NEGATIVE = 10  # negative reviews from the last 12 months needed to say if a complaint is still common
+
 # Risk heuristics
 SPIKE_LAUNCH_PERIODS = 2  # ignore the first N histogram periods (launch is always busy)
 SPIKE_MEDIAN_FACTOR = 5.0  # period >= 5x the median period...

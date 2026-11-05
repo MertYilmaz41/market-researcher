@@ -1,3 +1,5 @@
+import pytest
+
 from steam_researcher import risk
 from steam_researcher.mining import mine
 from steam_researcher.mining.keywords import clean, core_phrases
@@ -78,3 +80,38 @@ def test_core_phrases_skip_generic():
 def test_liked_capture():
     pos = ["I loved the duck hunting. Cool"] * 3
     assert mine([], [rev(t, up=True) for t in pos]).liked[0] == ("duck hunting", 3)
+
+
+# --- review sample: playtime weights, recent complaints ----------------------------------------
+
+def timed(text, playtime=0, timestamp=0, i=[1000]):
+    from steam_researcher.models import Review
+
+    i[0] += 1
+    return Review(recommendation_id=str(i[0]), text=text, voted_up=False, playtime_minutes=playtime, timestamp=timestamp)
+
+
+def test_short_playtime_reviews_count_half():
+    # one bug review after 10 minutes, one boring review after 50 hours
+    m = mine([timed("It crashed.", playtime=10), timed("So boring.", playtime=3000)], [])
+    share = {c.code: c.share for c in m.categories}
+    assert share["bugs"] == pytest.approx(0.5 / 1.5) and share["content"] == pytest.approx(1 / 1.5)
+    assert [c.code for c in m.categories] == ["content", "bugs"]  # sorted by weighted share
+    assert {c.code: c.count for c in m.categories} == {"content": 1, "bugs": 1}  # counts stay raw
+
+
+def test_recent_share_and_trend():
+    now = 2_000_000_000
+    old, new = now - 3 * 365 * 86400, now - 30 * 86400
+    neg = ([timed("Crashes all the time.", timestamp=old)] * 10
+           + [timed("Boring and repetitive.", timestamp=new)] * 10)
+    m = mine(neg, [], now=now)
+    by = {c.code: c for c in m.categories}
+    assert m.n_recent_negative == 10
+    assert by["bugs"].recent_share == 0 and by["bugs"].trend == "rarely mentioned lately"
+    assert by["content"].recent_share == 1 and by["content"].trend == "still common lately"
+
+
+def test_no_trend_with_few_recent_reviews():
+    m = mine([timed("buggy", timestamp=0)] * 20 + [timed("buggy", timestamp=2_000_000_000)] * 3, [], now=2_000_000_000)
+    assert m.categories[0].recent_share is None and m.categories[0].trend == ""
