@@ -146,6 +146,11 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 - **Separate parsing from fetching.** For example, `steamspy.parse_tag_response` is pure, so tests feed it inline fixture dicts and never hit the network.
 - **Tunable thresholds live in `config.py`:** review and rating filters, Box Method multipliers (30/45/100), TTLs and the User-Agent.
 - **`Game.rating` is % positive (0–100).** `Game.base_price` is the undiscounted USD price, and the Box Method uses it.
+- **Official review numbers:** search results use SteamSpy's counts, but `pipeline.official_reviews` gives analyzed games Steam's own.
+  - The source is `steam_store.review_summary`, GetAppReviews' `query_summary` with `languages: ["all"]`. It matches the store page's "All Reviews" exactly, and excludes off-topic review-bomb periods that Steam confirmed. Without `languages` it is English-only.
+  - Fallback: the histogram totals, then SteamSpy.
+  - `Game.rating_source` and `steamspy_rating` record the choice, and `report.rating_source_text` shows it. SteamSpy can be far off (Feed the Cups: SteamSpy 30%, Steam 73%).
+  - Caveat: excluding review-bomb periods also lowers the review count that demand and the Box Method use.
 
 ## Data sources and constraints
 

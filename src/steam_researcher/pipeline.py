@@ -11,7 +11,7 @@ from .market import MarketStats, TagMarket, market_stats
 from .http import HttpClient, RetryableStatus
 from .mining import mine
 from .discover import filter_candidates
-from .models import Analysis, Game, Review
+from .models import Analysis, Game, HistPoint, Review
 from .notices import BROAD_TAG_GAMES, friendly_error
 from .sources import steam_search, steam_store, steamspy
 
@@ -55,6 +55,26 @@ def review_sample(http: HttpClient, appid: int, kind: str, limit: int) -> list[R
     return helpful + [r for r in newest if r.recommendation_id not in seen]
 
 
+def official_reviews(http: HttpClient, game: Game, hist: list[HistPoint]) -> Game:
+    """Steam's own review numbers instead of SteamSpy's estimate (they differ by several points).
+    Falls back to the histogram totals, then keeps SteamSpy's."""
+    try:
+        summary = steam_store.review_summary(http, game.appid)
+    except (RuntimeError, httpx.HTTPError, RetryableStatus):
+        summary = None
+    if summary:
+        positive, total = summary
+        source = "steam"
+    elif hist and (total := sum(p.total for p in hist)):
+        positive, source = sum(p.up for p in hist), "histogram"
+    else:
+        return game
+    return game.model_copy(update={
+        "positive": positive, "negative": total - positive,
+        "rating_source": source, "steamspy_rating": game.rating,
+    })
+
+
 def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analysis | None:
     """Everything known about one game: data, risks, mined reviews, opportunity score."""
     game = steamspy.game_details(http, appid)
@@ -62,6 +82,7 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
         return None
     details = steam_store.app_details(http, appid)
     hist = steam_store.review_histogram(http, appid)
+    game = official_reviews(http, game, hist)
 
     mining, review_error = None, None
     try:

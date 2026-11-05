@@ -15,7 +15,7 @@ from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
 from .models import Analysis, MiningResult
 from .pipeline import TagResult, UnknownTag, analyze_game, run_markets, run_tag, tag_games, tag_label, verify_games
-from .report import money, rank, recent_text, render, slug
+from .report import money, rank, rating_source_text, recent_text, render, slug
 
 app = typer.Typer(help="Find underserved Steam audiences (CodeMonkey's method).", no_args_is_help=True)
 cache_app = typer.Typer(help="Manage the local cache.")
@@ -301,6 +301,7 @@ def _print_analysis(a: Analysis) -> None:
         f"Reviews: [bold]{game.reviews:,}[/] ({game.rating:.0f}% positive)   "
         f"Price: ${game.base_price:.2f}   Owners (SteamSpy): {game.owners}"
     )
+    console.print(f"[dim]Review numbers: {rating_source_text(game)}[/]")
     if a.has_histogram:
         console.print(f"Reviews in the last 12 months: {recent_text(a)}")
     if details:

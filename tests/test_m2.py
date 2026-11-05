@@ -200,3 +200,64 @@ def test_review_sample_mixes_helpful_and_newest(monkeypatch):
     got = pipeline.review_sample(None, 1, "negative", 5)
     assert calls == [("all", 3), ("recent", 2)]
     assert [r.recommendation_id for r in got] == ["a", "b", "c", "d"]
+
+
+# --- official review numbers -----------------------------------------------------------------
+
+def test_parse_review_summary():
+    data = {"response": {"query_summary": {"total_positive": 928, "total_negative": 532, "total_reviews": 1460}}}
+    assert steam_store.parse_review_summary(data) == (928, 1460)
+    assert steam_store.parse_review_summary({"response": {"query_summary": {"total_reviews": 0}}}) is None
+    assert steam_store.parse_review_summary({}) is None
+
+
+def test_review_summary_asks_for_all_languages(tmp_path, monkeypatch):
+    monkeypatch.setattr("steam_researcher.http.time.sleep", lambda s: None)
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.url.params["input_json"]))
+        return httpx.Response(200, json={"response": {"query_summary": {"total_positive": 3, "total_reviews": 4}}})
+
+    http = HttpClient(cache=Cache(tmp_path / "c.sqlite"), transport=httpx.MockTransport(handler))
+    assert steam_store.review_summary(http, 7) == (3, 4)
+    # without languages=["all"] the summary is English-only
+    assert seen[0]["languages"] == ["all"] and seen[0]["num_per_page"] == 0 and seen[0]["day_range"] == 0
+
+
+def _game(**kw):
+    from steam_researcher.models import Game
+
+    return Game(appid=1, name="G", positive=kw.pop("positive", 300), negative=kw.pop("negative", 700), **kw)
+
+
+def test_official_reviews_replace_steamspy(monkeypatch):
+    from steam_researcher import pipeline
+
+    monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (928, 1460))
+    g = pipeline.official_reviews(None, _game(), [])
+    assert (g.positive, g.negative, g.rating_source) == (928, 532, "steam")
+    assert g.steamspy_rating == 30
+
+
+def test_official_reviews_fall_back(monkeypatch):
+    from steam_researcher import pipeline
+    from steam_researcher.models import HistPoint
+
+    def down(http, appid):
+        raise RuntimeError("redirected")
+
+    monkeypatch.setattr(steam_store, "review_summary", down)
+    hist = [HistPoint(date=0, up=60, down=40), HistPoint(date=1, up=20, down=0)]
+    g = pipeline.official_reviews(None, _game(), hist)
+    assert (g.positive, g.negative, g.rating_source) == (80, 40, "histogram")
+    g = pipeline.official_reviews(None, _game(), [])
+    assert (g.positive, g.rating_source, g.steamspy_rating) == (300, "steamspy", None)
+
+
+def test_rating_source_text():
+    from steam_researcher.report import rating_source_text
+
+    assert rating_source_text(_game()) == "SteamSpy estimate"
+    assert rating_source_text(_game(rating_source="steam", steamspy_rating=31)) == "Steam's own numbers"
+    assert rating_source_text(_game(rating_source="steam", steamspy_rating=40)) == "Steam's own numbers (SteamSpy says 40%)"

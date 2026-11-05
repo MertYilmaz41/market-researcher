@@ -143,6 +143,15 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
             hint="Run again later; games that loaded are cached.",
         ))
 
+    outside = [a for a in ranked if a.game.rating_source != "steamspy" and not lo <= a.game.rating <= hi]
+    if outside:
+        names = ", ".join(f"{a.game.name} ({a.game.rating:.0f}%)" for a in outside[:5])
+        out.append(Notice(
+            level="info", title="Steam rates some games differently",
+            message=f"SteamSpy put {len(outside)} game(s) in {lo:g}-{hi:g}% positive, but Steam's own numbers "
+                    f"don't: {names}. They stay in the ranking, scored on Steam's numbers.",
+        ))
+
     no_reviews = [a for a in ranked if a.review_error]
     if no_reviews:
         out.append(Notice(

@@ -964,6 +964,7 @@ function renderPanel(g) {
         el("div", {}, el("span", {}, "Range (x30-x100)"), el("b", {}, g.price ? `${money(g.box.gross_low)} - ${money(g.box.gross_high)}` : "-")),
       ),
     ),
+    g.rating_source_text ? el("p", { class: "muted rating-src" }, `Review numbers: ${g.rating_source_text}`) : null,
     el("div", { class: "bars" },
       bar("Demand", o.demand),
       bar("Dissatisfaction", o.dissatisfaction),

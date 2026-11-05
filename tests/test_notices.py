@@ -382,9 +382,11 @@ def test_review_timeout_keeps_the_game(monkeypatch):
         raise httpx.ReadTimeout("x", request=httpx.Request("GET", "https://api.steampowered.com/IUserReviewsService/"))
 
     monkeypatch.setattr(steam_store, "reviews", stalled)
+    monkeypatch.setattr(steam_store, "review_summary", stalled)
     a = pipeline.analyze_game(None, 7, 100)
     assert a is not None and a.mining is None
     assert a.review_error == "api.steampowered.com didn't answer in time."
+    assert a.game.rating_source == "steamspy"  # Steam's own numbers timed out too: SteamSpy's stay
 
 
 

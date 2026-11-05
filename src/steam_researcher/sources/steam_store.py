@@ -117,6 +117,23 @@ def reviews(
     return out[:limit]
 
 
+def parse_review_summary(data: dict) -> tuple[int, int] | None:
+    """(positive, total) from GetAppReviews' query_summary; None if missing or empty."""
+    s = ((data or {}).get("response") or {}).get("query_summary") or {}
+    total = s.get("total_reviews") or 0
+    return (s.get("total_positive", 0), total) if total else None
+
+
+def review_summary(http: HttpClient, appid: int) -> tuple[int, int] | None:
+    """Steam's own review count and positives: the store page's "All Reviews" number (all languages,
+    off-topic review-bomb periods that Steam confirmed are excluded). Without `languages: ["all"]` the
+    summary is English-only, whatever `language` says."""
+    query = {"appid": appid, "languages": ["all"], "review_type": 0, "filter": 0, "day_range": 0,
+             "purchase_type": "all", "num_per_page": 0, "cursor": "*"}
+    data = http.get_json(REVIEWS_API, {"input_json": json.dumps(query, sort_keys=True)}, ttl=config.TTL_HISTOGRAM)
+    return parse_review_summary(data or {})
+
+
 TAGS_API = "https://api.steampowered.com/IStoreService/GetTagList/v1/"
 
 

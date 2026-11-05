@@ -16,6 +16,10 @@ class Game(BaseModel):
     owners: str = ""
     ccu: int = 0
     tags: dict[str, int] = {}  # only filled by SteamSpy appdetails
+    # Where positive/negative come from: "steamspy" (search results), or for analyzed games "steam"
+    # (Steam's own All Reviews number) or "histogram" (Steam's monthly review counts, a fallback).
+    rating_source: str = "steamspy"
+    steamspy_rating: float | None = None  # SteamSpy's % positive, kept when replaced by Steam's
 
     @computed_field
     @property

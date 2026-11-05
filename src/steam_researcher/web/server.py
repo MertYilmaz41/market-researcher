@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 from .. import boxmethod, config, market, notices, pipeline, risk, runs, scoring
 from ..http import HttpClient
 from ..models import Analysis
-from ..report import rank, ranking_csv, render, slug
+from ..report import rank, ranking_csv, rating_source_text, render, slug
 from ..sources import steam_store
 
 STATIC = Path(__file__).parent / "static"
@@ -102,6 +102,7 @@ def game_json(a: Analysis) -> dict:
         store_url=g.store_url,
         reviews=g.reviews,
         rating=g.rating,
+        rating_source_text=rating_source_text(g),
         price=g.base_price,
         box=box.model_dump(),
         excluded=a.excluded,

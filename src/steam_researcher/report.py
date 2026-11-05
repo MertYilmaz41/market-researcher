@@ -9,7 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from . import boxmethod, config, risk
-from .models import Analysis
+from .models import Analysis, Game
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "templates"),
@@ -52,6 +52,17 @@ def top_complaint(a: Analysis) -> str:
         return "-"
     c = a.mining.categories[0]
     return f"{c.label} ({c.share:.0%})"
+
+
+SOURCE_NAMES = {"steam": "Steam's own numbers", "histogram": "Steam's review histogram", "steamspy": "SteamSpy estimate"}
+
+
+def rating_source_text(g: Game) -> str:
+    """Where the review count and % positive come from, and SteamSpy's figure when it differs."""
+    text = SOURCE_NAMES.get(g.rating_source, g.rating_source)
+    if g.steamspy_rating is not None and abs(g.steamspy_rating - g.rating) >= 3:
+        text += f" (SteamSpy says {g.steamspy_rating:.0f}%)"
+    return text
 
 
 def recent_text(a: Analysis) -> str:
@@ -106,6 +117,7 @@ def render(
         top_complaint=top_complaint,
         risk_codes=risk_codes,
         recent_text=recent_text,
+        rating_source_text=rating_source_text,
     )
     return re.sub(r"\n{3,}", "\n\n", text)  # template whitespace tidy-up
 

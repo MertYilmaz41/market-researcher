@@ -332,6 +332,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; flex: 1; }
 .facts div span { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--fs-xs); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
 .facts div b { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: 500; }
+.rating-src { margin: 6px 0 0; }
 
 .bars { display: grid; gap: 10px; margin: var(--s3) 0 var(--s4); }
 .bar { display: grid; grid-template-columns: 130px 1fr 48px; align-items: center; gap: 10px; font-size: var(--fs-sm); }
