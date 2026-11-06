@@ -16,6 +16,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem Ollama (local AI) is only needed for the "Write summary" buttons
+curl -s -o nul -m 2 http://localhost:11434/api/version 2>nul
+if errorlevel 1 (
+    echo Note: Ollama isn't running, so the AI summaries are off. Everything else works.
+    echo To use them, start the Ollama app ^(install: winget install Ollama.Ollama^).
+    echo.
+)
+
 echo Starting Steam Researcher... your browser will open in a few seconds.
 echo To stop it, close this window.
 echo.
