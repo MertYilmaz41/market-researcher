@@ -28,7 +28,7 @@ CATEGORIES = [  # code, Turkish name, hint (see LABELING.md)
     ("ui_ux", "Kafa karıştıran arayüz", "menüler, öğretici yok, ne yapılacağı anlaşılmıyor"),
     ("content", "Az içerik / sığ ilerleme", "yapacak az şey, kısa, tekrarlıyor, boş, sığ"),
     ("performance", "Kötü performans", "düşük FPS, takılma, uzun yükleme, optimizasyon"),
-    ("abandoned", "Geliştirici bıraktı", "güncelleme yok, vaat tutulmadı, yıllardır bitmemiş"),
+    ("abandoned", "Geliştirici bıraktı", "güncelleme yok, vaat tutulmadı, yıllardır bitmemiş, vaat edilen tür ya da özellik yok"),
     ("realism", "Gerçekçi simülasyon değil", "arcade gibi, gerçek hayata uymuyor"),
     ("scope_unrealistic", "AAA beklentisi", "indie'den GTA ölçeği bekliyor"),
 ]

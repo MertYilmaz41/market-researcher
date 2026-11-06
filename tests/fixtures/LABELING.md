@@ -31,6 +31,9 @@ Bir kategoriyi, **inceleyen o şikayeti bu oyun hakkında açıkça dile getiriy
    - Bunun yanında içeriğin azlığı açıkça söyleniyorsa ("yapacak şey yok", "boş", "içerik çok az") `content` de eklenir.
    - Bitmemiş olduğu hatalar üzerinden anlatılıyorsa `bugs` eklenir.
 2. **Vaat edilen ama gelmeyen özellik** (mağaza sayfası, yol haritası, Kickstarter) `abandoned`'dır, `content` değil.
+   - "Bait and switch" ve vaat edilen türü vermemek ("MMO değil", "open world dendi, değil") da `abandoned`'dır.
+   - "Sahte reklam" (false advertising) ancak eksik olan şey söyleniyorsa `abandoned`'dır: "co-op diye satıldı, co-op yok". Sadece "false advertising" deniyorsa ya da grafiklerin fragmandakinden kötü olmasından söz ediliyorsa kategori almaz. Başka bir neden söylüyorsa ona göre etiketlenir (sıkıcı → `content`).
+   - Kural Kasım 2026'da kullanıcının kararıyla eklendi.
 3. **"Kötü tasarım", "eğlenceli değil", "oynanış berbat":** bunlar tek başına kategori almaz. İnceleyen nedenini söylüyorsa nedene göre etiketle: tekrarlıyor → `content`, kontroller kötü → `controls`.
 4. **Fiyat, geri ödeme hikayesi, başka oyunların daha iyi olması ve geliştiricinin tartışmaları** şikayet kategorisi değildir.
 5. **Olumsuzlanmış ifadeler sayılmaz:** "hiç hata yok", "performans iyi".

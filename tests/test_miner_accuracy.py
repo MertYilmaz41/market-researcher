@@ -8,6 +8,8 @@ After 12 "content" labels were corrected by a blind human check: tuning 90% / 86
 holdout2 (73 sure reviews, 6 more games, labeled by the user, never tuned on): 78% / 63%.
 After tuning on the Claude-labeled set (40 of its 50 games): tuning 90% / 86%, held-out 85% / 62%,
 holdout2 77% / 65%; idea praise recall on holdout2 31% -> 50%.
+After the bait-and-switch rule (6 reviews relabeled abandoned by the user): tuning 90% / 85%, held-out 85% / 60%,
+holdout2 77% / 65%.
 """
 
 import pytest
@@ -54,6 +56,8 @@ def test_patterns_from_the_claude_labeled_set():
     assert "abandoned" in detect("Don't buy it, it'll be shut down in 8 months.")
     assert "abandoned" in detect("Complete lack of developers response on the forums.")
     assert "abandoned" not in detect("The game terminated unexpectedly twice.")
+    assert "abandoned" in detect("Classic bait and switch, this is not an MMO at all.")
+    assert "abandoned" not in detect("False advertising, terrible game.")  # says nothing about what is missing
 
 
 def test_game_level_comparison():
