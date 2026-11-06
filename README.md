@@ -20,7 +20,27 @@ Based on CodeMonkey's Underserved Audience method: look for genres where players
 
 ## Installation
 
-You need [uv](https://docs.astral.sh/uv/). It installs Python 3.13 by itself, and no API keys are needed.
+### One command
+
+**Windows** (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/MertYilmaz41/steam-researcher/main/install.ps1 | iex"
+```
+
+**macOS / Linux:**
+
+```sh
+curl -LsSf https://raw.githubusercontent.com/MertYilmaz41/steam-researcher/main/install.sh | sh
+```
+
+This installs [uv](https://docs.astral.sh/uv/) if you don't have it, then the app with its own Python 3.13 (nothing else on your system changes). On Windows it also puts a **Steam Researcher** shortcut on the desktop. Start the app with the shortcut or by typing `steam-researcher`: it opens in your browser. The same `sr` commands described below work too (`sr report --tag ...`). Run the command again to update. No API keys are needed.
+
+To remove it: `uv tool uninstall steam-researcher` (and delete the shortcut). Your saved runs stay in `~/.local/share/steam-researcher`.
+
+### From the source code
+
+For development, or to change the code. You need [uv](https://docs.astral.sh/uv/); it installs Python 3.13 by itself.
 
 ```powershell
 # 1. Install uv (Windows; for macOS/Linux see https://docs.astral.sh/uv/)
@@ -36,13 +56,10 @@ uv run pytest -q
 
 ## Usage
 
-**Easiest (Windows):** double-click **`Steam Researcher.bat`**. It starts the web UI and opens your browser; close the window to stop it.
+**Start the web UI.** It opens http://localhost:8501 in your browser. To stop it, close its window or press Ctrl+C in the terminal.
 
-**Web UI from a terminal.** This opens http://localhost:8501 in your browser; press Ctrl+C in the terminal to stop it.
-
-```powershell
-uv run sr ui
-```
+- Installed with the one command: use the **Steam Researcher** desktop shortcut (Windows), or type `steam-researcher`.
+- From the source code: double-click **`Steam Researcher.bat`** (Windows), or run `uv run sr ui` in the project folder.
 
 The page has three parts: the **sidebar** on the left (search, filters, one game, views), the **main area** in the middle (ranking, map, markets or shortlist), and the **details panel** that opens on the right when you pick a game. On a narrow window they stack, and the details panel fills the screen.
 
@@ -64,7 +81,7 @@ In the sidebar, click the tag field and tick one or more Steam tags (up to 5; ty
 - **Language:** the **EN | TR** switch at the top right changes the whole interface, including messages and the score card.
 - **Dark | light theme:** the ☾ | ☀ switch right of EN | TR. The page follows your system setting until you pick one, then remembers it.
 
-**Command line:**
+**Command line.** The examples are written for the source code. If you installed with the one command, leave out `uv run`: type `sr report --tag "Job Simulator"`.
 
 ```powershell
 uv run sr discover --tag "Job Simulator"           # list candidate games
@@ -108,7 +125,8 @@ Treat the summaries as a first draft: check each point against the games and quo
 
 | Layer | Built with |
 |---|---|
-| **Language & tooling** | [Python 3.13](https://www.python.org/), managed with [uv](https://docs.astral.sh/uv/) (dependencies, virtual env, `sr` entry point) |
+| **Language & tooling** | [Python 3.13](https://www.python.org/), managed with [uv](https://docs.astral.sh/uv/) (dependencies, virtual env, the `sr` and `steam-researcher` commands) |
+| **Installation** | `install.ps1` / `install.sh` install the app as a [uv tool](https://docs.astral.sh/uv/concepts/tools/) with its own Python; packaged with `uv_build`, released to PyPI by a GitHub Actions workflow on version tags |
 | **Command line** | [Typer](https://typer.tiangolo.com/) for commands and options, [Rich](https://rich.readthedocs.io/) for colored tables and progress |
 | **Web server** | [FastAPI](https://fastapi.tiangolo.com/) on [Uvicorn](https://www.uvicorn.org/), bound to `127.0.0.1`. Long searches run as background jobs that the page polls |
 | **Frontend** | Plain HTML, CSS and JavaScript ES modules, with **no build step and no framework**. The 2D map is hand-drawn SVG; the 3D map uses [three.js](https://threejs.org/) `0.170.0` from a CDN, and the page falls back to 2D without it |
@@ -119,7 +137,7 @@ Treat the summaries as a first draft: check each point against the games and quo
 | **Local AI (optional)** | [Ollama](https://ollama.com/) running `gemma3:12b` on your own machine, used only for the written summaries |
 | **Reports** | [Jinja2](https://jinja.palletsprojects.com/) Markdown templates, plus CSV export |
 | **Languages** | A small built-in English/Turkish i18n layer (Python and JS), with tests that fail if any text lacks a translation |
-| **Testing & CI** | [pytest](https://pytest.org/) (unit, API and miner-accuracy tests), [Playwright](https://playwright.dev/python/) browser tests, run by GitHub Actions on every push |
+| **Testing & CI** | [pytest](https://pytest.org/) (unit, API and miner-accuracy tests), [Playwright](https://playwright.dev/python/) browser tests, plus a check that the built package installs and starts, run by GitHub Actions on every push |
 
 ```
 SteamSpy / Steam APIs ──► HttpClient (rate limit, retry, SQLite cache)

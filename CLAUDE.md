@@ -87,6 +87,7 @@ uv run python -m steam_researcher.mining.evaluate --miner llm --model gemma3:12b
 uv run sr markets --top 30                  # rank every tag by underserved games (~7 min first time)
 uv run sr runs                              # saved runs (from sr report and the web UI)
 uv run sr ui                                # web UI (3D map) on http://localhost:8501
+uv run steam-researcher                     # same as sr; with no command it opens the web UI (what the installers run)
 uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report (or SR_LANG=tr); the web UI has an EN | TR switch
 uv run sr cache clear
 uv run --with playwright pytest tests/test_ui.py   # browser smoke test, if .venv lacks Playwright
@@ -179,6 +180,13 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
   - Fallback: the histogram totals, then SteamSpy.
   - `Game.rating_source` and `steamspy_rating` record the choice, and `report.rating_source_text` shows it. SteamSpy can be far off (Feed the Cups: SteamSpy 30%, Steam 73%).
   - Review-bomb periods: a second call with `filter_offtopic_activity: 0` counts them too. The difference goes into `Game.offtopic_reviews`, which `Game.reviews` (demand, Box Method) includes but `Game.rating` doesn't, because those reviewers bought the game but the bomb isn't about its quality. Feed the Cups: 73% of 4,855 rated, 11,224 counted for demand.
+
+## Installing and releasing
+
+- `install.ps1` (Windows) and `install.sh` (macOS/Linux) at the repo root are the one-line installers in the README: they install uv if missing, then `uv tool install --force --refresh --python 3.13 <source>` (default source: the main branch's GitHub zip, so no git is needed; the repo must be public), and `install.ps1` makes a desktop shortcut to `steam-researcher.exe`. Test them without touching the real system: `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` pointed at a temp folder (the scripts then skip `uv tool update-shell`), `SR_SOURCE=<built wheel>`, `SR_NO_SHORTCUT=1`.
+- `steam-researcher` (`cli.start`) is `sr` that opens the web UI when no command is given (also with only global options such as `--lang tr`). The shortcut and a future `uvx steam-researcher` rely on it.
+- CI builds the wheel and runs both commands from it (`uvx --isolated --from dist/*.whl`), which catches files missing from the package (`web/static`, the report template).
+- `.github/workflows/release.yml`: pushing a `v*` tag that matches `version` in `pyproject.toml` publishes to PyPI through a trusted publisher (set up once on pypi.org: workflow `release.yml`, environment `pypi`). The name `steam-researcher` was free on PyPI in Nov 2026.
 
 ## Data sources and constraints
 

@@ -46,3 +46,24 @@ def test_parse_rating_range():
 def test_parse_rating_range_rejects_bad_input(bad):
     with pytest.raises(ValueError):
         parse_rating_range(bad)
+
+
+@pytest.mark.parametrize("args, opens_ui", [
+    ([], True),                          # `steam-researcher` alone opens the web UI
+    (["--lang", "tr"], True),            # options without a command too
+    (["--help"], False),
+    (["discover", "--tag", "Job Simulator"], False),
+    (["ui", "--port", "9000"], False),   # already has a command: not added twice
+])
+def test_start_opens_ui_without_a_command(monkeypatch, args, opens_ui):
+    import sys
+
+    import typer
+
+    from steam_researcher import cli
+
+    monkeypatch.setattr("sys.argv", ["steam-researcher", *args])
+    seen = []
+    monkeypatch.setattr(typer.Typer, "__call__", lambda self: seen.append(sys.argv[1:]))
+    cli.start()
+    assert seen == [[*args, "ui"] if opens_ui else args]

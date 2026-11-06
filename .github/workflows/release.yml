@@ -1,0 +1,23 @@
+name: release
+
+# Push a version tag (git tag v0.1.0 && git push origin v0.1.0) to publish to PyPI.
+# One-time setup on pypi.org: add a "trusted publisher" for this repository,
+# workflow release.yml, environment pypi. No token is stored here.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # lets PyPI verify that this workflow is the trusted publisher
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Check that the tag matches the version in pyproject.toml
+        run: test "v$(uv version --short)" = "$GITHUB_REF_NAME"
+      - run: uv build
+      - run: uvx --isolated --from dist/*.whl steam-researcher --help
+      - run: uv publish

@@ -16,3 +16,8 @@ jobs:
       - name: Install a browser for the UI tests
         run: uv run playwright install --with-deps chromium
       - run: uv run pytest -q
+      - name: Check that the built package installs and starts
+        run: |
+          uv build
+          uvx --isolated --from dist/*.whl steam-researcher --help
+          uvx --isolated --from dist/*.whl sr --help

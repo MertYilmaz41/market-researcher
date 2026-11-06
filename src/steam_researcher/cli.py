@@ -446,5 +446,22 @@ def cache_clear():
     console.print(f"Removed {Cache().clear()} cached entries.")
 
 
+
+def start() -> None:
+    """The `steam-researcher` command: like `sr`, but with no command it opens the web UI.
+
+    So `uvx steam-researcher` (or the desktop shortcut the installer makes) starts the app in one step.
+    """
+    import sys
+
+    from typer.main import get_command
+
+    commands = set(get_command(app).commands)  # type: ignore[attr-defined]
+    args = sys.argv[1:]
+    if not any(a in commands for a in args) and not {"--help", "-h", "--install-completion", "--show-completion"} & set(args):
+        sys.argv.append("ui")
+    app()
+
+
 if __name__ == "__main__":
     app()
