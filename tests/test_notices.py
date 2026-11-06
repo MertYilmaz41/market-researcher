@@ -1,3 +1,5 @@
+import re
+
 import httpx
 import pytest
 from typer.testing import CliRunner
@@ -204,7 +206,8 @@ def test_cli_multiple_tags(monkeypatch):
 
 def test_cli_option_bounds():
     res = CliRunner().invoke(app, ["report", "--tag", "X", "--max-games", "99"])
-    assert res.exit_code == 2 and "max-games" in res.output
+    text = re.sub(r"\x1b\[[0-9;]*m", "", res.output)  # CI (GitHub Actions) gets colored output
+    assert res.exit_code == 2 and "max-games" in text
 
 
 def test_cli_game_not_found_is_not_unexpected(monkeypatch):
