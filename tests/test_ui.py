@@ -421,3 +421,39 @@ def test_ui_help_dialog(base_url, browser):
     page.click("#help .help-head button")
     assert page.is_hidden("#help")
     assert errors == []
+
+
+def test_ui_keyboard(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")
+    page.click("#run")
+    page.wait_for_selector("#ranking tbody tr")
+    active = lambda: page.evaluate("document.activeElement.id || document.activeElement.dataset.appid || ''")  # noqa: E731
+    # The page opens the top game by itself, without pulling the focus into the drawer.
+    assert page.is_visible("#drawer") and active() != "drawer-close"
+    page.keyboard.press("Escape")
+
+    # A row opens with Enter; the focus moves to the drawer and comes back to the row on Esc.
+    row = page.locator("#ranking tbody tr").nth(1)
+    appid = row.get_attribute("data-appid")
+    row.focus()
+    page.keyboard.press("Enter")
+    assert page.is_visible("#drawer") and active() == "drawer-close"
+    # Tabs: arrow keys move the selection.
+    page.focus('#panel [role=tab][aria-selected="true"]')
+    page.keyboard.press("ArrowRight")
+    assert page.get_attribute('#panel [role=tab][aria-selected="true"]', "id") == "panel-tab-1"
+    assert active() == "panel-tab-1"
+    page.keyboard.press("Escape")
+    assert page.is_hidden("#drawer") and active() == appid
+
+    # Sort headers work with the keyboard and tell how they're sorted.
+    page.focus('#ranking th[data-key="name"]')
+    page.keyboard.press("Enter")
+    assert page.get_attribute('#ranking th[data-key="name"]', "aria-sort") == "ascending"
+    assert page.get_attribute('#ranking th[data-key="score"]', "aria-sort") == "none"
+    assert errors == []

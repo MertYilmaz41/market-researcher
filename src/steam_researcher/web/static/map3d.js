@@ -58,13 +58,14 @@ export function createMap(container, { onSelect, describe }) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(CENTER);
   controls.enableDamping = true;
-  controls.autoRotate = true;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches; // no spinning for those who asked for less motion
+  controls.autoRotate = !still;
   controls.autoRotateSpeed = 0.6;
   controls.minDistance = 6;
   controls.maxDistance = 35;
   let idleTimer;
   controls.addEventListener("start", () => { controls.autoRotate = false; clearTimeout(idleTimer); });
-  controls.addEventListener("end", () => { idleTimer = setTimeout(() => (controls.autoRotate = true), 8000); });
+  controls.addEventListener("end", () => { if (!still) idleTimer = setTimeout(() => (controls.autoRotate = true), 8000); });
 
   // Lights
   // neutral warm light: no tint on the score colors

@@ -21,6 +21,27 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+// Rows and cells that open something: reachable with Tab and opened with Enter or Space, not only the mouse.
+// Keys on a button inside (a star, an ⓘ) stay that button's.
+function clickable(node, fn) {
+  node.tabIndex = 0;
+  node.addEventListener("click", fn);
+  node.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target === node) { e.preventDefault(); fn(e); }
+  });
+  return node;
+}
+// Sortable headers also say how they're sorted to screen readers.
+function markSorted(ths, key, asc) {
+  for (const th of ths) {
+    if (!th.dataset.key) continue;
+    th.classList.toggle("sorted", th.dataset.key === key);
+    th.classList.toggle("asc", th.dataset.key === key && asc);
+    th.setAttribute("aria-sort", th.dataset.key === key ? (asc ? "ascending" : "descending") : "none");
+  }
+}
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 const money = (x) => (x >= 1e9 ? `$${decimal(x / 1e9, 1)}B` : x >= 1e6 ? `$${decimal(x / 1e6, 1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Math.round(x)}`);
 
 // Every request says which language the server's text (notices, score card, risks) should be in.
@@ -180,13 +201,27 @@ $("#games-mode").addEventListener("click", (e) => {
 });
 
 // ---------- details drawer: opens with a game, closes with × or Esc ----------
-function openDrawer() {
+// Opening moves the focus into the drawer (unless the page opened it by itself, after a search);
+// closing gives it back to what opened it, or to the game's row.
+let drawerReturn = null;
+function openDrawer(focus = true) {
+  if (!$("#drawer").hidden) return;
+  drawerReturn = document.activeElement;
   $("#drawer").hidden = false;
   document.body.classList.add("drawer-open");
+  if (focus) $("#drawer-close").focus({ preventScroll: true });
 }
 function closeDrawer() {
+  const appid = state.selected;
+  const focusInside = $("#drawer").contains(document.activeElement) || document.activeElement === document.body;
   $("#drawer").hidden = true;
   document.body.classList.remove("drawer-open");
+  if (focusInside) {
+    const back = drawerReturn?.isConnected && drawerReturn !== document.body ? drawerReturn
+      : document.querySelector(`#ranking tr[data-appid="${appid}"]`);
+    back?.focus({ preventScroll: true });
+  }
+  drawerReturn = null;
   state.selected = null;
   state.panelGame = null;
   map.select(null);
@@ -320,7 +355,7 @@ function renderChips() {
   saveFilters();
   $("#tag-chips").replaceChildren(...tagPicker.picked.map((tag) =>
     el("span", { class: "tag-chip" }, tag,
-      el("button", { type: "button", tabindex: "-1", "aria-label": t("Remove {tag}", { tag }),
+      el("button", { type: "button", "aria-label": t("Remove {tag}", { tag }),
         onmousedown: (e) => e.preventDefault(), // don't steal focus from the filter box
         onclick: (e) => { e.stopPropagation(); togglePick(tag); } }, "×"))));
   if (tagPicker.freeText) return;
@@ -672,7 +707,7 @@ function showResult(result, id, quiet = false) {
   if (state.keepPanel) {
     // the panel shows a game the user analyzed during the search: leave it there
   } else if (state.games.length) {
-    selectGame(state.games[0].game.appid);
+    selectGame(state.games[0].game.appid, false);
   } else {
     closeDrawer();
     const why = (result.notices || []).find((n) => n.level === "warning");
@@ -867,13 +902,10 @@ function renderMarkets() {
   const { key, asc } = markets.sort;
   const val = (r) => (key === "tag" ? r.tag.toLowerCase() : r[key]);
   const rows = [...markets.rows].sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * (asc ? 1 : -1));
-  for (const th of document.querySelectorAll("#markets th")) {
-    th.classList.toggle("sorted", th.dataset.key === key);
-    th.classList.toggle("asc", th.dataset.key === key && asc);
-  }
+  markSorted(document.querySelectorAll("#markets th"), key, asc);
   const n = fmt;
   $("#markets tbody").replaceChildren(...rows.map((r) =>
-    el("tr", { onclick: () => searchTag(r.tag), title: t("Search {tag}", { tag: r.tag }) },
+    clickable(el("tr", { title: t("Search {tag}", { tag: r.tag }) },
       el("td", { class: "num" }, r.rank),
       el("td", {}, r.tag),
       el("td", { class: "num" }, n(r.n_games)),
@@ -883,16 +915,14 @@ function renderMarkets() {
       el("td", { class: "num" }, pct(r.gap)),
       el("td", { class: "num" }, money(r.underserved_gross)),
       el("td", { class: "num" }, r.n_demand ? percent(r.median_rating) : "-"),
-    )));
+    ), () => searchTag(r.tag))));
 }
 
-$("#markets thead").addEventListener("click", (e) => {
-  const key = e.target.closest("th")?.dataset.key;
-  if (!key) return;
-  const s = markets.sort;
+document.querySelectorAll("#markets th[data-key]").forEach((th) => clickable(th, () => {
+  const key = th.dataset.key, s = markets.sort;
   markets.sort = { key, asc: s.key === key ? !s.asc : key === "tag" || key === "rank" };
   renderMarkets();
-});
+}));
 
 // From the Markets table: search that one tag as a normal games search.
 function searchTag(tag) {
@@ -938,12 +968,12 @@ async function openRuns() {
     const count = (r) => (r.kind === "market" ? t("{n} tags", { n: r.n })
       : r.n === 1 ? t("{n} game", { n: r.n }) : t("{n} games", { n: r.n }));
     list.replaceChildren(...runs.map((r) => {
-      const item = el("li", { class: r.id === state.runId ? "current" : "", onclick: () => openRun(r) },
+      const item = clickable(el("li", { class: r.id === state.runId ? "current" : "" },
         el("div", { class: "run-main" },
           el("b", {}, r.kind === "market" ? t("Markets: all tags") : r.label),
           el("span", {}, `${dateTime(r.created)} · ${count(r)}`)),
         el("button", { type: "button", class: "run-del", title: t("Delete this run"), "aria-label": t("Delete run {label}", { label: r.label }),
-          onclick: (e) => { e.stopPropagation(); deleteRun(r, item); } }, "×"));
+          onclick: (e) => { e.stopPropagation(); deleteRun(r, item); } }, "×")), () => openRun(r));
       return item;
     }));
   } catch (err) {
@@ -1066,16 +1096,13 @@ function renderTable() {
     const va = sortValue[key](a), vb = sortValue[key](b);
     return (va < vb ? -1 : va > vb ? 1 : 0) * (asc ? 1 : -1);
   });
-  for (const th of document.querySelectorAll("#ranking th")) {
-    th.classList.toggle("sorted", th.dataset.key === key);
-    th.classList.toggle("asc", th.dataset.key === key && asc);
-  }
+  markSorted(document.querySelectorAll("#ranking th"), key, asc);
   $("#ranking tbody").replaceChildren(
     ...rows.map((g) => {
       const o = g.opportunity;
       const adj = Math.round(o.effective_rating) !== Math.round(g.rating) ? adjText(g) : "";
       const top = g.mining?.categories[0];
-      return el("tr", { "data-appid": g.game.appid, onclick: () => selectGame(g.game.appid) },
+      return clickable(el("tr", { "data-appid": g.game.appid },
         el("td", {}, starButton(g.game.appid)),
         el("td", { class: "num" }, g.rank),
         el("td", {}, g.game.name),
@@ -1087,14 +1114,14 @@ function renderTable() {
         el("td", { class: "num" }, g.price ? money(g.box.gross_mid) : "F2P"),
         el("td", { class: "complaint-cell" }, top ? `${top.label} (${pct(top.share)})` : "-"),
         el("td", { class: "risks-cell" }, penaltyText(g)),
-      );
+      ), () => selectGame(g.game.appid));
     }),
   );
   highlightRow();
 }
 
 document.querySelectorAll("#ranking th[data-key]").forEach((th) =>
-  th.addEventListener("click", () => {
+  clickable(th, () => {
     const key = th.dataset.key;
     state.sort = { key, asc: state.sort.key === key ? !state.sort.asc : ["rank", "name"].includes(key) };
     renderTable();
@@ -1159,7 +1186,7 @@ function renderShortlist() {
       } catch (err) { notifyError(err); }
     });
     return el("tr", { "data-appid": s.appid },
-      el("td", { class: "name", onclick: () => openGame(s.appid) }, s.name),
+      clickable(el("td", { class: "name" }, s.name), () => openGame(s.appid)),
       el("td", { class: "num" }, Math.round(s.score)),
       el("td", { class: "num" }, percent(s.rating)),
       el("td", { class: "num" }, fmt(s.reviews)),
@@ -1185,14 +1212,14 @@ function highlightRow() {
   }
 }
 
-function selectGame(appid) {
+function selectGame(appid, focus = true) {
   const g = state.games.find((x) => x.game.appid === appid);
   if (!g) return;
   state.selected = appid;
   map.select(appid); // both views, so the hidden one is in sync when you switch
   highlightRow();
-  renderPanel(g);
-  document.querySelector(`#ranking tr[data-appid="${appid}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  renderPanel(g, 0, focus);
+  document.querySelector(`#ranking tr[data-appid="${appid}"]`)?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
 }
 
 // ---------- score card: how a score was reached (hover or focus any score) ----------
@@ -1363,7 +1390,7 @@ function bar(labelText, value, text) {
   );
 }
 
-function renderPanel(g, tab = 0) {
+function renderPanel(g, tab = 0, focus = true) {
   state.panelGame = g;
   const o = g.opportunity;
   const game = g.game;
@@ -1411,21 +1438,37 @@ function renderPanel(g, tab = 0) {
     [t("History"), () => historyTab(g)],
     [t("Summary"), () => gameSummaryTab(g)],
   ];
-  const body = el("div");
+  // ARIA tabs: one Tab stop (the active tab); arrow keys and Home/End move between them.
+  const body = el("div", { role: "tabpanel", id: "panel-tabpanel", tabindex: "0" });
   const tabBar = el("div", { class: "tabs", role: "tablist" });
-  tabs.forEach(([name, render], i) => {
-    const b = el("button", { type: "button", role: "tab" }, name);
+  const buttons = tabs.map(([name, render]) => {
+    const b = el("button", { type: "button", role: "tab", "aria-controls": "panel-tabpanel" }, name);
     b.addEventListener("click", () => {
-      tabBar.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x === b));
+      for (const x of buttons) {
+        x.classList.toggle("active", x === b);
+        x.setAttribute("aria-selected", String(x === b));
+        x.tabIndex = x === b ? 0 : -1;
+      }
+      body.setAttribute("aria-labelledby", b.id);
       body.replaceChildren(render());
     });
-    tabBar.append(b);
-    if (i === tab) { b.classList.add("active"); body.replaceChildren(render()); }
+    return b;
   });
+  buttons.forEach((b, i) => (b.id = `panel-tab-${i}`));
+  tabBar.append(...buttons);
+  tabBar.addEventListener("keydown", (e) => {
+    const i = buttons.indexOf(e.target), n = buttons.length;
+    const to = { ArrowRight: i + 1, ArrowLeft: i - 1 + n, Home: 0, End: n - 1 }[e.key];
+    if (i < 0 || to === undefined) return;
+    e.preventDefault();
+    buttons[to % n].focus();
+    buttons[to % n].click();
+  });
+  buttons[Math.min(tab, buttons.length - 1)].click();
 
   $("#panel").replaceChildren(...head.filter(Boolean), tabBar, body);
   $("#panel").scrollTop = 0;
-  openDrawer();
+  openDrawer(focus);
 }
 
 function complaintsTab(g) {
