@@ -25,10 +25,10 @@
 
 ## {{ _("Ranking") }}
 
-| # | {{ _("Game") }} | {{ _("Score") }} | {{ _("Reviews") }} | {{ _("% Pos") }} | {{ _("Est. gross (x45)") }} | {{ _("Top complaint") }} | {{ _("Risks") }} |
+| # | {{ _("Game") }} | {{ _("Score") }} | {{ _("Reviews") }} | {{ _("% Pos") }} | {{ _("Est. revenue (x45)") }} | {{ _("Top complaint") }} | {{ _("Risks") }} |
 |--:|---|--:|--:|--:|--:|---|---|
 {% for a in ranked -%}
-| {{ loop.index }} | [{{ a.game.name|md }}](#{{ a.game.appid }}) | **{{ a.opportunity.score|round|int }}** | {{ num(a.game.reviews) }} | {{ percent(a.game.rating) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %} {{ _("({rating} adj.)", rating=percent(a.opportunity.effective_rating)) }}{% endif %} | {{ gross(a) }} | {{ complaint_text(a)|md }} | {{ risk_names(a)|md }} |
+| {{ loop.index }} | [{{ a.game.name|md }}](#{{ a.game.appid }}) | **{{ a.opportunity.score|round|int }}** | {{ num(a.game.reviews) }} | {{ percent(a.game.rating) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %} {{ _("({rating} without review bombs)", rating=percent(a.opportunity.effective_rating)) }}{% endif %} | {{ gross(a) }} | {{ complaint_text(a)|md }} | {{ risk_names(a)|md }} |
 {% endfor %}
 
 {% for a in ranked %}
@@ -74,7 +74,7 @@
 {% endfor %}
 **{{ _("Great idea, bad execution?") }}** {{ _("{pct} of negative reviews still praise the idea or its potential.", pct=pct(a.mining.idea_praise_share)) }}
 
-### {{ _("Core fantasy to keep") }}
+### {{ _("What players love (keep it)") }}
 {% if a.mining.core_phrases %}- {{ _("Common phrases in {n} positive reviews: {phrases}", n=a.mining.n_positive, phrases=a.mining.core_phrases|map("first")|join(", ")) }}
 {% endif %}{% if a.mining.liked %}- {{ _("Players liked: {phrases}", phrases=a.mining.liked|map("first")|join(", ")) }}
 {% endif %}

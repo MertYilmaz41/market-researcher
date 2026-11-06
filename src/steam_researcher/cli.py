@@ -143,7 +143,7 @@ def discover(
                           tag=label, n=len(candidates) - len(not_games), total=len(games), min=min_reviews, lo=lo, hi=hi))
     for col, just in [
         (_("AppID"), "right"), (_("Name"), "left"), (_("Reviews"), "right"), (_("% Pos"), "right"),
-        (_("Price"), "right"), (_("Est. units (x45)"), "right"), (_("Est. gross (x30-x100)"), "right"),
+        (_("Price"), "right"), (_("Est. units (x45)"), "right"), (_("Est. revenue (x30-x100)"), "right"),
     ]:
         table.add_column(col, justify=just)
 
@@ -271,7 +271,7 @@ def report(
         o = a.opportunity
         pos = percent(a.game.rating)
         if round(o.effective_rating) != round(a.game.rating):
-            pos += " " + _("({rating} adj.)", rating=percent(o.effective_rating))
+            pos += " " + _("({rating} without review bombs)", rating=percent(o.effective_rating))
         top = a.mining.categories[0] if a.mining and a.mining.categories else None
         table.add_row(
             str(i), a.game.name, f"[bold]{o.score:.0f}[/]", num(a.game.reviews), pos,
@@ -306,14 +306,14 @@ def markets(
     table = Table(title=_("Markets: tags by underserved games (>={min} reviews, {lo:g}-{hi:g}% positive)",
                           min=min_reviews, lo=lo, hi=hi))
     for i, col in enumerate(["#", _("Tag"), _("Games"), _("With demand"), _("Underserved"),
-                             _("Well served ({pct}%+)", pct=config.WELL_SERVED_RATING), _("Gap"), _("Underserved gross")]):
+                             _("Well served ({pct}%+)", pct=config.WELL_SERVED_RATING), _("Unmet share"), _("Underserved revenue")]):
         table.add_column(col, justify="left" if i == 1 else "right")
     for i, r in enumerate(result.rows[:top], 1):
         m = r.stats
         table.add_row(str(i), r.tag, num(m.n_games), num(m.n_demand), f"[bold]{num(m.n_underserved)}[/]",
                       num(m.n_well_served), fmt("{x:.0%}", x=m.gap), money(m.underserved_gross))
     console.print(table)
-    console.print("[dim]" + _("Gap = underserved / (underserved + well served). High gap + many underserved games = "
+    console.print("[dim]" + _("Unmet share = underserved / (underserved + well served). High share + many underserved games = "
                               "an audience that good games don't reach yet.") + "[/]")
     if result.skipped:
         console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with sr discover).",
@@ -359,7 +359,7 @@ def _print_analysis(a: Analysis) -> None:
         console.print(_("Top tags: {tags}", tags=", ".join(list(game.tags)[:10])))
     if game.base_price:
         est = boxmethod.estimate(game.reviews, game.base_price)
-        console.print(_("Box Method: ~{units} units (x45), gross {low} - {high} (x30-x100)",
+        console.print(_("Box Method: ~{units} units (x45), revenue {low} - {high} (x30-x100)",
                         units=num(est.units_mid), low=money(est.gross_low), high=money(est.gross_high)))
     o = a.opportunity
     parts = _("demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, fixability {fixability}",
@@ -415,7 +415,7 @@ def _print_mining(m: MiningResult) -> None:
     )
     if m.core_phrases:
         phrases = ", ".join(f"{p} ({n})" for p, n in m.core_phrases)
-        console.print(f"[bold]{_('Core fantasy')}[/] "
+        console.print(f"[bold]{_('What players love')}[/] "
                       + _("(common phrases in {n} positive reviews): {phrases}", n=m.n_positive, phrases=phrases))
     if m.liked:
         console.print(f"[bold]{_('Players liked:')}[/] {', '.join(p for p, _n in m.liked)}")

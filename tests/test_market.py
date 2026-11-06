@@ -31,7 +31,7 @@ def test_market_stats_without_demand_games():
 
 def test_summary_is_ascii():
     text = market.summary(market_stats([g(40), g(90, appid=2)], 100, 5, 70))
-    assert text.isascii() and "gap 50%" in text
+    assert text.isascii() and "unmet share 50%" in text
 
 
 def test_well_served_market_gets_a_notice():

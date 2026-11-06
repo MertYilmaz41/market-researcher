@@ -686,7 +686,7 @@ function renderMarketStrip(m, wellServed) {
   const strip = $("#market-strip");
   strip.hidden = !m;
   if (!m) return;
-  const stat = (value, label, cls = "", title = "") => el("div", { class: cls, title }, el("b", {}, value), el("span", {}, label));
+  const stat = (value, label, cls = "", term = null) => el("div", { class: cls }, el("b", {}, value), el("span", {}, label, term ? info(term) : null));
   const rated = m.n_underserved + m.n_well_served;
   const verdict = rated < 5 ? t("Too few games with demand to judge this market.")
     : m.gap >= 0.5 ? t("Many disappointed players and few good games: an underserved audience.")
@@ -694,11 +694,11 @@ function renderMarketStrip(m, wellServed) {
     : t("Mostly well served: players here already have good games.");
   strip.replaceChildren(
     stat(fmt(m.n_games), t("Games in tag")),
-    stat(fmt(m.n_demand), t("With demand")),
-    stat(fmt(m.n_underserved), t("Underserved"), "good"),
-    stat(fmt(m.n_well_served), t("Well served ({pct}+)", { pct: percent(wellServed) })),
-    stat(pct(m.gap), t("Gap"), m.gap >= 0.5 ? "good" : "", t("Underserved / (underserved + well served)")),
-    stat(money(m.underserved_gross), t("Underserved $"), "", t("Box Method (x45) gross of the underserved games")),
+    stat(fmt(m.n_demand), t("With demand"), "", "with_demand"),
+    stat(fmt(m.n_underserved), t("Underserved"), "good", "underserved"),
+    stat(fmt(m.n_well_served), t("Well served ({pct}+)", { pct: percent(wellServed) }), "", "well_served"),
+    stat(pct(m.gap), t("Unmet share"), m.gap >= 0.5 ? "good" : "", "unmet_share"),
+    stat(money(m.underserved_gross), t("Underserved revenue"), "", "revenue"),
     el("div", { class: "verdict" }, verdict),
   );
 }
@@ -1010,12 +1010,12 @@ const sortValue = {
   recent: (g) => g.recent_share ?? -1,
   gross: (g) => g.box.gross_mid,
   complaint: (g) => g.mining?.categories[0]?.share ?? -1,
-  risks: (g) => risks(g).length,
+  risks: (g) => g.opportunity.penalty,
 };
 
 const recentText = (g) => g.recent_share == null ? "-"
   : `${fmt(g.recent_reviews)} (${pct(g.recent_share)})` + (g.recent_rating == null ? "" : t(", {pct} pos", { pct: percent(g.recent_rating) }));
-const adjText = (g) => t(" ({pct} adj.)", { pct: percent(g.opportunity.effective_rating) });
+const adjText = (g) => t(" ({pct} without review bombs)", { pct: percent(g.opportunity.effective_rating) });
 
 // Score change since the previous run with the same tags and filters (only present when one exists).
 function delta(g) {
@@ -1026,7 +1026,12 @@ function delta(g) {
     d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "=");
 }
 
-const risks = (g) => g.flags.filter((f) => f.severity !== "info");
+// The risks that cost points, as in the score card: the same games the risk-penalty filter hides.
+function penaltyText(g) {
+  const list = g.score_explained?.penalties || [];
+  if (list.length) return list.map((p) => `${p.label} -${p.points}`).join(", ");
+  return g.opportunity.penalty > 0 ? `-${Math.round(g.opportunity.penalty)}` : "-";
+}
 
 // Quick filter above the ranking: by name, and without games that have a risk penalty.
 // Ranks stay those of the full ranking.
@@ -1073,7 +1078,7 @@ function renderTable() {
         el("td", { class: "num" }, recentText(g)),
         el("td", { class: "num" }, g.price ? money(g.box.gross_mid) : "F2P"),
         el("td", { class: "complaint-cell" }, top ? `${top.label} (${pct(top.share)})` : "-"),
-        el("td", { class: "risks-cell" }, risks(g).map((f) => f.label || f.code).join(", ") || "-"),
+        el("td", { class: "risks-cell" }, penaltyText(g)),
       );
     }),
   );
@@ -1202,7 +1207,7 @@ function fillScoreTip(g) {
       el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(p.value * 100)}%` })),
       el("p", {}, p.basis))),
     el("div", { class: "tip-sum" },
-      row("", t("Combined (weighted geometric mean)"), Math.round(e.combined)),
+      row("", t("Combined"), Math.round(e.combined)),
       ...e.penalties.map((p) => row("minus", t("{label} (risk)", { label: p.label }), `-${p.points}`, p.reason)),
       row("total", t("Score"), Math.round(e.score))),
     el("p", { class: `tip-note${e.zero_part ? " warn" : ""}` }, e.zero_part
@@ -1215,14 +1220,18 @@ function showScoreTip(anchor, g) {
   if (!g.score_explained) return;
   fillScoreTip(g);
   scoreTip.hidden = false;
-  const a = anchor.getBoundingClientRect(), t = scoreTip.getBoundingClientRect(), gap = 10;
+  placeTip(scoreTip, anchor);
+}
+// Beside the anchor, flipped to its left when there's no room, and kept inside the window.
+function placeTip(tip, anchor) {
+  const a = anchor.getBoundingClientRect(), t = tip.getBoundingClientRect(), gap = 10;
   const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
   let left = a.right + gap; // beside the score; flip to the left side when there's no room
   if (left + t.width > vw - 8) left = Math.max(8, a.left - gap - t.width);
   let top = a.top + a.height / 2 - t.height / 2;
   top = Math.max(8, Math.min(top, vh - t.height - 8));
-  scoreTip.style.left = `${left}px`;
-  scoreTip.style.top = `${top}px`;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
 }
 
 const hideScoreTip = () => (scoreTip.hidden = true);
@@ -1239,6 +1248,102 @@ function scoreAnchor(node, g) {
   node.addEventListener("mouseleave", hideScoreTip);
   node.addEventListener("blur", hideScoreTip);
   return node;
+}
+
+// ---------- terms: what this project's words mean, shown by an ⓘ and listed in How it works ----------
+// Change the wording here; every ⓘ and the glossary read it.
+function terms() {
+  return {
+    demand: [t("Demand"), t("How many people bought games like this, judged by the number of reviews. Each extra review counts a little less (log scale), so one hit doesn't drown out the rest.")],
+    dissatisfaction: [t("Dissatisfaction"), t("How unhappy the players are: how far the game's % positive is below 70%. A 40% game scores higher than a 65% one.")],
+    fixability: [t("Fixability"), t("How many of the complaints a new game could avoid: bugs, controls, missing content, performance and the like. Complaints about price or the genre itself don't count.")],
+    risk_penalty: [t("Risk penalty"), t("Points taken off the score for something that makes a game a weaker opportunity than it looks, e.g. online multiplayer, fading interest, or recent reviews showing it's already fixed. The Risks column lists them with their points.")],
+    risks: [t("Risks"), t("The risks that cost this game points, with how many. Other notes, such as review bombs, are in the game's Risks tab.")],
+    revenue: [t("Estimated revenue"), t("Box Method: each review stands for about 30 to 100 copies sold (45 in the middle), times the full price. A rough figure before Steam's cut, discounts, refunds and taxes.")],
+    recent: [t("Last 12 months"), t("Reviews written in the last 12 months, their share of all reviews, and how positive they are. Few recent reviews mean fading interest; much better recent reviews mean the problems may already be fixed.")],
+    loved: [t("What players love"), t("Phrases that come up most often in the positive reviews: what people enjoy, and what a new game should keep.")],
+    idea_praise: [t("Great idea, bad execution?"), t("Negative reviews that still praise the idea or its potential. A high share means players want this game, just made better.")],
+    with_demand: [t("With demand"), t("Games with at least the minimum number of reviews set in the Filters.")],
+    underserved: [t("Underserved"), t("Games with demand whose % positive is inside the range set in the Filters: many players, let down.")],
+    well_served: [t("Well served"), t("Games with demand that players rate {pct} positive or more: these players already have a good game.", { pct: percent(state.result?.well_served ?? 85) })],
+    unmet_share: [t("Unmet share"), t("Of the games with demand that are clearly rated, the share that are underserved: underserved / (underserved + well served). Higher means players have fewer good games to choose from.")],
+    min_reviews: [t("Minimum reviews"), t("How proven the demand must be: a game needs at least this many reviews to be considered.")],
+    pct_range: [t("% positive range"), t("Which games count as letting players down. 5-70% leaves out games that are simply broken (under 5%) and games players already like (over 70%).")],
+    reviews_read: [t("Reviews read per game"), t("How many reviews are read to find the complaints, half the most helpful and half the newest. More is slower but more reliable.")],
+  };
+}
+
+// Every risk, with what it means (the glossary lists them; a game's Risks tab says why it got one).
+function riskTerms() {
+  return [
+    [t("Review bomb"), t("A burst of negative reviews about something other than the game itself. The rating is shown without it; no points are taken off.")],
+    [t("Streamer spike"), t("A burst of reviews after a streamer played it. Interest like that often doesn't last.")],
+    [t("Deep discount"), t("On a big sale right now, so the review count may be inflated by cheap copies.")],
+    [t("Very cheap"), t("A very low price inflates the number of buyers and reviews.")],
+    [t("Online multiplayer"), t("Needs netcode and servers: hard for a small team to do well.")],
+    [t("Niche audience"), t("A small audience that's harder to reach and to market to.")],
+    [t("AAA expectations"), t("Players compare it to big-budget games, which a small team can hardly match.")],
+    [t("Hard tech"), t("A kind of game that is technically demanding to do well.")],
+    [t("Fading demand"), t("Few reviews in the last 12 months: the audience may have moved on.")],
+    [t("Already improved"), t("Recent reviews are much better than older ones: the problems may already be fixed.")],
+    [t("No store page"), t("Delisted or region-locked: check it by hand.")],
+    [t("Not a game"), t("A soundtrack, tool or similar: left out of the ranking.")],
+  ];
+}
+
+// An ⓘ button; hover, focus or a tap shows the term's meaning. Static ones are in index.html (data-term).
+const infoLabel = (key) => t("What does \"{term}\" mean?", { term: terms()[key][0] });
+function info(key) {
+  return el("button", { type: "button", class: "info", "data-term": key, "aria-label": infoLabel(key) }, "i");
+}
+function relabelInfo() {
+  for (const b of document.querySelectorAll(".info[data-term]")) {
+    b.textContent = "i";
+    b.setAttribute("aria-label", infoLabel(b.dataset.term));
+  }
+}
+
+const termTip = el("div", { id: "term-tip", class: "score-tip term-tip", role: "tooltip", hidden: true });
+document.body.append(termTip);
+let termAnchor = null;
+function showTerm(button) {
+  const [title, text] = terms()[button.dataset.term];
+  termTip.replaceChildren(el("div", { class: "tip-head" }, el("b", {}, title)), el("p", {}, text));
+  termTip.hidden = false;
+  termAnchor = button;
+  placeTip(termTip, button);
+}
+function hideTerm() {
+  termTip.hidden = true;
+  termAnchor = null;
+}
+// Delegated, so ⓘ buttons made later (panel, market strip) work too. A click or tap only toggles the
+// explanation: caught here first, so it never sorts a column, selects a row or ticks a checkbox.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest?.(".info[data-term]");
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (termAnchor === b) hideTerm(); else showTerm(b);
+}, true);
+document.addEventListener("mouseover", (e) => {
+  const b = e.target.closest?.(".info[data-term]");
+  if (b && b !== termAnchor) showTerm(b);
+});
+document.addEventListener("mouseout", (e) => {
+  const b = e.target.closest?.(".info[data-term]");
+  if (b && !b.contains(e.relatedTarget)) hideTerm();
+});
+document.addEventListener("focusin", (e) => e.target.matches?.(".info[data-term]") && showTerm(e.target));
+document.addEventListener("focusout", (e) => e.target.matches?.(".info[data-term]") && hideTerm());
+document.addEventListener("keydown", (e) => e.key === "Escape" && hideTerm());
+document.addEventListener("scroll", hideTerm, true);
+
+// The glossary in How it works: the same texts as the ⓘ buttons, then every risk.
+function renderGlossary() {
+  const entry = ([title, text]) => [el("dt", {}, title), el("dd", {}, text)];
+  $("#help-terms").replaceChildren(...Object.values(terms()).flatMap(entry));
+  $("#help-risks").replaceChildren(...riskTerms().flatMap(entry));
 }
 
 // ---------- detail panel ----------
@@ -1271,19 +1376,19 @@ function renderPanel(g, tab = 0) {
       el("div", { class: "facts" },
         el("div", {}, el("span", {}, t("Reviews")), el("b", {}, fmt(g.reviews))),
         el("div", {}, el("span", {}, t("% positive")), el("b", {}, percent(g.rating), adjusted ? adjText(g) : "")),
-        el("div", {}, el("span", {}, t("Last 12 months")), el("b", {}, recentText(g))),
-        el("div", {}, el("span", {}, t("Est. gross (x45)")), el("b", {}, g.price ? money(g.box.gross_mid) : "F2P")),
+        el("div", {}, el("span", {}, t("Last 12 months"), info("recent")), el("b", {}, recentText(g))),
+        el("div", {}, el("span", {}, t("Est. revenue (x45)"), info("revenue")), el("b", {}, g.price ? money(g.box.gross_mid) : "F2P")),
         el("div", {}, el("span", {}, t("Range (x30-x100)")), el("b", {}, g.price ? `${money(g.box.gross_low)} - ${money(g.box.gross_high)}` : "-")),
       ),
     ),
     g.rating_source_text ? el("p", { class: "muted rating-src" }, t("Review numbers: {source}", { source: g.rating_source_text })) : null,
     el("div", { class: "bars" },
-      bar(t("Demand"), o.demand),
-      bar(t("Dissatisfaction"), o.dissatisfaction),
-      bar(t("Fixability"), o.fixability),
+      bar([t("Demand"), info("demand")], o.demand),
+      bar([t("Dissatisfaction"), info("dissatisfaction")], o.dissatisfaction),
+      bar([t("Fixability"), info("fixability")], o.fixability),
     ),
     o.penalty ? el("div", { class: "penalty" }, t("Risk penalty -{points} ({names})", { points: Math.round(o.penalty),
-      names: (g.score_explained?.penalties || []).map((p) => p.label).join(", ") || o.penalized.join(", ") })) : null,
+      names: (g.score_explained?.penalties || []).map((p) => p.label).join(", ") || o.penalized.join(", ") }), info("risk_penalty")) : null,
     g.score_explained ? scoreAnchor(el("button", { type: "button", class: "how-scored" }, t("How is this score calculated?")), g) : null,
     Object.keys(game.tags || {}).length
       ? el("div", { class: "chips" }, Object.keys(game.tags).slice(0, 10).map((tag) => el("button", {
@@ -1293,7 +1398,7 @@ function renderPanel(g, tab = 0) {
 
   const tabs = [
     [t("Complaints"), () => complaintsTab(g)],
-    [t("Core fantasy"), () => fantasyTab(g)],
+    [t("What players love"), () => fantasyTab(g)],
     [t("Risks") + (g.flags.length ? ` (${g.flags.length})` : ""), () => risksTab(g)],
     [t("History"), () => historyTab(g)],
     [t("Summary"), () => gameSummaryTab(g)],
@@ -1321,7 +1426,7 @@ function complaintsTab(g) {
   if (!m || !m.n_negative) return el("div", { class: "callout" }, t("No English negative reviews to mine."));
   return el("div", {},
     el("div", { class: "callout" },
-      el("b", {}, t("Great idea, bad execution?") + " "),
+      el("b", {}, t("Great idea, bad execution?")), info("idea_praise"), " ",
       t("{pct} of {n} negative reviews still praise the idea or its potential.", { pct: pct(m.idea_praise_share), n: m.n_negative }) + " ",
       t("{pct} of complaint mentions are fixable.", { pct: pct(m.fixability) })),
     el("p", { class: "muted" },
@@ -1332,7 +1437,7 @@ function complaintsTab(g) {
         el("summary", {},
           bar(c.label, c.share),
           c.trend ? el("div", { class: `trend ${c.trend_kind || "fading"}` }, c.trend) : null,
-          el("div", { class: c.fixable ? "pillar" : "pillar unfixable" }, (c.fixable ? t("Do: ") : "") + c.pillar)),
+          el("div", { class: c.fixable ? "pillar" : "pillar unfixable" }, (c.fixable ? t("A new game should: ") : "") + c.pillar)),
         c.quotes.map((q) => el("blockquote", {}, `"${q}"`)),
       ),
     ),
@@ -1390,14 +1495,14 @@ function fantasyTab(g) {
   if (!m || !(m.core_phrases.length || m.liked.length)) return el("div", { class: "callout" }, t("No positive-review phrases found."));
   const max = Math.max(1, ...m.core_phrases.map(([, n]) => n));
   return el("div", {},
-    m.core_phrases.length ? el("p", { class: "muted" }, t("Common phrases in {n} positive reviews", { n: m.n_positive })) : null,
+    m.core_phrases.length ? el("p", { class: "muted" }, t("Common phrases in {n} positive reviews", { n: m.n_positive }), info("loved")) : null,
     el("div", { class: "bars" }, m.core_phrases.map(([p, n]) => bar(p, n / max, String(n)))),
     m.liked.length ? el("div", {}, el("p", { class: "muted" }, t("Players liked")),
       el("div", { class: "chips" }, m.liked.map(([p]) => el("span", { class: "chip" }, p)))) : null,
   );
 }
 
-const severity = (s) => ({ high: t("high"), warn: t("warn"), info: t("info") })[s] || s;
+const severity = (s) => ({ high: t("Serious"), warn: t("Caution"), info: t("Note") })[s] || s;
 
 function risksTab(g) {
   if (!g.flags.length) return el("div", { class: "callout" }, t("No risk flags."));
@@ -1408,6 +1513,7 @@ function risksTab(g) {
     ),
   ));
 }
+
 
 const POSITIVE = cssVar("--accent-2"), NEGATIVE = cssVar("--bad"); // History bars
 
@@ -1457,6 +1563,8 @@ async function setLanguage(value) {
   setLang(value);
   for (const b of document.querySelectorAll("#lang button")) b.setAttribute("aria-pressed", String(b.dataset.lang === getLang()));
   applyStatic();
+  relabelInfo();
+  renderGlossary();
   setMapView(mapView);
   map.relabel();
   renderChips();
@@ -1482,6 +1590,7 @@ async function setLanguage(value) {
   } catch { /* the old language stays until the next search */ }
 }
 document.querySelectorAll("#lang button").forEach((b) => b.addEventListener("click", () => setLanguage(b.dataset.lang)));
+
 let savedMode = "table";
 try { savedMode = localStorage.getItem("gamesMode") || "table"; } catch { /* storage blocked */ }
 setGamesMode(savedMode);

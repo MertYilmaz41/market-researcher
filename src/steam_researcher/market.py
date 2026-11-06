@@ -43,7 +43,7 @@ def market_stats(games: list[Game], min_reviews: int, lo: float, hi: float) -> M
 def summary(m: MarketStats) -> str:
     """One line for the CLI and the report (no symbols outside cp1254: the Windows console)."""
     return _("{games:,} games, {demand:,} with demand, {under:,} underserved, {well:,} well served "
-             "(gap {gap:.0%}), {gross} underserved gross", games=m.n_games, demand=m.n_demand,
+             "(unmet share {gap:.0%}), {gross} underserved revenue", games=m.n_games, demand=m.n_demand,
              under=m.n_underserved, well=m.n_well_served, gap=m.gap, gross=money(m.underserved_gross))
 
 

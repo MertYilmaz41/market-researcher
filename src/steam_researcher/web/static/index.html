@@ -47,7 +47,7 @@
       </section>
       <section>
         <h3 data-i18n>Filters</h3>
-        <p data-i18n>Minimum reviews sets how proven the demand must be. The % positive range picks unhappy audiences (5-70% by default). Games to analyze and reviews mined per game trade speed for detail. Presets fill in the fields.</p>
+        <p data-i18n>Minimum reviews sets how proven the demand must be. The % positive range picks unhappy audiences (5-70% by default). Games to analyze and reviews read per game trade speed for detail. Presets fill in the fields.</p>
       </section>
       <section>
         <h3 data-i18n>The score</h3>
@@ -64,6 +64,16 @@
       <section>
         <h3 data-i18n>Local AI summaries</h3>
         <p data-i18n>If Ollama runs on your computer, Write summary lets a local model read the results: what players love, the complaints the games share and what to build. Nothing leaves your computer. It takes from 20 seconds to about a minute and a half.</p>
+      </section>
+      <section>
+        <h3 data-i18n>Terms</h3>
+        <p data-i18n>What the words on the page mean here. The same explanations appear when you hover or tap an ⓘ.</p>
+        <dl id="help-terms" class="terms"></dl>
+      </section>
+      <section>
+        <h3 data-i18n>Risks</h3>
+        <p data-i18n>Each risk a game can get. Most take points off the score; the game's Risks tab says why it got one.</p>
+        <dl id="help-risks" class="terms"></dl>
       </section>
       <section>
         <h3 data-i18n>Shortlist and past runs</h3>
@@ -95,11 +105,11 @@
         <section class="side-section">
           <button type="button" id="filters-toggle" class="side-toggle label" aria-expanded="true" aria-controls="filters"><span data-i18n>Filters</span><span class="caret" aria-hidden="true">&#9662;</span></button>
           <div id="filters" class="filters">
-            <label><span data-i18n>Minimum reviews</span> <input id="min-reviews" type="number" min="1" value="100"></label>
-            <label><span data-i18n>% positive from</span> <input id="lo" type="number" min="0" max="100" value="5"></label>
+            <label><span><span data-i18n>Minimum reviews</span><button type="button" class="info" data-term="min_reviews">i</button></span> <input id="min-reviews" type="number" min="1" value="100"></label>
+            <label><span><span data-i18n>% positive from</span><button type="button" class="info" data-term="pct_range">i</button></span> <input id="lo" type="number" min="0" max="100" value="5"></label>
             <label><span data-i18n>% positive to</span> <input id="hi" type="number" min="0" max="100" value="70"></label>
             <label><span data-i18n>Games to analyze</span> <input id="max-games" type="number" min="1" max="50" value="15"></label>
-            <label class="wide"><span data-i18n>Reviews mined per game</span> <input id="reviews" type="number" min="10" max="1000" step="10" value="200"></label>
+            <label class="wide"><span><span data-i18n>Reviews read per game</span><button type="button" class="info" data-term="reviews_read">i</button></span> <input id="reviews" type="number" min="10" max="1000" step="10" value="200"></label>
             <div class="presets">
               <span data-i18n>Presets:</span>
               <button type="button" class="ghost" data-preset="default" data-i18n>Default</button>
@@ -170,7 +180,7 @@
       </details>
       <div id="quick-filter" class="quick-filter" hidden>
         <input id="name-filter" type="search" placeholder="Find a game..." aria-label="Find a game by name" data-i18n-attr="placeholder,aria-label">
-        <label><input id="hide-risky" type="checkbox"> <span data-i18n>Hide risky games</span></label>
+        <label><input id="hide-risky" type="checkbox"> <span data-i18n>Hide games with risk penalties</span></label><button type="button" class="info" data-term="risk_penalty">i</button>
         <span id="filter-count" class="muted"></span>
       </div>
       <div class="table-wrap">
@@ -183,10 +193,10 @@
               <th data-key="score" class="num" data-i18n>Score</th>
               <th data-key="reviews" class="num" data-i18n>Reviews</th>
               <th data-key="rating" class="num" data-i18n>% Pos</th>
-              <th data-key="recent" class="num" title="Reviews in the last 12 months (share of all reviews), and their % positive" data-i18n data-i18n-attr="title">Last 12 mo</th>
-              <th data-key="gross" class="num" data-i18n>Est. gross</th>
+              <th data-key="recent" class="num"><span data-i18n>Last 12 mo</span><button type="button" class="info" data-term="recent">i</button></th>
+              <th data-key="gross" class="num"><span data-i18n>Est. revenue</span><button type="button" class="info" data-term="revenue">i</button></th>
               <th data-key="complaint" data-i18n>Top complaint</th>
-              <th data-key="risks" data-i18n>Risks</th>
+              <th data-key="risks"><span data-i18n>Risks</span><button type="button" class="info" data-term="risks">i</button></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -223,8 +233,8 @@
                 <th data-key="n_demand" class="num" title="Games with at least the minimum reviews" data-i18n data-i18n-attr="title">With demand</th>
                 <th data-key="n_underserved" class="num" title="Games with demand inside the % positive range" data-i18n data-i18n-attr="title">Underserved</th>
                 <th data-key="n_well_served" class="num" id="markets-well-head">Well served</th>
-                <th data-key="gap" class="num" title="Underserved / (underserved + well served)" data-i18n data-i18n-attr="title">Gap</th>
-                <th data-key="underserved_gross" class="num" title="Box Method (x45) gross of the underserved games" data-i18n data-i18n-attr="title">Underserved $</th>
+                <th data-key="gap" class="num"><span data-i18n>Unmet share</span><button type="button" class="info" data-term="unmet_share">i</button></th>
+                <th data-key="underserved_gross" class="num"><span data-i18n>Underserved revenue</span><button type="button" class="info" data-term="revenue">i</button></th>
                 <th data-key="median_rating" class="num" title="% positive of the median game with demand" data-i18n data-i18n-attr="title">Median % pos</th>
               </tr>
             </thead>

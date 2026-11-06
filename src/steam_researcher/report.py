@@ -49,7 +49,7 @@ def fmt_price(price: float) -> str:
     return fmt("${x:.2f}", x=price)
 
 
-SEVERITY_NAMES = {"high": N_("high"), "warn": N_("warn"), "info": N_("info")}
+SEVERITY_NAMES = {"high": N_("Serious"), "warn": N_("Caution"), "info": N_("Note")}
 
 
 def severity(level: str) -> str:

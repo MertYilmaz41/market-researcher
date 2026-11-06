@@ -52,7 +52,7 @@ FIELD_LABELS = {
     "lo": N_("% positive from"),
     "hi": N_("% positive to"),
     "max_games": N_("Games to analyze"),
-    "reviews": N_("Reviews mined per game"),
+    "reviews": N_("Reviews read per game"),
 }
 
 

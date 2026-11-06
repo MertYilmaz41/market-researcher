@@ -233,9 +233,9 @@ TR: dict[str, str] = {
     "{n:,} ({share:.0%})": "{n:,} ({share:.0%})",
     ", {rating:.0f}% positive": ", %{rating:.0f} olumlu",
     "{games:,} games, {demand:,} with demand, {under:,} underserved, {well:,} well served "
-    "(gap {gap:.0%}), {gross} underserved gross":
+    "(unmet share {gap:.0%}), {gross} underserved revenue":
         "{games:,} oyun, {demand:,} talep gören, {under:,} karşılanmamış, {well:,} iyi karşılanmış "
-        "(boşluk {gap:.0%}), karşılanmamışların brüt geliri {gross}",
+        "(karşılanmama oranı {gap:.0%}), karşılanmamışların geliri {gross}",
 
     # ---- complaints (mining/lexicon.py) and trends
     "Bad controls / clunky feel": "Kötü kontroller / hantal his",
@@ -275,7 +275,7 @@ TR: dict[str, str] = {
     "% positive from": "% olumlu (en az)",
     "% positive to": "% olumlu (en çok)",
     "Games to analyze": "Analiz edilecek oyun",
-    "Reviews mined per game": "Oyun başına incelenen inceleme",
+    "Reviews read per game": "Oyun başına okunan inceleme",
     "'% positive from' must not be higher than '% positive to'":
         "'% olumlu (en az)', '% olumlu (en çok)' değerinden büyük olamaz",
     "Check the filters": "Filtreleri kontrol edin",
@@ -301,18 +301,18 @@ TR: dict[str, str] = {
     "% Pos": "% Olumlu",
     "Price": "Fiyat",
     "Tag": "Etiket",
-    "Gap": "Boşluk",
+    "Unmet share": "Karşılanmama oranı",
     "Ranking": "Sıralama",
     "Risks": "Riskler",
     "Top complaint": "En büyük şikayet",
     "With demand": "Talep gören",
     "Underserved": "Karşılanmamış",
-    "Underserved gross": "Karşılanmamış brüt",
+    "Underserved revenue": "Karşılanmamış gelir",
     "Well served ({pct}%+)": "İyi karşılanmış (%{pct}+)",
     "Market:": "Pazar:",
     "{tag}: opportunity ranking": "{tag}: fırsat sıralaması",
-    "({rating} adj.)": "({rating} düzeltilmiş)",
-    "Est. gross (x45)": "Tahmini brüt (x45)",
+    "({rating} without review bombs)": "(inceleme bombardımanı hariç {rating})",
+    "Est. revenue (x45)": "Tahmini gelir (x45)",
     "Complaint": "Şikayet",
     "% of neg.": "Olumsuzların %'si",
     "Lately": "Son zamanlarda",
@@ -321,9 +321,9 @@ TR: dict[str, str] = {
     "No English negative reviews to mine.": "İncelenecek İngilizce olumsuz inceleme yok.",
     "Review numbers: {source}": "İnceleme rakamları: {source}",
     "Risk checks": "Risk kontrolleri",
-    "high": "yüksek",
-    "warn": "uyarı",
-    "info": "bilgi",
+    "Serious": "Ciddi",
+    "Caution": "Dikkat",
+    "Note": "Not",
 
     # ---- CLI (cli.py)
     "use at most {n} tags": "en fazla {n} etiket kullanın",
@@ -334,7 +334,7 @@ TR: dict[str, str] = {
         "{tag}: {total} oyundan {n} tanesinin >={min} incelemesi var ve %{lo:g}-{hi:g} olumlu",
     "AppID": "AppID",
     "Est. units (x45)": "Tahmini satış (x45)",
-    "Est. gross (x30-x100)": "Tahmini brüt (x30-x100)",
+    "Est. revenue (x30-x100)": "Tahmini gelir (x30-x100)",
     "unlisted": "mağazada yok",
     "Bold review counts = 500+ (ideal demand). Gross uses the undiscounted price, "
     "before Steam's cut, regional pricing and discounts.":
@@ -347,9 +347,9 @@ TR: dict[str, str] = {
         "Rapor {path} dosyasına yazıldı (tarama da kaydedildi: sr runs ya da sr ui'de Geçmiş taramalar)",
     "Markets: tags by underserved games (>={min} reviews, {lo:g}-{hi:g}% positive)":
         "Pazarlar: karşılanmamış oyunlarına göre etiketler (>={min} inceleme, %{lo:g}-{hi:g} olumlu)",
-    "Gap = underserved / (underserved + well served). High gap + many underserved games = "
+    "Unmet share = underserved / (underserved + well served). High share + many underserved games = "
     "an audience that good games don't reach yet.":
-        "Boşluk = karşılanmamış / (karşılanmamış + iyi karşılanmış). Yüksek boşluk + çok sayıda karşılanmamış oyun = "
+        "Karşılanmama oranı = karşılanmamış / (karşılanmamış + iyi karşılanmış). Yüksek oran + çok sayıda karşılanmamış oyun = "
         "iyi oyunların henüz ulaşmadığı bir kitle.",
     "Skipped {n} tags SteamSpy can't search (search them one by one with sr discover).":
         "SteamSpy'ın arayamadığı {n} etiket atlandı (onları sr discover ile tek tek arayın).",
@@ -370,8 +370,8 @@ TR: dict[str, str] = {
     "Reviews in the last 12 months: {recent}": "Son 12 aydaki incelemeler: {recent}",
     "Released: {date}   Categories: {categories}": "Çıkış: {date}   Kategoriler: {categories}",
     "Top tags: {tags}": "Öne çıkan etiketler: {tags}",
-    "Box Method: ~{units} units (x45), gross {low} - {high} (x30-x100)":
-        "Box Method: ~{units} satış (x45), brüt {low} - {high} (x30-x100)",
+    "Box Method: ~{units} units (x45), revenue {low} - {high} (x30-x100)":
+        "Box Method: ~{units} satış (x45), gelir {low} - {high} (x30-x100)",
     "demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, fixability {fixability}":
         "talep {demand}, {rating} olumluda memnuniyetsizlik {dissatisfaction}, düzeltilebilirlik {fixability}",
     ", penalty -{points:.0f} for {names}": ", ceza -{points:.0f}: {names}",
@@ -391,7 +391,6 @@ TR: dict[str, str] = {
     "{idea} of negative reviews still praise the idea or its potential.  Fixable complaints: {fix} of mentions.":
         "Olumsuz incelemelerin {idea} kadarı yine de fikri ya da potansiyelini övüyor.  "
         "Düzeltilebilir şikayetler: anılanların {fix} kadarı.",
-    "Core fantasy": "Ana fantezi",
     "(common phrases in {n} positive reviews): {phrases}": "({n} olumlu incelemede sık geçen ifadeler): {phrases}",
     "Players liked:": "Oyuncuların sevdikleri:",
 
@@ -428,7 +427,7 @@ TR: dict[str, str] = {
     "Tags:": "Etiketler:",
     "{pct} of negative reviews still praise the idea or its potential.":
         "Olumsuz incelemelerin {pct} kadarı yine de fikri ya da potansiyelini övüyor.",
-    "Core fantasy to keep": "Korunacak ana fantezi",
+    "What players love (keep it)": "Oyuncuların sevdiği (korunmalı)",
     "Common phrases in {n} positive reviews: {phrases}": "{n} olumlu incelemede sık geçen ifadeler: {phrases}",
     "Players liked: {phrases}": "Oyuncuların sevdikleri: {phrases}",
     "Mistakes to avoid": "Kaçınılacak hatalar",

@@ -400,6 +400,23 @@ body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380
 .score-tip .tip-note.warn { color: var(--warn); }
 .penalty { color: var(--bad); font-family: var(--font-mono); font-size: var(--fs-sm); margin: -6px 0 var(--s3); }
 
+/* ⓘ: what a term means (app.js terms()); hover, focus or tap opens #term-tip */
+.info[data-term] {
+  display: inline-grid; place-items: center; flex: none;
+  width: 15px; height: 15px; margin-left: 5px; padding: 0; vertical-align: 1px;
+  border: 1px solid currentColor; border-radius: 50%; background: none; color: var(--muted); opacity: .75;
+  font-family: Georgia, "Times New Roman", serif; font-size: 10px; font-style: italic; font-weight: 700; line-height: 1;
+  text-transform: none; letter-spacing: 0; cursor: help;
+}
+.info[data-term]:hover, .info[data-term]:focus-visible { color: var(--accent); opacity: 1; outline: none; }
+.term-tip { width: min(320px, calc(100vw - 16px)); }
+.term-tip p { font-size: var(--fs-sm); color: var(--text-2); }
+/* the glossary in How it works */
+.terms { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--s4); margin: var(--s2) 0 0; font-size: var(--fs-sm); }
+.terms dt { font-weight: 600; color: var(--text); }
+.terms dd { margin: 0; color: var(--muted); line-height: 1.5; }
+@media (max-width: 560px) { .terms { grid-template-columns: 1fr; } .terms dd { margin-bottom: var(--s2); } }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s3); }
 .chip { padding: 3px 10px; border-radius: 99px; background: var(--card-2); border: 1px solid var(--line); font-size: var(--fs-xs); font-weight: 500; color: var(--muted); }
 

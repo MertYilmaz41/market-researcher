@@ -360,6 +360,9 @@ def test_ui_quick_filter_and_tag_chips(base_url, browser):
     assert page.text_content("#ranking tbody tr td.num") == "1"  # keeps its rank
     assert page.text_content("#filter-count") == "1 of 2 games shown"
     page.fill("#name-filter", "")
+    # The Risks column shows the points, and the checkbox hides exactly those games.
+    risks = page.eval_on_selector_all("#ranking tbody tr", "rs => rs.map(r => r.children[2].textContent + ':' + r.lastChild.textContent)")
+    assert "Other:-20" in risks and "Best Sim:-" in risks
     page.check("#hide-risky")  # "Other" has a risk penalty in the fake result
     names = page.eval_on_selector_all("#ranking tbody tr", "rs => rs.map(r => r.children[2].textContent)")
     assert names == ["Best Sim"]
@@ -381,14 +384,25 @@ def test_ui_help_dialog(base_url, browser):
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")  # app.js is running
     page.click("#help-toggle")
-    assert page.is_visible("#help") and page.locator("#help section").count() == 7
+    assert page.is_visible("#help") and page.locator("#help section").count() == 9
     assert "80%" in page.inner_text("#help")
+    glossary = page.inner_text("#help-terms")
+    assert "Fixability" in glossary and "Unmet share" in glossary and "Fading demand" in page.inner_text("#help-risks")
     page.keyboard.press("Escape")
     assert page.is_hidden("#help")
+
+    # An info button explains its term on hover; clicking it doesn't sort the column.
+    page.hover('#ranking th[data-key="gross"] .info')
+    assert page.is_visible("#term-tip") and "Box Method" in page.inner_text("#term-tip")
+    page.click('#ranking th[data-key="gross"] .info')
+    assert "sorted" not in (page.get_attribute('#ranking th[data-key="gross"]', "class") or "")
+    page.mouse.move(5, 5)
+    assert page.is_hidden("#term-tip")
 
     page.click('#lang button[data-lang="tr"]')
     page.click("#help-toggle")
     assert page.text_content("#help-title") == "Nasıl çalışır?" and "Skor" in page.inner_text("#help")
+    assert "Karşılanmama oranı" in page.inner_text("#help-terms")
     page.click("#help .help-head button")
     assert page.is_hidden("#help")
     assert errors == []
