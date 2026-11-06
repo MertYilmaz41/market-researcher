@@ -11,8 +11,8 @@ jobs:
   live:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3  # full tag: setup-uv publishes no @v10 since v8
       - run: uv sync
       - run: uv run pytest tests/test_live.py -v
         env:

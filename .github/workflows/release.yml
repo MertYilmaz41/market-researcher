@@ -14,8 +14,8 @@ jobs:
     permissions:
       id-token: write  # lets PyPI verify that this workflow is the trusted publisher
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3  # full tag: setup-uv publishes no @v10 since v8
       - name: Check that the tag matches the version in pyproject.toml
         run: test "v$(uv version --short)" = "$GITHUB_REF_NAME"
       - run: uv build
