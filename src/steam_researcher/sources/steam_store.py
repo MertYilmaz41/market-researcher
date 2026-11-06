@@ -49,11 +49,11 @@ def parse_histogram(data: dict) -> list[HistPoint]:
     ]
 
 
-def review_histogram(http: HttpClient, appid: int) -> list[HistPoint]:
+def review_histogram(http: HttpClient, appid: int, ttl: float = config.TTL_HISTOGRAM) -> list[HistPoint]:
     data = http.get_json(
         f"{STORE}/appreviewhistogram/{appid}",
         {"l": "english", "review_score_preference": 0},
-        ttl=config.TTL_HISTOGRAM,
+        ttl=ttl,
     )
     return parse_histogram(data or {})
 
