@@ -107,6 +107,16 @@ def _request(texts: list[str], model: str) -> dict:
     return _body(model, system_prompt(), f"Label these {len(texts)} reviews.\n\n{numbered}", schema())
 
 
+def think_setting(model: str) -> bool | str | None:
+    """Ollama's `think` for a model, or None to leave it out (a model without thinking rejects it).
+    Thinking makes Qwen3 several times slower and helps neither labeling nor summaries."""
+    if model.startswith(("qwen3", "gemma4")):  # qwen3, qwen3.5 and gemma4 can think; gemma3 can't
+        return False
+    if model.startswith("gpt-oss"):
+        return "low"  # gpt-oss can't turn thinking off, only down
+    return None
+
+
 def _body(model: str, system: str, user: str, fmt: dict) -> dict:
     body = {
         "model": model,
@@ -115,10 +125,8 @@ def _body(model: str, system: str, user: str, fmt: dict) -> dict:
         "stream": False,
         "options": {"temperature": 0, "num_ctx": 8192},
     }
-    if model.startswith("qwen3"):
-        body["think"] = False  # thinking makes Qwen3 several times slower and doesn't help labeling
-    elif model.startswith("gpt-oss"):
-        body["think"] = "low"  # gpt-oss can't turn thinking off, only down
+    if (think := think_setting(model)) is not None:
+        body["think"] = think
     return body
 
 

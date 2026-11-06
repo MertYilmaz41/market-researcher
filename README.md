@@ -112,11 +112,11 @@ The first run of a tag takes about 30 seconds because of API rate limits. After 
 
 ### Optional: local AI for the summaries
 
-The opportunity summary and the game summaries are written on your own computer by [Ollama](https://ollama.com) with the free `gemma3:12b` model (about 8 GB; a GPU with 12 GB+ of memory keeps it fast). Nothing is sent to an online service. Everything else works without it.
+The opportunity summary and the game summaries are written on your own computer by [Ollama](https://ollama.com) with the free `gemma4:12b` model (about 8 GB; a GPU with 12 GB+ of memory keeps it fast; Ollama 0.22 or newer). Nothing is sent to an online service. Everything else works without it.
 
 ```powershell
 winget install Ollama.Ollama
-ollama pull gemma3:12b
+ollama pull gemma4:12b
 ```
 
 Treat the summaries as a first draft: check each point against the games and quotes it names.
@@ -134,7 +134,7 @@ Treat the summaries as a first draft: check each point against the games and quo
 | **HTTP** | [httpx](https://www.python-httpx.org/) with [tenacity](https://tenacity.readthedocs.io/) retries, per-host rate limiting and a SQLite response cache, so repeated runs barely touch Steam |
 | **Storage** | [SQLite](https://www.sqlite.org/) (Python's built-in `sqlite3`): one database for the HTTP cache, a separate one for saved runs and the shortlist |
 | **Review mining** | Regex keyword lexicon with negation handling and phrase counting. No ML dependencies; accuracy is measured against hand-labeled reviews |
-| **Local AI (optional)** | [Ollama](https://ollama.com/) running `gemma3:12b` on your own machine, used only for the written summaries |
+| **Local AI (optional)** | [Ollama](https://ollama.com/) running `gemma4:12b` on your own machine, used only for the written summaries |
 | **Reports** | [Jinja2](https://jinja.palletsprojects.com/) Markdown templates, plus CSV export |
 | **Languages** | A small built-in English/Turkish i18n layer (Python and JS), with tests that fail if any text lacks a translation |
 | **Testing & CI** | [pytest](https://pytest.org/) (unit, API and miner-accuracy tests), [Playwright](https://playwright.dev/python/) browser tests, plus a check that the built package installs and starts, run by GitHub Actions on every push |

@@ -30,6 +30,7 @@ SECTIONS = ("loved", "complaints", "build", "caveats")
 LANGUAGES = {"en": "English", "tr": "Turkish"}
 QUOTE_CHARS = 160
 REVIEW_CHARS = 400  # per uncovered review in a game summary
+EVIDENCE_CATEGORIES = 4  # complaint categories per game the model reads
 
 SYSTEM = """You help an indie game designer find an underserved audience on Steam. The evidence below
 describes the top-ranked games for a tag: games many people bought (many reviews) but rate poorly.
@@ -101,7 +102,7 @@ def _game(a: Analysis) -> str:
     lines.append(f"Fixable complaints: {m.fixability:.0%}. Negative reviews that still praise the idea: "
                  f"{m.idea_praise_share:.0%}.")
     lines.append(f"Complaints (share of {m.n_negative} negative reviews):")
-    for c in m.categories[:4]:
+    for c in m.categories[:EVIDENCE_CATEGORIES]:
         trend = f", {c.trend}" if c.trend else ""
         quotes = "; ".join(f'"{_quote(q)}"' for q in c.quotes[:2])
         lines.append(f"- {c.label}: {c.share:.0%}{trend}. {quotes}")
@@ -162,7 +163,7 @@ def parse(content: str, names: list[str]) -> OpportunitySummary:
 
 
 def request(text: str, lang: str, model: str, system: str = SYSTEM, fmt: dict | None = None) -> dict:
-    return {
+    body = {
         "model": model,
         "messages": [{"role": "system", "content": system.format(language=LANGUAGES[lang])},
                      {"role": "user", "content": text}],
@@ -170,6 +171,9 @@ def request(text: str, lang: str, model: str, system: str = SYSTEM, fmt: dict | 
         "stream": False,
         "options": {"temperature": 0, "num_ctx": config.SUMMARY_CTX},
     }
+    if (think := llm.think_setting(model)) is not None:  # same rule as the complaint labeling
+        body["think"] = think
+    return body
 
 
 def write(tag: str, analyses: list[Analysis], market: MarketStats | None, lang: str, *,

@@ -76,7 +76,7 @@ RECENT_MIN_NEGATIVE = 10  # negative reviews from the last 12 months needed to s
 # 48-71% precision (keywords: 86%), so the keyword miner is used.
 #   python -m steam_researcher.mining.evaluate --miner llm --model <name>
 LLM_URL = "http://localhost:11434"
-LLM_MODEL = "gemma3:12b"  # the most precise of the models measured (Nov 2026)
+LLM_MODEL = "gemma4:12b"  # best of the models measured for the summaries (Nov 2026: summary_eval and a blind read)
 LLM_BATCH = 8  # reviews per request (complaint detection)
 SUMMARY_GAMES = 10  # top-ranked games the opportunity summary reads
 SUMMARY_CTX = 16384  # context window for the summary request (its evidence is ~5-8k tokens)
