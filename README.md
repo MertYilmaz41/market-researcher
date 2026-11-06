@@ -44,17 +44,19 @@ uv run pytest -q
 uv run sr ui
 ```
 
-Click the tag field and tick one or more Steam tags (up to 5; typing only filters the list). Games must have all the ticked tags. Adjust the **Filters** if you like, and press **Find opportunities**. The first run of a tag takes about 30 seconds; you can cancel it at any time.
+Click the tag field and tick one or more Steam tags (up to 5; typing only filters the list). Games must have all the ticked tags. Adjust the **Filters** if you like (or pick a preset: Default, Proven demand, Quick look), and press **Find opportunities**. The page remembers your tags and filters for next time. The first run of a tag takes about 30 seconds; you can cancel it at any time.
 
 - **Opportunity map (2D | 3D):** each bubble is a game. Left–right is demand and height is dissatisfaction; in 3D, depth is fixability. Size is estimated revenue and color is the score (blue = low, gold = high). Click a bubble to inspect it. In 3D, drag to orbit and scroll to zoom.
 - **Market strip:** how many games in the tag have demand, how many are underserved and how many are well served (85%+ positive), with a short verdict.
 - **Opportunity summary (optional):** under the market strip, press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-summaries).
-- **Detail panel:** score breakdown, review numbers and their source, the last 12 months of reviews, revenue estimate, what players complain about (with quotes, trends and design pillars), the core fantasy, risk checks and a monthly review chart. Its **Summary** tab (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the complaint categories (e.g. price, cheaters), each with a quote from a review. It is saved with the run and added to the report.
+- **Detail panel:** score breakdown, review numbers and their source, the game's tags (click one to search that tag), the last 12 months of reviews, revenue estimate, what players complain about (with quotes, trends and design pillars), the core fantasy, risk checks and a monthly review chart. Its **Summary** tab (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the complaint categories (e.g. price, cheaters), each with a quote from a review. It is saved with the run and added to the report.
 - **Score card:** hover or focus any score to see its three parts, their weights, each risk penalty and why.
-- **Ranking table:** click a column header to sort and a row to select a game. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV**.
+- **Ranking table:** click a column header to sort and a row to select a game. Find a game by name or tick **Hide risky games** (games with a risk penalty); the map follows. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV**.
 - **Markets:** switch the table to **Markets** and press **Build market ranking** to rank every tag (about 7 minutes the first time, then from the cache). Click a tag to search it.
+- **Shortlist:** star (☆) a game in the ranking or the panel to keep it. Switch the table to **Shortlist** to see the starred games with the score they had when you starred them, add a note to each, or download the list as CSV. It stays after a restart and a cache clear.
 - **Past runs:** reopen any earlier search or market ranking, even after a restart.
 - **Single game:** paste an AppID or a Steam store link into the box at the top right.
+- **How it works:** the **?** button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
 - **Language:** the **EN | TR** switch at the top right changes the whole interface, including messages and the score card.
 
 **Command line:**
