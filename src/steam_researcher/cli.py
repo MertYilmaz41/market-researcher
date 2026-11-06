@@ -15,8 +15,9 @@ from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
 from .i18n import LANG, LANGS, _, fmt, lang, num
 from .mining.llm import LLMUnavailable
-from .models import Analysis, MiningResult
-from .pipeline import TagResult, UnknownTag, analyze_game, run_markets, run_tag, tag_games, tag_label, verify_games
+from .models import Analysis, GameSummary, MiningResult
+from .pipeline import (TagResult, UnknownTag, analyze_game, review_sample, run_markets, run_tag, tag_games, tag_label,
+                       verify_games)
 from .report import money, percent, rank, rating_source_text, recent_text, render, risk_label, severity, slug
 
 app = typer.Typer(help="Find underserved Steam audiences (CodeMonkey's method).", no_args_is_help=True)
@@ -170,6 +171,7 @@ def discover(
 def analyze(
     appid: int = typer.Argument(..., min=1, help="Steam AppID (from sr discover)"),
     reviews: int = typer.Option(300, "--reviews", min=10, max=1000, help="Max negative and max positive reviews to mine"),
+    with_summary: bool = typer.Option(False, "--summary", help="Also let a local LLM (Ollama) read the game"),
     no_cache: bool = NO_CACHE_OPT,
 ):
     """Step 4 for one game: risk checks, complaint mining, core fantasy, design pillars."""
@@ -186,6 +188,28 @@ def analyze(
     _print_analysis(a)
     console.print()
     _print_notices(notices.for_game(a))
+    if with_summary:
+        try:
+            with console.status(_("The local model {model} is reading the game (under a minute)...", model=config.LLM_MODEL)):
+                s = summary.write_game(a, review_sample(http, appid, "negative", reviews), lang())
+        except LLMUnavailable as e:
+            _print_notices([notices.llm_unavailable(e.missing_model)])
+        else:
+            _print_game_summary(s)
+
+
+def _print_game_summary(s: GameSummary) -> None:
+    console.print()
+    console.print("[bold]" + _("Read by the local model") + "[/] [dim]"
+                  + _("({model}, {seconds:.0f} s; it can be wrong)", model=s.model, seconds=s.seconds) + "[/]")
+    if s.why:
+        console.print(s.why, markup=False)
+    for f in s.fix:
+        console.print("  - " + f, markup=False)
+    if s.other:
+        console.print("[bold]" + _("Complaints no category covers:") + "[/]")
+        for o in s.other:
+            console.print(f'  - {o.text} "{o.quote}"', markup=False)
 
 
 @app.command()

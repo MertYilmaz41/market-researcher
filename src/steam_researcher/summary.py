@@ -6,6 +6,10 @@ games share, what a better game should do, and the caveats. Scores and rankings 
 
 Every point names the games it rests on; points naming none of the analyzed games are dropped
 (the model made them up), and unknown names are removed from the rest.
+
+write_game() does the same for one game: why its players are unhappy, what to do differently, and
+the complaints in its negative reviews that no keyword category matched (with quotes that must be
+in those reviews).
 """
 
 import json
@@ -18,12 +22,14 @@ from . import config, risk
 from .i18n import use
 from .market import MarketStats, summary as market_line
 from .mining import llm
-from .models import Analysis, OpportunitySummary, SummaryPoint
+from .mining.keywords import _hits, clean
+from .models import Analysis, GameSummary, OpportunitySummary, OtherComplaint, Review, SummaryPoint
 from .report import rank
 
 SECTIONS = ("loved", "complaints", "build", "caveats")
 LANGUAGES = {"en": "English", "tr": "Turkish"}
 QUOTE_CHARS = 160
+REVIEW_CHARS = 400  # per uncovered review in a game summary
 
 SYSTEM = """You help an indie game designer find an underserved audience on Steam. The evidence below
 describes the top-ranked games for a tag: games many people bought (many reviews) but rate poorly.
@@ -44,6 +50,23 @@ game here gives them yet).
 based on in its games list, as written in the evidence; don't repeat the names in the text. A
 complaint point needs games where that complaint has a large share. Don't invent games, numbers or
 features that the evidence doesn't mention. Write all text, the pitch too, in {language}.
+Answer with JSON only."""
+
+
+GAME_SYSTEM = """You help an indie game designer learn from one Steam game that many people bought but
+rate poorly. Part 1 of the evidence is what a keyword search found in its reviews. Part 2 is negative
+reviews that the keyword search couldn't put in any complaint category.
+
+Using only this evidence, write:
+- why: one or two sentences on why players are unhappy with this game.
+- fix: 3 to 5 concrete things a new game for these players should do differently. Each rests on a
+  share, quote or phrase from the evidence; not generic advice such as "polish the game".
+- other: up to 5 complaints from part 2 that the keyword categories (bugs, controls, interface,
+  content, performance, abandoned, realism, scope) don't cover, e.g. price, monetization, cheaters,
+  a missing mode. Each with quote: the exact words of one review in part 2. Empty if there are none.
+
+Don't invent features, numbers or complaints the evidence doesn't mention. Write why, fix and the
+text of other in {language}; keep each quote in the review's own words.
 Answer with JSON only."""
 
 
@@ -135,12 +158,12 @@ def parse(content: str, names: list[str]) -> OpportunitySummary:
     return out
 
 
-def request(text: str, lang: str, model: str) -> dict:
+def request(text: str, lang: str, model: str, system: str = SYSTEM, fmt: dict | None = None) -> dict:
     return {
         "model": model,
-        "messages": [{"role": "system", "content": SYSTEM.format(language=LANGUAGES[lang])},
+        "messages": [{"role": "system", "content": system.format(language=LANGUAGES[lang])},
                      {"role": "user", "content": text}],
-        "format": schema(),
+        "format": fmt or schema(),
         "stream": False,
         "options": {"temperature": 0, "num_ctx": config.SUMMARY_CTX},
     }
@@ -153,5 +176,59 @@ def write(tag: str, analyses: list[Analysis], market: MarketStats | None, lang: 
     start = time.monotonic()
     content = llm.post_chat(request(text, lang, model), client)
     out = parse(content, names)
+    out.model, out.seconds = model, round(time.monotonic() - start, 1)
+    return out
+
+
+def game_schema() -> dict:
+    other = {"type": "object", "properties": {"text": {"type": "string"}, "quote": {"type": "string"}},
+             "required": ["text", "quote"]}
+    return {"type": "object", "required": ["why", "fix", "other"], "properties": {
+        "why": {"type": "string"}, "fix": {"type": "array", "items": {"type": "string"}},
+        "other": {"type": "array", "items": other}}}
+
+
+def uncovered(negative: list[Review]) -> list[str]:
+    """Negative reviews no complaint category matched, most helpful first, shortened."""
+    rows = [r for r in negative if len(r.text.strip()) >= 20 and not _hits(clean(r.text))]
+    rows.sort(key=lambda r: -r.votes_up)
+    out = []
+    for r in rows[:config.GAME_SUMMARY_REVIEWS]:
+        text = " ".join(clean(r.text).split())
+        out.append(text if len(text) <= REVIEW_CHARS else text[:REVIEW_CHARS].rsplit(" ", 1)[0] + "...")
+    return out
+
+
+def game_evidence(a: Analysis, negative: list[Review]) -> tuple[str, list[str]]:
+    """The text the model reads about one game, and the uncovered reviews in it. Pure (always English)."""
+    texts = uncovered(negative)
+    with use("en"):
+        part1 = _game(a)
+    part2 = "\n".join(f"- {t}" for t in texts) or "(none)"
+    return f"# Part 1\n{part1}\n\n# Part 2: {len(texts)} negative reviews in no category\n{part2}", texts
+
+
+def parse_game(content: str, texts: list[str]) -> GameSummary:
+    """The model's JSON -> a game summary. An "other" complaint whose quote isn't in one of the
+    uncovered reviews is dropped (the model made it up)."""
+    data = json.loads(content)
+    fix = [str(x).strip() for x in data.get("fix") or [] if str(x).strip()]
+    other = []
+    for o in data.get("other") or []:
+        if not isinstance(o, dict) or not str(o.get("text", "")).strip():
+            continue
+        quote = str(o.get("quote", "")).strip()
+        if any(llm.grounded(quote, t) for t in texts):
+            other.append(OtherComplaint(text=o["text"].strip(), quote=quote))
+    return GameSummary(why=str(data.get("why") or "").strip(), fix=fix, other=other[:5], n_uncovered=len(texts))
+
+
+def write_game(a: Analysis, negative: list[Review], lang: str, *, model: str = config.LLM_MODEL,
+               client: httpx.Client | None = None) -> GameSummary:
+    """Ask the local model about one game. Raises llm.LLMUnavailable if Ollama or the model is missing."""
+    text, texts = game_evidence(a, negative)
+    start = time.monotonic()
+    content = llm.post_chat(request(text, lang, model, GAME_SYSTEM, game_schema()), client)
+    out = parse_game(content, texts)
     out.model, out.seconds = model, round(time.monotonic() - start, 1)
     return out

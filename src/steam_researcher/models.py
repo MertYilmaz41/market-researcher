@@ -182,6 +182,22 @@ class OpportunitySummary(BaseModel):
     seconds: float = 0.0
 
 
+class OtherComplaint(BaseModel):
+    text: str  # what these players complain about, in the interface language
+    quote: str  # a review's own words (checked to be in one of the reviews the model read)
+
+
+class GameSummary(BaseModel):
+    """One game read by a local LLM (summary.write_game): written text, no numbers change."""
+
+    why: str = ""  # why players are unhappy, one or two sentences
+    fix: list[str] = []  # what a new game for these players should do differently
+    other: list[OtherComplaint] = []  # complaints the keyword categories don't cover
+    n_uncovered: int = 0  # negative reviews the model read because no category matched them
+    model: str = ""
+    seconds: float = 0.0
+
+
 class BoxEstimate(BaseModel):
     units_low: int
     units_mid: int

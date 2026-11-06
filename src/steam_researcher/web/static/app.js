@@ -648,7 +648,7 @@ function renderSummary() {
 }
 
 async function writeSummary() {
-  if (state.summarizing) return stillRunning(t("The opportunity summary is being written."));
+  if (state.summarizing || state.gameSummarizing) return stillRunning(t("The opportunity summary is being written."));
   const id = state.runId;
   state.summarizing = true;
   renderSummary();
@@ -1043,7 +1043,7 @@ function bar(labelText, value, text) {
   );
 }
 
-function renderPanel(g) {
+function renderPanel(g, tab = 0) {
   state.panelGame = g;
   const o = g.opportunity;
   const game = g.game;
@@ -1087,6 +1087,7 @@ function renderPanel(g) {
     [t("Core fantasy"), () => fantasyTab(g)],
     [t("Risks") + (g.flags.length ? ` (${g.flags.length})` : ""), () => risksTab(g)],
     [t("History"), () => historyTab(g)],
+    [t("Summary"), () => gameSummaryTab(g)],
   ];
   const body = el("div");
   const tabBar = el("div", { class: "tabs", role: "tablist" });
@@ -1097,7 +1098,7 @@ function renderPanel(g) {
       body.replaceChildren(render());
     });
     tabBar.append(b);
-    if (i === 0) { b.classList.add("active"); body.replaceChildren(render()); }
+    if (i === tab) { b.classList.add("active"); body.replaceChildren(render()); }
   });
 
   $("#panel").replaceChildren(...head.filter(Boolean), tabBar, body);
@@ -1126,6 +1127,52 @@ function complaintsTab(g) {
       ),
     ),
   );
+}
+
+// ---------- one game read by the local LLM: written on request, saved with the run ----------
+const SUMMARY_TAB = 4;
+
+function gameSummaryTab(g) {
+  const s = g.summary;
+  if (!s) {
+    const inRun = state.games.some((x) => x.game.appid === g.game.appid);
+    if (!inRun) return el("div", { class: "callout" }, t("A summary can be written for the games in the current ranking."));
+    const busy = state.gameSummarizing === g.game.appid;
+    const button = el("button", { type: "button", class: "ghost", onclick: () => writeGameSummary(g) });
+    setButtonBusy(button, busy, busy ? t("Writing...") : t("Write summary"));
+    return el("div", { class: "opp-empty" },
+      el("p", {}, t("Why players are unhappy, what a better game would do, and complaints no category covers. Written by the local model {model} (Ollama) in under a minute.",
+        { model: state.result?.llm_model || "" })),
+      button);
+  }
+  return el("div", { class: "game-summary" },
+    el("p", { class: "muted" }, t("Written by the local model {model}. It can be wrong: check it against the reviews.", { model: s.model })),
+    s.why ? el("p", { class: "opp-pitch" }, s.why) : null,
+    s.fix.length ? el("div", {}, el("h4", {}, t("A better game would")), el("ul", {}, s.fix.map((f) => el("li", {}, f)))) : null,
+    el("h4", {}, t("Complaints no category covers")),
+    s.other.length
+      ? s.other.map((o) => el("div", { class: "other-complaint" }, el("p", {}, o.text), el("blockquote", {}, `"${o.quote}"`)))
+      : el("p", { class: "muted" }, t("None found in the {n} negative reviews no category matched.", { n: s.n_uncovered })),
+  );
+}
+
+async function writeGameSummary(g) {
+  if (state.gameSummarizing || state.summarizing) return stillRunning(t("A summary is being written."));
+  const id = state.runId, appid = g.game.appid;
+  state.gameSummarizing = appid;
+  if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, SUMMARY_TAB);
+  try {
+    const res = await api(`/api/tag-runs/${id}/games/${appid}/summary`, { method: "POST" });
+    if (!res.ok) throw await apiError(res);
+    const data = await res.json();
+    const target = state.runId === id && state.games.find((x) => x.game.appid === appid);
+    if (target) target.summary = data.summary;
+  } catch (err) {
+    notifyError(err);
+  } finally {
+    state.gameSummarizing = null;
+    if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, SUMMARY_TAB);
+  }
 }
 
 function fantasyTab(g) {

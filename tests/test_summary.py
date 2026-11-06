@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from steam_researcher import config, pipeline, summary
 from steam_researcher.market import MarketStats
 from steam_researcher.mining import llm
-from steam_researcher.models import OpportunitySummary, SummaryPoint
+from steam_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, Review, SummaryPoint
 from steam_researcher.pipeline import TagResult
 from steam_researcher.report import render
 from steam_researcher.runs import ADAPTERS, RunStore
@@ -153,3 +153,74 @@ def test_report_names_the_penalties_of_a_penalized_game():
     a.opportunity.penalty, a.opportunity.penalized = 10, ["fading_demand"]
     assert ", penalty -10 (fading_demand)." in render(
         tag="X", analyses=[a], n_candidates=1, n_tag_games=1, min_reviews=50, lo=5, hi=70, not_games=[], unlisted=[])
+
+
+# ---------- one game (write_game) ----------
+def review(text, votes=0):
+    return Review(recommendation_id=text[:10], text=text, voted_up=False, votes_up=votes)
+
+
+NEGATIVE = [review("The game crashes every ten minutes, constant bugs.", 50),  # a category matches: not sent
+            review("Way too expensive for what it is, and the DLC policy is greedy.", 5),
+            review("Cheaters in every single match and nobody bans them.", 30),
+            review("meh")]  # too short to say anything
+
+
+def game_answer(body):
+    return {"why": "It costs too much and cheaters ruin matches.",
+            "fix": ["Fair price", " ", "Anti-cheat from day one"],
+            "other": [{"text": "Cheaters", "quote": "cheaters in every single match"},
+                      {"text": "Bad music", "quote": "the music is awful"}]}  # not in any review: dropped
+
+
+def test_game_evidence_sends_only_reviews_no_category_matched():
+    text, texts = summary.game_evidence(analysis(60, "Bus Sim"), NEGATIVE)
+    assert texts[0].startswith("cheaters in every") and len(texts) == 2  # most helpful first
+    assert "crashes every ten minutes" not in text and "## Bus Sim" in text and "# Part 2: 2 negative" in text
+
+
+def test_write_game_keeps_only_grounded_other_complaints():
+    requests = []
+    s = summary.write_game(analysis(60, "Bus Sim"), NEGATIVE, "tr", client=fake_ollama(game_answer, requests))
+    assert s.why.startswith("It costs") and s.fix == ["Fair price", "Anti-cheat from day one"]
+    assert [(o.text, o.quote) for o in s.other] == [("Cheaters", "cheaters in every single match")]
+    assert s.n_uncovered == 2 and s.model == config.LLM_MODEL
+    assert "Turkish" in requests[0]["messages"][0]["content"]
+    assert requests[0]["format"]["required"] == ["why", "fix", "other"]
+
+
+def game_sample() -> GameSummary:
+    return GameSummary(why="Cheaters | everywhere.", fix=["Anti-cheat"], model="gemma3:12b",
+                       other=[OtherComplaint(text="Cheaters", quote="cheaters in every match")])
+
+
+def test_report_shows_a_written_game_summary():
+    assert "Read by the local model" not in report()
+    text = report(game_summaries={1: game_sample()})
+    assert "### Read by the local model" in text and "Cheaters \\| everywhere." in text
+    assert '- Cheaters *"cheaters in every match"*' in text
+
+
+def test_game_summary_endpoint_writes_once_and_saves(client, monkeypatch):
+    calls = []
+
+    def fake_write_game(a, negative, lang, **kw):
+        calls.append((a.game.appid, len(negative), lang))
+        return game_sample()
+
+    monkeypatch.setattr(server.summary, "write_game", fake_write_game)
+    monkeypatch.setattr(server.pipeline, "review_sample", lambda http, appid, kind, limit: NEGATIVE[:limit])
+    run_id = client.post("/api/tag-runs", json={"tags": ["Job Simulator"], "reviews": 10}).json()["id"]
+    game = wait(client, run_id)["result"]["games"][0]
+    assert game["summary"] is None
+    appid = game["game"]["appid"]
+
+    first = client.post(f"/api/tag-runs/{run_id}/games/{appid}/summary").json()["summary"]
+    client.post(f"/api/tag-runs/{run_id}/games/{appid}/summary")
+    assert first["why"] == "Cheaters | everywhere." and calls == [(appid, 4, "en")]
+    assert client.post(f"/api/tag-runs/{run_id}/games/999/summary").status_code == 404
+
+    monkeypatch.setattr(server, "_jobs", {})  # restart: saved with the run
+    assert client.get(f"/api/tag-runs/{run_id}").json()["result"]["games"][0]["summary"]["why"] == first["why"]
+    assert "### Read by the local model" in client.get(f"/api/tag-runs/{run_id}/report.md").text
+    assert client.get(f"/api/tag-runs/{run_id}", headers={"X-Lang": "tr"}).json()["result"]["games"][0]["summary"] is None

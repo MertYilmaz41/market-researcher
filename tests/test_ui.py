@@ -15,7 +15,7 @@ uvicorn = pytest.importorskip("uvicorn")
 
 from steam_researcher import pipeline  # noqa: E402
 from steam_researcher.market import TagMarket, market_stats  # noqa: E402
-from steam_researcher.models import OpportunitySummary, SummaryPoint  # noqa: E402
+from steam_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, SummaryPoint  # noqa: E402
 from steam_researcher.runs import RunStore  # noqa: E402
 from steam_researcher.web import server  # noqa: E402
 
@@ -61,6 +61,10 @@ def base_url(tmp_path_factory):
     mp.setattr(server.summary, "write", lambda tag, analyses, market, lang, **kw: OpportunitySummary(
         pitch="A bus sim that works.", model="gemma3:12b",
         loved=[SummaryPoint(text="Driving the <b>bus</b>.", games=["Other"])]))
+    mp.setattr(server.summary, "write_game", lambda a, negative, lang, **kw: GameSummary(
+        why="Players hate the <i>cheaters</i>.", fix=["Anti-cheat"], model="gemma3:12b",
+        other=[OtherComplaint(text="Cheaters", quote="cheaters everywhere")]))
+    mp.setattr(server.pipeline, "review_sample", lambda http, appid, kind, limit: [])
     mp.setattr(server, "_runs", RunStore(tmp_path_factory.mktemp("runs") / "runs.sqlite"))
     mp.setattr(server, "_jobs", {})
 
@@ -245,4 +249,24 @@ def test_ui_opportunity_summary(base_url, browser):
 
     page.click("#opp-summary .opp-games button")  # a game chip opens that game
     assert page.text_content("#panel h3") == "Other"
+    assert errors == []
+
+
+def test_ui_game_summary_tab(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")
+    page.click("#run")
+    page.wait_for_selector("#ranking tbody tr")
+    page.click("#panel .tabs button:has-text('Summary')")
+    page.click("#panel .opp-empty button")
+    page.wait_for_selector("#panel .game-summary")
+    text = page.inner_text("#panel .game-summary")
+    assert "Players hate the <i>cheaters</i>." in text  # model text is shown as text, never as HTML
+    assert '"cheaters everywhere"' in text and "Anti-cheat" in text
+    assert page.get_attribute("#panel .tabs button.active", "role") == "tab"
+    assert "Summary" in page.text_content("#panel .tabs button.active")  # stays on the tab
     assert errors == []

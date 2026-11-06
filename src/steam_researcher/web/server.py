@@ -251,6 +251,7 @@ def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -
     games = []
     for a in ranked:
         g = game_json(a)
+        g["summary"] = _summary_json(result.game_summaries.get(a.game.appid, {}).get(lang()))
         if a.game.appid in changes:  # only when an earlier run with the same tags and filters exists
             g["score_change"] = changes[a.game.appid]
             g["new"] = changes[a.game.appid] is None
@@ -362,7 +363,8 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
                   n_tag_games=res.n_tag_games, min_reviews=r.min_reviews, lo=r.lo, hi=r.hi,
                   not_games=res.not_games, unlisted=res.unlisted,
                   market=market.summary(res.market) if res.market else "",
-                  summary=res.summaries.get(lang()))
+                  summary=res.summaries.get(lang()),
+                  game_summaries={k: v[lang()] for k, v in res.game_summaries.items() if lang() in v})
     return PlainTextResponse(text, media_type="text/markdown", headers={
         "Content-Disposition": f'attachment; filename="{slug(label)}.md"'})
 
@@ -386,6 +388,34 @@ def write_summary(job_id: str):
                 notice = notices.friendly_error(e)
                 return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
             res.summaries[language] = s
+            _runs.update_result(job_id, res)
+    return {"summary": _summary_json(s)}
+
+
+@app.post("/api/tag-runs/{job_id}/games/{appid}/summary")
+def write_game_summary(job_id: str, appid: int):
+    """One game of the run, read by the local LLM (why players are unhappy, what to do, complaints no
+    category covers), in the request's language; written once and saved with the run."""
+    job = _job(job_id)
+    if job.result is None:
+        raise HTTPException(409, _("The run hasn't finished yet."))
+    res, language = job.result, lang()
+    a = next((x for x in res.analyses if x.game.appid == appid), None)
+    if a is None:
+        raise HTTPException(404, _("This game isn't part of the run."))
+    with _summary_lock:
+        s = res.game_summaries.get(appid, {}).get(language)
+        if s is None:
+            try:
+                negative = pipeline.review_sample(HttpClient(), appid, "negative", job.request.reviews)
+                s = summary.write_game(a, negative, language)
+            except llm.LLMUnavailable as e:
+                notice = notices.llm_unavailable(e.missing_model)
+                return JSONResponse(status_code=503, content={"detail": notice.message, "notice": notice.model_dump()})
+            except Exception as e:
+                notice = notices.friendly_error(e)
+                return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
+            res.game_summaries.setdefault(appid, {})[language] = s
             _runs.update_result(job_id, res)
     return {"summary": _summary_json(s)}
 

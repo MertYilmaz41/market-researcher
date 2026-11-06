@@ -455,6 +455,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .opp-games button.chip:hover { color: var(--text); border-color: var(--accent); }
 .opp-empty { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
 .opp-empty p { margin: 0; flex: 1 1 260px; }
+.game-summary h4 { margin: var(--s3) 0 var(--s1); }
+.game-summary ul { margin: 0; padding-left: 1.2em; }
+.other-complaint p { margin: var(--s2) 0 var(--s1); }
 
 /* Past runs: a list under its button in the table card head */
 .runs-wrap { position: relative; }

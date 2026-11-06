@@ -463,4 +463,13 @@ TR: dict[str, str] = {
     "Shared complaints": "Ortak şikayetler",
     "A better game would": "Daha iyi bir oyun",
     "Caveats": "Dikkat",
+    # Game summary (local LLM)
+    "This game isn't part of the run.": "Bu oyun bu aramada yok.",
+    "Read by the local model": "Yerel modelin yorumu",
+    "Written by the local model {model}. It can be wrong: check it against the reviews.":
+        "Yerel model {model} yazdı. Yanılabilir: incelemelerle karşılaştırarak okuyun.",
+    "Complaints no category covers:": "Hiçbir kategoriye girmeyen şikayetler:",
+    "The local model {model} is reading the game (under a minute)...":
+        "Yerel model {model} oyunu okuyor (bir dakikadan kısa)...",
+    "({model}, {seconds:.0f} s; it can be wrong)": "({model}, {seconds:.0f} sn; yanılabilir)",
 }

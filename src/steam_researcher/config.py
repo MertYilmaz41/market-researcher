@@ -77,6 +77,7 @@ LLM_MODEL = "gemma3:12b"  # the most precise of the models measured (Nov 2026)
 LLM_BATCH = 8  # reviews per request (complaint detection)
 SUMMARY_GAMES = 10  # top-ranked games the opportunity summary reads
 SUMMARY_CTX = 16384  # context window for the summary request (its evidence is ~5-8k tokens)
+GAME_SUMMARY_REVIEWS = 25  # negative reviews with no complaint category that a game summary reads
 
 # Risk heuristics
 SPIKE_LAUNCH_PERIODS = 2  # ignore the first N histogram periods (launch is always busy)

@@ -45,6 +45,19 @@
 - **{{ _("Score parts:") }}** {{ _("demand {demand}, dissatisfaction {dissatisfaction}, fixability {fixability}", demand=pct(a.opportunity.demand), dissatisfaction=pct(a.opportunity.dissatisfaction), fixability=pct(a.opportunity.fixability)) }}{% if a.opportunity.penalty %}{{ _(", penalty -{points} ({names})", points=a.opportunity.penalty|int, names=a.opportunity.penalized|map("risk_label")|join(", ")) }}{% endif %}.
 {% if a.game.tags %}- **{{ _("Tags:") }}** {{ (a.game.tags|list)[:8]|join(", ") }}
 {% endif %}
+{% set gs = game_summaries.get(a.game.appid) %}{% if gs %}
+### {{ _("Read by the local model") }}
+
+*{{ _("Written by the local model {model}. It can be wrong: check it against the reviews.", model=gs.model) }}*
+
+{% if gs.why %}{{ gs.why|md }}
+
+{% endif %}{% for f in gs.fix %}- {{ f|md }}
+{% endfor %}{% if gs.other %}
+**{{ _("Complaints no category covers:") }}**
+{% for o in gs.other %}- {{ o.text|md }} *"{{ o.quote|md }}"*
+{% endfor %}{% endif %}
+{% endif %}
 {% if a.mining and a.mining.n_negative %}
 ### {{ _("What went wrong ({n} negative reviews)", n=a.mining.n_negative) }}
 

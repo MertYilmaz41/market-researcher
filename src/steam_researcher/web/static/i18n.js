@@ -246,6 +246,13 @@ const TR = {
   "A better game would": "Daha iyi bir oyun",
   "Caveats": "Dikkat",
   "The opportunity summary is being written.": "Fırsat özeti yazılıyor.",
+  "Summary": "Özet",
+  "A summary can be written for the games in the current ranking.": "Özet, geçerli sıralamadaki oyunlar için yazılabilir.",
+  "Why players are unhappy, what a better game would do, and complaints no category covers. Written by the local model {model} (Ollama) in under a minute.": "Oyuncular neden mutsuz, daha iyi bir oyun ne yapmalı ve hiçbir kategoriye girmeyen şikayetler. Yerel model {model} (Ollama) bir dakikadan kısa sürede yazar.",
+  "Written by the local model {model}. It can be wrong: check it against the reviews.": "Yerel model {model} yazdı. Yanılabilir: incelemelerle karşılaştırarak okuyun.",
+  "Complaints no category covers": "Hiçbir kategoriye girmeyen şikayetler",
+  "None found in the {n} negative reviews no category matched.": "Hiçbir kategoriye girmeyen {n} olumsuz incelemede başka şikayet bulunmadı.",
+  "A summary is being written.": "Bir özet yazılıyor.",
 };
 
 let lang = "en";
