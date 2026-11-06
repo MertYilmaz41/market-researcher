@@ -199,6 +199,14 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 - **Cost:** histograms are cached 30 days (`HIST_TTL`). `--all --dry-run` counts the fetches.
 - **Biases** (listed in the report): survivorship, today's tags, review bombs counted in the histogram, and games with < 10 reviews left out.
 
+## Box Method check (Nov 2026)
+
+`tests/fixtures/sales_disclosures.jsonl` holds developer-reported unit sales with sources. Each row has the review count at the time of the figure: from the source, or from the histogram (`backtest.as_of`). Add rows as more disclosures turn up.
+- **Copies per review in the 6 games:** 16x, 30x, 38x, 54x, 100x, 165x. The median is ~46x, so x45 sits in the middle. Four of six fall inside x30-x100. For a single game, x45 was off by 1.2-3.7x either way.
+- **Literature:** GameDiscoverCo and Gamalytic (2023) give ~93 sales per review in 2013 and ~32 in 2023. Steam's review prompt from 2019 halved the ratio. Heavy discounting raises it (40-57). Their figures are mostly Gamalytic's own estimates, so they are no independent check.
+- **What the 6 games say:** x45 is a fair center, but no single estimate is precise.
+- **Gross is not income:** gross = units x undiscounted price. Escape Simulator took ~$10 a unit against a $14.99 list price, before Steam's cut, refunds and taxes.
+
 ## Installing and releasing
 
 - `install.ps1` (Windows) and `install.sh` (macOS/Linux) at the repo root are the one-line installers in the README: they install uv if missing, then `uv tool install --force --refresh --python 3.13 <source>` (default source: the main branch's GitHub zip, so no git is needed; the repo must be public), and `install.ps1` makes a desktop shortcut to `steam-researcher.exe`. Test them without touching the real system: `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` pointed at a temp folder (the scripts then skip `uv tool update-shell`), `SR_SOURCE=<built wheel>`, `SR_NO_SHORTCUT=1`.
