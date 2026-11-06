@@ -1,0 +1,19 @@
+name: live endpoints
+
+# Weekly check that Steam and SteamSpy still answer in the shape the app parses (tests/test_live.py).
+# A failed scheduled run emails the repo owner, so a broken endpoint shows up before users hit it.
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run pytest tests/test_live.py -v
+        env:
+          SR_LIVE: "1"

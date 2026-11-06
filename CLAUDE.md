@@ -92,6 +92,7 @@ uv run sr ui                                # web UI (3D map) on http://localhos
 uv run steam-researcher                     # same as sr; with no command it opens the web UI (what the installers run)
 uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report (or SR_LANG=tr); the web UI has an EN | TR switch
 uv run sr cache clear
+SR_LIVE=1 uv run pytest tests/test_live.py -v   # do Steam/SteamSpy still answer as we parse? (~20 s; CI runs it weekly)
 uv run --with playwright pytest tests/test_ui.py   # browser smoke test, if .venv lacks Playwright
 ```
 
@@ -129,6 +130,7 @@ Web UI (`web/`): `sr ui` runs uvicorn on `web/server.py`, bound to 127.0.0.1, an
 - **Quick filter:** the name box and "Hide games with risk penalties" (`opportunity.penalty > 0`) above the ranking filter the table and the map through `visibleGames()`. The Risks column shows the same set (`penaltyText`: `score_explained.penalties` with their points), so the two always agree; ranks stay those of the full ranking. Tag chips in the panel call `searchOneTag` (a new search for that one tag).
 - **Terms:** project words are explained by an ⓘ (`info(key)` in `app.js`; static ones are `<button class="info" data-term>` in `index.html`, beside a `<span data-i18n>` so the language switch doesn't wipe them) and listed in the help dialog (`#help-terms`, `#help-risks`). All texts live in `terms()` and `riskTerms()` in `app.js`: change wording there. One delegated, capturing click listener toggles `#term-tip`, so an ⓘ in a header never sorts it. Renamed in Nov 2026 for clarity: Core fantasy -> What players love, Gap -> Unmet share, Est. gross -> Est. revenue, severity high/warn/info -> Serious/Caution/Note, "adj." -> "without review bombs", Reviews mined -> Reviews read (also in the CLI and the report).
 - **Help:** `<dialog id="help">` in `index.html`, opened by the green "How it works" button in the top bar; its text is static `data-i18n`. Update its accuracy numbers when the miner is re-measured.
+- **Live endpoints:** `tests/test_live.py` checks every outside endpoint once (SteamSpy tag list, unknown-tag detection, appdetails; Steam appdetails, histogram, review texts incl. newest-first, review summary, tag catalog, store-search markup) against Stardew Valley and Colony Sim/Incremental. It is skipped unless `SR_LIVE=1` and uses a throwaway cache. `.github/workflows/live.yml` runs it Mondays 06:00 UTC and on demand, so a failed run emails the owner when Steam changes something. GitHub turns off scheduled workflows after 60 days without commits; re-enable it in the Actions tab.
 - **Tests:** `tests/test_web.py` uses FastAPI's `TestClient` with `pipeline.run_tag`/`analyze_game` monkeypatched, so it needs no network; an autouse fixture points `server._runs` at a temp DB. `tests/test_ui.py` drives the real app in a browser with Playwright (pipeline faked) and skips when Playwright or a browser is missing. Check JS syntax with `node --check`. CI (`.github/workflows/test.yml`) runs both on every push.
 
 **Interface language** (English or Turkish; review mining and Steam data stay English):
