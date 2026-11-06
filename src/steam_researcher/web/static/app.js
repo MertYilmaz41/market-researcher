@@ -857,6 +857,11 @@ function searchTag(tag) {
   $("#tag-form").requestSubmit();
 }
 
+// ---------- "How it works": a help dialog (static text in index.html) ----------
+const help = $("#help");
+$("#help-toggle").addEventListener("click", () => help.showModal());
+help.addEventListener("click", (e) => { if (e.target === help) help.close(); }); // a click on the backdrop
+
 // From a tag chip in the panel: the same, and say that the picked tags were replaced.
 function searchOneTag(tag) {
   if (!state.searching) toast("info", t("Searching {tag}", { tag }), t("Only this tag; your other tags were set aside."));

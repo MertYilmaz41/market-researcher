@@ -357,3 +357,23 @@ def test_ui_quick_filter_and_tag_chips(base_url, browser):
     page.wait_for_function("document.querySelector('#table-title').textContent.includes('Crafting')")
     assert page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)") == ["Crafting"]
     assert errors == []
+
+
+def test_ui_help_dialog(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.click("#help-toggle")
+    assert page.is_visible("#help") and page.locator("#help section").count() == 7
+    assert "80%" in page.inner_text("#help")
+    page.keyboard.press("Escape")
+    assert page.is_hidden("#help")
+
+    page.click('#lang button[data-lang="tr"]')
+    page.click("#help-toggle")
+    assert page.text_content("#help-title") == "Nasıl çalışır?" and "Skor" in page.inner_text("#help")
+    page.click("#help .help-head button")
+    assert page.is_hidden("#help")
+    assert errors == []

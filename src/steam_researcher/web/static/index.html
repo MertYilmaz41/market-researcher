@@ -64,11 +64,50 @@
       <button type="submit" class="ghost">Analyze</button>
     </form>
 
-    <div id="lang" class="seg" role="group" aria-label="Language" data-i18n-attr="aria-label">
-      <button type="button" data-lang="en" aria-pressed="true">EN</button>
-      <button type="button" data-lang="tr" aria-pressed="false">TR</button>
+    <div class="top-tools">
+      <button type="button" id="help-toggle" class="ghost help-toggle" aria-label="How it works" title="How it works" data-i18n-attr="aria-label,title">?</button>
+      <div id="lang" class="seg" role="group" aria-label="Language" data-i18n-attr="aria-label">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="tr" aria-pressed="false">TR</button>
+      </div>
     </div>
   </header>
+  <dialog id="help" class="help" aria-labelledby="help-title">
+    <form method="dialog" class="help-head">
+      <h2 id="help-title" data-i18n>How it works</h2>
+      <button class="ghost" aria-label="Close" data-i18n-attr="aria-label">×</button>
+    </form>
+    <div class="help-body">
+      <section>
+        <h3 data-i18n>The method</h3>
+        <p data-i18n>Look for games that many people bought (many reviews) but rate poorly. Their players want this kind of game, and the game lets them down. A better game for the same players is the opportunity.</p>
+      </section>
+      <section>
+        <h3 data-i18n>Filters</h3>
+        <p data-i18n>Minimum reviews sets how proven the demand must be. The % positive range picks unhappy audiences (5-70% by default). Games to analyze and reviews mined per game trade speed for detail. Presets fill in the fields.</p>
+      </section>
+      <section>
+        <h3 data-i18n>The score</h3>
+        <p data-i18n>0 to 100, from three parts: demand (how many reviews), dissatisfaction (how far below 70% positive) and fixability (how many complaints a new game could fix). Risks such as an abandoned or fading game subtract points. Hover over any score to see how it was reached.</p>
+      </section>
+      <section>
+        <h3 data-i18n>The map</h3>
+        <p data-i18n>Further right means more demand, higher up means unhappier players, a bigger bubble means more estimated revenue, and the color is the score. The best opportunities sit at the top right. The 3D view adds fixability as depth.</p>
+      </section>
+      <section>
+        <h3 data-i18n>Complaints</h3>
+        <p data-i18n>Complaints are found with keywords in the negative reviews. Checked against hand-labeled reviews, about 80% of the complaints it finds are right and it catches about 64% of them, so read the quotes as well.</p>
+      </section>
+      <section>
+        <h3 data-i18n>Local AI summaries</h3>
+        <p data-i18n>If Ollama runs on your computer, Write summary lets a local model read the results: what players love, the complaints the games share and what to build. Nothing leaves your computer. It takes from 20 seconds to about a minute and a half.</p>
+      </section>
+      <section>
+        <h3 data-i18n>Shortlist and past runs</h3>
+        <p data-i18n>Star a game to keep it on the Shortlist with a note, and download the list as CSV. Every finished search is saved under Past runs, and running the same search again shows how the scores changed.</p>
+      </section>
+    </div>
+  </dialog>
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
   <main class="layout">
