@@ -25,6 +25,8 @@ from test_m4 import analysis, game  # noqa: E402
 from test_web import fake_result  # noqa: E402
 
 TAGS = ["Crafting", "Job Simulator", "Survival", "Colony Sim"]
+# Nothing is pre-picked on a first visit: most tests start as a returning user with one tag remembered.
+PICKED = "localStorage.getItem('filters') || localStorage.setItem('filters', JSON.stringify({tags: ['Job Simulator']}))"
 
 
 def _free_port() -> int:
@@ -107,9 +109,10 @@ def test_ui_smoke(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d')")  # no CDN/WebGL needed
+    page.add_init_script(PICKED)
     page.goto(base_url)
 
-    # Tick two tags in the checklist (Job Simulator is pre-picked: untick it).
+    # Tick two tags in the checklist (Job Simulator is remembered: untick it).
     page.wait_for_selector(".tag-chip")
     page.click("#tag-toggle")
     opt = lambda t: page.locator(f'#tag-list li[role=option][data-tag="{t}"]')  # noqa: E731
@@ -207,8 +210,9 @@ def test_ui_turkish(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
-    page.wait_for_selector(".tag-chip")  # Job Simulator is pre-picked
+    page.wait_for_selector(".tag-chip")  # Job Simulator is remembered
     page.click("#run")
     page.wait_for_selector("#ranking tbody tr")
     page.click("#ranking tbody tr:first-child")
@@ -251,6 +255,7 @@ def test_ui_opportunity_summary(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")
     page.click("#run")
@@ -274,6 +279,7 @@ def test_ui_game_summary_tab(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")
     page.click("#run")
@@ -294,6 +300,7 @@ def test_ui_remembers_filters_and_tags(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")
 
@@ -318,6 +325,7 @@ def test_ui_shortlist(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")
     page.click("#run")
@@ -349,6 +357,7 @@ def test_ui_quick_filter_and_tag_chips(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")
     page.click("#run")
@@ -384,6 +393,7 @@ def test_ui_help_dialog(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")  # app.js is running
     page.click("#help-toggle")
@@ -428,6 +438,7 @@ def test_ui_keyboard(base_url, browser):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")
     page.click("#run")
@@ -456,4 +467,50 @@ def test_ui_keyboard(base_url, browser):
     page.keyboard.press("Enter")
     assert page.get_attribute('#ranking th[data-key="name"]', "aria-sort") == "ascending"
     assert page.get_attribute('#ranking th[data-key="score"]', "aria-sort") == "none"
+    assert errors == []
+
+
+def test_ui_first_visit_and_narrow_screen(base_url, browser):
+    page = browser.new_page(viewport={"width": 800, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.focus("#tag")  # opens the list (once the tags are in)
+    page.wait_for_selector("#tag-list li[role=option]")
+    # A first visit picks no tag and says the first search is slow.
+    assert page.locator(".tag-chip").count() == 0 and page.is_visible("#run-hint")
+    page.locator('#tag-list li[data-tag="Crafting"]').click()
+    page.keyboard.press("Escape")
+    page.click("#run")
+    page.wait_for_selector("#ranking tbody tr")
+    # On a narrow screen the ranking stays in view: no game opens by itself.
+    assert page.is_hidden("#drawer")
+    # The run's warnings stay listed above the ranking and can be dismissed.
+    items = page.locator("#result-notices li")
+    if items.count():
+        n = items.count()
+        page.click("#result-notices li .close")
+        assert items.count() == n - 1
+    assert errors == []
+
+
+def test_ui_star_a_game_analyzed_by_appid(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.add_init_script(PICKED)
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")
+    page.fill("#appid", "4242")
+    page.press("#appid", "Enter")
+    page.wait_for_function("document.querySelector('#panel h3')?.textContent === 'Lone Game'")
+    page.click("#panel .star")
+    page.wait_for_selector('#panel .star.on[data-appid="4242"]')
+    page.click('#table-view button[data-view="shortlist"]')
+    row = page.locator('#shortlist tr[data-appid="4242"]')
+    assert "Lone Game" in row.inner_text() and "AppID" in row.inner_text()
+    page.click("#panel .star")  # unstar
+    page.wait_for_selector('#panel .star:not(.on)[data-appid="4242"]')
     assert errors == []

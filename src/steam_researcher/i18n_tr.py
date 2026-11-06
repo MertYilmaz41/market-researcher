@@ -466,6 +466,7 @@ TR: dict[str, str] = {
     "Caveats": "Dikkat",
     # Game summary (local LLM)
     "This game isn't part of the run.": "Bu oyun bu aramada yok.",
+    "Analyze this game again to star it.": "Yıldızlamak için bu oyunu yeniden analiz edin.",
     "This game isn't on the shortlist.": "Bu oyun kısa listede yok.",
     "Read by the local model": "Yerel modelin yorumu",
     "Written by the local model {model}. It can be wrong: check it against the reviews.":

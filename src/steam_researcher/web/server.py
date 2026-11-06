@@ -97,6 +97,7 @@ class Job:
     total: int = 0
     step_start: float = 0.0  # when the current step began (monotonic), and its done count then
     step_done: int = 0
+    step: int = 0  # counts the steps (listing, checking, analyzing...), so a bar that starts over isn't read as a restart
     result: pipeline.TagResult | pipeline.MarketsResult | None = None
     error: dict | None = None  # a Notice dict
 
@@ -160,6 +161,7 @@ def _run(job_id: str) -> None:
                 raise pipeline.Cancelled
             if total != job.total or done < job.done:  # a new step (listing, checking, analyzing...)
                 job.step_start, job.step_done = _now(), done
+                job.step += 1
             job.message, job.done, job.total = message, done, total
 
     def finish(**fields) -> None:
@@ -260,7 +262,7 @@ def eta(done: int, total: int, done0: int, since: float, now: float) -> float | 
 def _status(job_id: str, job: Job, result_json) -> dict:
     with _lock:
         running = job.status == "running"
-        out = {"status": job.status, "message": job.message, "done": job.done, "total": job.total,
+        out = {"status": job.status, "message": job.message, "done": job.done, "total": job.total, "step": job.step,
                "eta": eta(job.done, job.total, job.step_done, job.step_start, _now()) if running else None,
                "error": job.error}
         result = job.result
@@ -278,18 +280,35 @@ class ShortlistPut(BaseModel):
     note: Annotated[str, Field(max_length=2000)] | None = None
 
 
+# Games analyzed by AppID (the "One game" form), so they can be starred too. The latest few only.
+_single: dict[int, Analysis] = {}
+SINGLE_KEEP = 50
+
+
+def _remember_single(a: Analysis) -> None:
+    with _lock:
+        _single.pop(a.game.appid, None)
+        _single[a.game.appid] = a
+        while len(_single) > SINGLE_KEEP:
+            _single.pop(next(iter(_single)))
+
+
+def _snapshot_of(a: Analysis, source: str, run_id: str | None) -> dict:
+    """What the shortlist keeps of a game: how it looked when starred (English labels)."""
+    top = a.mining.categories[0] if a.mining and a.mining.categories else None
+    return {"name": a.game.name, "score": a.opportunity.score, "rating": a.game.rating, "reviews": a.game.reviews,
+            "complaint": top.label if top else "", "complaint_share": top.share if top else None,
+            "store_url": a.game.store_url, "source": source, "run_id": run_id}
+
+
 def _snapshot(job_id: str, appid: int) -> dict:
-    """What the shortlist keeps of a game: how it looked in this run (English labels)."""
     job = _job(job_id)
     if job.result is None:
         raise HTTPException(409, _("The run hasn't finished yet."))
     a = next((x for x in job.result.analyses if x.game.appid == appid), None)
     if a is None:
         raise HTTPException(404, _("This game isn't part of the run."))
-    top = a.mining.categories[0] if a.mining and a.mining.categories else None
-    return {"name": a.game.name, "score": a.opportunity.score, "rating": a.game.rating, "reviews": a.game.reviews,
-            "complaint": top.label if top else "", "complaint_share": top.share if top else None,
-            "store_url": a.game.store_url, "source": pipeline.tag_label(job.request.tags), "run_id": job_id}
+    return _snapshot_of(a, pipeline.tag_label(job.request.tags), job_id)
 
 
 def _shortlist_json() -> list[dict]:
@@ -303,9 +322,15 @@ def get_shortlist() -> dict:
 
 @app.put("/api/shortlist/{appid}")
 def put_shortlist(appid: int, body: ShortlistPut) -> dict:
-    """Star a game of a run, and/or change its note."""
+    """Star a game of a run, and/or change its note. Without either: star a game analyzed by AppID."""
     if body.run_id is not None:
         _runs.star(appid, _snapshot(body.run_id, appid))
+    elif body.note is None:
+        with _lock:
+            a = _single.get(appid)
+        if a is None:
+            raise HTTPException(404, _("Analyze this game again to star it."))
+        _runs.star(appid, _snapshot_of(a, "AppID", None))
     if body.note is not None and not _runs.set_note(appid, body.note.strip()):
         raise HTTPException(404, _("This game isn't on the shortlist."))
     return {"games": _shortlist_json()}
@@ -518,6 +543,7 @@ def game(appid: int, reviews: int = 300):
                    "Unreleased or very new games may not be listed yet."),
         )
         return JSONResponse(status_code=404, content={"detail": notice.message, "notice": notice.model_dump()})
+    _remember_single(a)
     data = game_json(a)
     data["notices"] = [n.model_dump() for n in notices.for_game(a)]
     return data

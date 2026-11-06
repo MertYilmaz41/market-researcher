@@ -486,6 +486,12 @@ body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380
 
 /* ---------- ranking table: scrolls inside its card, header stays ---------- */
 #table-note { flex: none; margin: calc(-1 * var(--s2)) 0 var(--s2); }
+#run-hint { margin: var(--s1) 0 0; font-size: var(--fs-xs); }
+.result-notices { flex: none; list-style: none; margin: 0 0 var(--s2); padding: 0; display: grid; gap: var(--s1); }
+.result-notice { position: relative; padding: var(--s1) calc(var(--s2) + 20px) var(--s1) var(--s2); border-radius: 6px;
+  font-size: var(--fs-sm); border-left: 3px solid var(--info); background: color-mix(in srgb, var(--info) 10%, transparent); }
+.result-notice.warning { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.result-notice .close { position: absolute; top: 2px; right: 4px; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 1rem; }
 
 /* Games | Markets: two views inside the table card */
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }

@@ -325,7 +325,7 @@ const tagPop = $("#tag-pop");
 const tagList = $("#tag-list");
 // tags: Steam's catalog. shown: options in list order. freeText: the catalog failed to load, so the
 // box takes comma-separated tags typed by hand.
-const tagPicker = { tags: [], picked: ["Job Simulator"], shown: [], active: -1, freeText: false };
+const tagPicker = { tags: [], picked: [], shown: [], active: -1, freeText: false };
 
 { // the last filters and tags used in this browser
   const saved = loadSaved();
@@ -587,6 +587,21 @@ function statusBox(box, title, frac, count, message) {
 }
 
 // "12 / 15 · ~3 min left": the server estimates the time left from the pace so far (null: no estimate yet).
+// The run's warnings stay above the ranking after their toasts fade (each can be dismissed).
+function renderResultNotices(list) {
+  const items = (list || []).filter((n) => n.level === "warning" || n.level === "info").map((n) => {
+    const item = el("li", { class: `result-notice ${n.level}` },
+      el("b", {}, n.title), " ", n.message, n.hint ? el("span", { class: "muted" }, ` ${n.hint}`) : null);
+    item.append(el("button", { type: "button", class: "close", "aria-label": t("Dismiss"), onclick: () => {
+      item.remove();
+      $("#result-notices").hidden = !$("#result-notices").children.length;
+    } }, "×"));
+    return item;
+  });
+  $("#result-notices").replaceChildren(...items);
+  $("#result-notices").hidden = !items.length;
+}
+
 function progressCount(count, eta) {
   if (eta == null || !count) return count;
   const left = eta < 60 ? t("under a minute left") : t("~{n} min left", { n: Math.round(eta / 60) });
@@ -609,7 +624,9 @@ async function poll(id, tag) {
     if (job.status === "cancelled" || runCtl.games.cancelled) throw new CancelledRun();
     if (job.status === "error") throw new ApiError(job.error);
     if (job.status === "done") return showResult(job.result, id);
-    searchStatus(tag, job.total ? job.done / job.total : 0, progressCount(job.total ? `${job.done} / ${job.total}` : "", job.eta), job.message);
+    const count = job.total ? `${job.done} / ${job.total}` : "";
+    searchStatus(tag, job.total ? job.done / job.total : 0,
+      progressCount(count && job.step ? t("Step {n} · {count}", { n: job.step, count }) : count, job.eta), job.message);
     await new Promise((r) => setTimeout(r, 1000));
     if (runCtl.games.cancelled) throw new CancelledRun();
   }
@@ -686,6 +703,7 @@ function showResult(result, id, quiet = false) {
   if (result.not_games.length) notes.push(t("Excluded non-games: {names}.", { names: result.not_games.join(", ") }));
   if (result.compared) notes.push(t("▲/▼ = score change since your previous run with these tags and filters."));
   $("#table-note").textContent = notes.join(" ");
+  renderResultNotices(result.notices);
   renderMarketStrip(result.market, result.well_served);
   state.runId = id;
   renderSummary();
@@ -707,7 +725,9 @@ function showResult(result, id, quiet = false) {
   if (state.keepPanel) {
     // the panel shows a game the user analyzed during the search: leave it there
   } else if (state.games.length) {
-    selectGame(state.games[0].game.appid, false);
+    // On a narrow screen the drawer covers the page: show the ranking and let the user pick.
+    if (matchMedia("(min-width: 1001px)").matches) selectGame(state.games[0].game.appid, false);
+    else closeDrawer();
   } else {
     closeDrawer();
     const why = (result.notices || []).find((n) => n.level === "warning");
@@ -1154,8 +1174,10 @@ async function toggleStar(appid) {
   try {
     if (isStarred(appid)) await shortlistCall(`/api/shortlist/${appid}`, { method: "DELETE" });
     else {
+      // A game of the ranking is starred as it is in this run; one analyzed by AppID as the server last analyzed it.
+      const inRun = state.games.some((g) => g.game.appid === appid);
       await shortlistCall(`/api/shortlist/${appid}`, { method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ run_id: state.runId }) });
+        body: JSON.stringify(inRun ? { run_id: state.runId } : {}) });
     }
   } catch (err) {
     notifyError(err);
@@ -1398,7 +1420,7 @@ function renderPanel(g, tab = 0, focus = true) {
 
   const head = [
     el("div", { class: "title-row" }, el("h3", {}, game.name),
-      state.games.some((x) => x.game.appid === game.appid) ? starButton(game.appid) : null),
+      starButton(game.appid)),
     el("div", { class: "sub" },
       el("a", { href: g.store_url, target: "_blank", rel: "noopener" }, t("Steam store")),
       ` · AppID ${game.appid}`,

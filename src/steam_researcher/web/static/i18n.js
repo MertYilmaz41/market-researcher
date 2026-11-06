@@ -85,6 +85,8 @@ const TR = {
   "Cancelling...": "İptal ediliyor...",
   "Stopping after the current step...": "Şu anki adımdan sonra duruyor...",
   "Search cancelled": "Arama iptal edildi",
+  "Step {n} · {count}": "Adım {n} · {count}",
+  "The first search of a tag can take a few minutes; later ones come from the cache.": "Bir etiketin ilk araması birkaç dakika sürebilir; sonrakiler önbellekten gelir.",
   "The previous results are still shown.": "Önceki sonuçlar gösterilmeye devam ediyor.",
   "Search failed": "Arama başarısız oldu",
   "The search was interrupted": "Arama yarıda kesildi",

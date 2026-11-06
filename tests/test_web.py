@@ -448,3 +448,38 @@ def test_one_http_client_for_the_whole_server(monkeypatch, client):
     wait(client, client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"])
     client.get("/api/games/5")
     assert len(seen) == 2 and seen[0] is seen[1] is server._http()
+
+
+def test_star_a_game_analyzed_by_appid(client, monkeypatch):
+    monkeypatch.setattr(server, "_single", {})
+    assert client.put("/api/shortlist/777", json={}).status_code == 404  # not analyzed yet
+    monkeypatch.setattr(pipeline, "analyze_game", lambda http, appid, n: analysis(45, "Lone Game", appid=appid))
+    assert client.get("/api/games/777").status_code == 200
+    games = client.put("/api/shortlist/777", json={}).json()["games"]
+    assert games[0]["name"] == "Lone Game" and games[0]["source"] == "AppID" and games[0]["run_id"] is None
+
+
+def test_job_status_counts_steps(client, monkeypatch):
+    import threading
+
+    release = threading.Event()
+
+    def run_tag(http, tags, *args):
+        on_step = args[-1]
+        for done in range(3):
+            on_step("Listing", done, 3)  # step 1
+        on_step("Analyzing games", 0, 5)  # step 2: the bar starts over
+        on_step("Analyzing games", 1, 5)
+        release.wait(5)
+        return fake_result()
+
+    monkeypatch.setattr(pipeline, "run_tag", run_tag)
+    run_id = client.post("/api/tag-runs", json={"tags": ["X"]}).json()["id"]
+    for _ in range(100):
+        job = client.get(f"/api/tag-runs/{run_id}").json()
+        if job["done"] == 1:
+            break
+        time.sleep(0.02)
+    release.set()
+    assert job["step"] == 2
+    wait(client, run_id)
