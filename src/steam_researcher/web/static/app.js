@@ -166,7 +166,7 @@ setMapView(savedView);
 // ---------- state ----------
 // A search and a single-game analysis can run at the same time. keepPanel: the user analyzed a game
 // during the current search, so its results must not replace that game in the panel.
-const state = { games: [], selected: null, sort: { key: "rank", asc: true }, runId: null,
+const state = { games: [], selected: null, sort: { key: "rank", asc: true }, runId: null, shortlist: [],
   searching: false, analyzing: false, keepPanel: false };
 
 // Buttons are never disabled while busy: a disabled button ignores clicks and Enter silently.
@@ -719,6 +719,7 @@ async function writeSummary() {
 const tableTitles = {
   games: () => (state.result ? t("{tag}: opportunity ranking", { tag: state.result.tag }) : t("Ranking")),
   markets: () => t("Markets: which audiences are underserved?"),
+  shortlist: () => t("Shortlist"),
 };
 let tableView = "games";
 
@@ -727,6 +728,8 @@ function setTableView(view) {
   for (const b of document.querySelectorAll("#table-view button")) b.setAttribute("aria-pressed", String(b.dataset.view === view));
   $("#games-view").hidden = view !== "games";
   $("#markets-view").hidden = view !== "markets";
+  $("#shortlist-view").hidden = view !== "shortlist";
+  if (view === "shortlist") renderShortlist();
   $("#table-title").textContent = tableTitles[view]();
   for (const a of [$("#download"), $("#download-csv")]) a.hidden = view !== "games" || !state.games.length;
 }
@@ -983,6 +986,7 @@ function renderTable() {
       const adj = Math.round(o.effective_rating) !== Math.round(g.rating) ? adjText(g) : "";
       const top = g.mining?.categories[0];
       return el("tr", { "data-appid": g.game.appid, onclick: () => selectGame(g.game.appid) },
+        el("td", {}, starButton(g.game.appid)),
         el("td", { class: "num" }, g.rank),
         el("td", {}, g.game.name),
         el("td", { class: "num" }, scoreAnchor(el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}`,
@@ -999,13 +1003,91 @@ function renderTable() {
   highlightRow();
 }
 
-document.querySelectorAll("#ranking th").forEach((th) =>
+document.querySelectorAll("#ranking th[data-key]").forEach((th) =>
   th.addEventListener("click", () => {
     const key = th.dataset.key;
     state.sort = { key, asc: state.sort.key === key ? !state.sort.asc : ["rank", "name"].includes(key) };
     renderTable();
   }),
 );
+
+// ---------- shortlist: starred games with a note, kept on the server across runs ----------
+const isStarred = (appid) => state.shortlist.some((s) => s.appid === appid);
+
+// A star for a game of the current ranking (the server keeps a snapshot of it from this run).
+function starButton(appid) {
+  const on = isStarred(appid);
+  const label = on ? t("Remove from shortlist") : t("Add to shortlist");
+  return el("button", { type: "button", class: on ? "star on" : "star", "data-appid": appid, "aria-pressed": String(on),
+    "aria-label": label, title: label, onclick: (e) => { e.stopPropagation(); toggleStar(appid); } }, on ? "★" : "☆");
+}
+
+function refreshStars() {
+  for (const b of document.querySelectorAll(".star[data-appid]")) b.replaceWith(starButton(+b.dataset.appid));
+  if (tableView === "shortlist") renderShortlist();
+}
+
+async function shortlistCall(path, options) {
+  const res = await api(path, options);
+  if (!res.ok) throw await apiError(res);
+  state.shortlist = (await res.json()).games;
+}
+
+async function toggleStar(appid) {
+  try {
+    if (isStarred(appid)) await shortlistCall(`/api/shortlist/${appid}`, { method: "DELETE" });
+    else {
+      await shortlistCall(`/api/shortlist/${appid}`, { method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_id: state.runId }) });
+    }
+  } catch (err) {
+    notifyError(err);
+  }
+  refreshStars();
+}
+
+async function loadShortlist() {
+  try { await shortlistCall("/api/shortlist"); } catch { /* shown as empty; the next star call reports errors */ }
+  refreshStars();
+}
+
+function renderShortlist() {
+  const list = state.shortlist;
+  $("#shortlist-note").textContent = list.length
+    ? t("{n} starred games. Score, rating and complaint are from the search you starred them in.", { n: list.length })
+    : t("No games yet. Star a game in the ranking (☆) to keep it here.");
+  $("#shortlist-csv").hidden = !list.length;
+  $("#shortlist tbody").replaceChildren(...list.map((s) => {
+    const note = el("input", { class: "note", type: "text", maxlength: "2000", placeholder: t("Add a note..."),
+      "aria-label": t("Note for {name}", { name: s.name }) });
+    note.value = s.note;
+    note.addEventListener("change", async () => {
+      try {
+        await shortlistCall(`/api/shortlist/${s.appid}`, { method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: note.value }) });
+        toast("success", t("Note saved"), s.name);
+      } catch (err) { notifyError(err); }
+    });
+    return el("tr", { "data-appid": s.appid },
+      el("td", { class: "name", onclick: () => openGame(s.appid) }, s.name),
+      el("td", { class: "num" }, Math.round(s.score)),
+      el("td", { class: "num" }, percent(s.rating)),
+      el("td", { class: "num" }, fmt(s.reviews)),
+      el("td", { class: "complaint-cell" }, s.complaint ? `${s.complaint} (${pct(s.complaint_share)})` : "-"),
+      el("td", {}, s.source),
+      el("td", {}, note),
+      el("td", {}, el("button", { type: "button", class: "ghost remove", "aria-label": t("Remove {name} from the shortlist", { name: s.name }),
+        onclick: () => toggleStar(s.appid) }, "×")),
+    );
+  }));
+}
+
+// A shortlisted game: selected if it is in the current ranking, else analyzed into the panel.
+function openGame(appid) {
+  if (state.games.some((g) => g.game.appid === appid)) return selectGame(appid);
+  $("#appid").value = String(appid);
+  $("#game-form").requestSubmit();
+}
 
 function highlightRow() {
   for (const tr of document.querySelectorAll("#ranking tbody tr")) {
@@ -1098,7 +1180,8 @@ function renderPanel(g, tab = 0) {
   const adjusted = Math.round(o.effective_rating) !== Math.round(g.rating);
 
   const head = [
-    el("h3", {}, game.name),
+    el("div", { class: "title-row" }, el("h3", {}, game.name),
+      state.games.some((x) => x.game.appid === game.appid) ? starButton(game.appid) : null),
     el("div", { class: "sub" },
       el("a", { href: g.store_url, target: "_blank", rel: "noopener" }, t("Steam store")),
       ` · AppID ${game.appid}`,
@@ -1305,6 +1388,7 @@ async function setLanguage(value) {
   marketsText();
   marketsButton();
   if (markets.result) renderMarkets();
+  loadShortlist(); // complaint names come in the new language
   $("#table-title").textContent = tableTitles[tableView]();
   try {
     if (state.runId && state.result) {

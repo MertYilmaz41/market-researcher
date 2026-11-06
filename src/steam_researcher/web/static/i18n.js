@@ -258,6 +258,18 @@ const TR = {
   "Default": "Varsayılan",
   "Proven demand": "Kanıtlı talep",
   "Quick look": "Hızlı bakış",
+  "Shortlist": "Kısa liste",
+  "Download CSV": "CSV indir",
+  "From search": "Arama",
+  "Note": "Not",
+  "Remove from shortlist": "Kısa listeden çıkar",
+  "Add to shortlist": "Kısa listeye ekle",
+  "{n} starred games. Score, rating and complaint are from the search you starred them in.": "{n} yıldızlı oyun. Skor, puan ve şikayet, oyunu yıldızladığınız aramadan.",
+  "No games yet. Star a game in the ranking (☆) to keep it here.": "Henüz oyun yok. Sıralamada bir oyunu yıldızlayın (☆), burada kalsın.",
+  "Add a note...": "Not ekleyin...",
+  "Note for {name}": "{name} için not",
+  "Note saved": "Not kaydedildi",
+  "Remove {name} from the shortlist": "{name} oyununu kısa listeden çıkar",
   "~{n} min left": "~{n} dk kaldı",
 };
 

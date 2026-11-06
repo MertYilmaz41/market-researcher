@@ -489,6 +489,13 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .markets-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); flex-wrap: wrap; }
 .markets-bar p { margin: 0; flex: 1 1 320px; }
 .markets-bar button { flex: none; }
+.star { border: 0; background: none; padding: 0 4px; font-size: 16px; line-height: 1; color: var(--muted); cursor: pointer; }
+.star.on, .star:hover { color: var(--accent); }
+.star-col { width: 28px; }
+.panel .title-row { display: flex; align-items: center; gap: 6px; }
+.panel .title-row .star { font-size: 20px; }
+#shortlist input.note { width: 100%; min-width: 160px; background: var(--bg-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 6px; font: inherit; }
+#shortlist td.name { cursor: pointer; text-decoration: underline dotted; }
 .table-wrap { flex: 1; min-height: 0; overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }

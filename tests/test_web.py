@@ -405,3 +405,32 @@ def test_running_job_reports_eta(client, monkeypatch):
     release.set()
     assert job["done"] == 1 and job["eta"] == 80  # 20 s for the first game, 4 to go
     assert wait(client, run_id)["eta"] is None
+
+
+# --- shortlist ------------------------------------------------------------------------------------
+
+def test_shortlist_star_note_csv_and_remove(client, monkeypatch, run_store):
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    run_id = client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"]
+    wait(client, run_id)
+    assert client.get("/api/shortlist").json() == {"games": []}
+
+    games = client.put("/api/shortlist/1", json={"run_id": run_id}).json()["games"]
+    assert [(g["appid"], g["name"], g["score"], g["source"], g["note"]) for g in games] == [
+        (1, "Best Sim", 60, "Job Simulator", "")]
+    assert client.put("/api/shortlist/1", json={"note": "  great idea  "}).json()["games"][0]["note"] == "great idea"
+
+    csv = client.get("/api/shortlist.csv")
+    assert 'filename="shortlist.csv"' in csv.headers["content-disposition"]
+    lines = csv.text.splitlines()
+    assert lines[0].startswith("appid,name,score,pct_positive") and lines[1].startswith("1,Best Sim,60,40,")
+    assert "great idea" in lines[1]
+
+    monkeypatch.setattr(server, "_jobs", {})  # restart: the shortlist is in the runs DB
+    assert client.get("/api/shortlist").json()["games"][0]["note"] == "great idea"
+
+    assert client.delete("/api/shortlist/1").json() == {"games": []}
+    assert client.delete("/api/shortlist/1").status_code == 404
+    assert client.put("/api/shortlist/1", json={"note": "x"}).status_code == 404
+    assert client.put("/api/shortlist/99", json={"run_id": run_id}).status_code == 404  # not in the run
+    assert client.put("/api/shortlist/1", json={"run_id": "nope"}).status_code == 404

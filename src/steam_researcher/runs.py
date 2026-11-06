@@ -3,6 +3,9 @@
 Kept in its own SQLite file under DATA_DIR, apart from the cache, so `sr cache clear` keeps them.
 A run is stored as its request params plus the pipeline result (TagResult / MarketsResult) as JSON;
 `load` rebuilds the result, so reports and CSVs work for old runs too.
+
+The shortlist (games the user starred, with a note) lives in the same file: a snapshot of each game
+as it was when starred, so it outlasts the runs it came from.
 """
 
 import json
@@ -41,6 +44,9 @@ class RunStore:
             self._conn.execute(
                 "CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, created REAL, kind TEXT, label TEXT,"
                 " n INTEGER, compare_key TEXT, scores TEXT, params TEXT, result TEXT)"
+            )
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS shortlist (appid INTEGER PRIMARY KEY, added REAL, note TEXT, snapshot TEXT)"
             )
         return self._conn
 
@@ -97,6 +103,36 @@ class RunStore:
             n = db.execute("DELETE FROM runs WHERE id = ?", (run_id,)).rowcount
             db.commit()
         return n > 0
+
+    def star(self, appid: int, snapshot: dict) -> None:
+        """Add a game to the shortlist, or refresh its snapshot (its note and time stay)."""
+        with self._lock:
+            db = self._db()
+            db.execute("INSERT INTO shortlist VALUES (?, ?, '', ?)"
+                       " ON CONFLICT(appid) DO UPDATE SET snapshot = excluded.snapshot",
+                       (appid, time.time(), json.dumps(snapshot)))
+            db.commit()
+
+    def unstar(self, appid: int) -> bool:
+        with self._lock:
+            db = self._db()
+            n = db.execute("DELETE FROM shortlist WHERE appid = ?", (appid,)).rowcount
+            db.commit()
+        return n > 0
+
+    def set_note(self, appid: int, note: str) -> bool:
+        with self._lock:
+            db = self._db()
+            n = db.execute("UPDATE shortlist SET note = ? WHERE appid = ?", (note, appid)).rowcount
+            db.commit()
+        return n > 0
+
+    def shortlist(self) -> "list[dict]":  # quoted: the method list() shadows the builtin here
+        """Starred games, newest first: {appid, added, note, **snapshot}."""
+        with self._lock:
+            rows = self._db().execute(
+                "SELECT appid, added, note, snapshot FROM shortlist ORDER BY added DESC").fetchall()
+        return [{**json.loads(r[3]), "appid": r[0], "added": r[1], "note": r[2]} for r in rows]
 
     def previous_scores(self, run_id: str) -> dict[int, float] | None:
         """Scores of the last comparable tag run saved before this one; None if there is none."""

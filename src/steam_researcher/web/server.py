@@ -20,7 +20,7 @@ from ..http import HttpClient
 from ..i18n import LANGS, N_, _, lang, use
 from ..mining import llm
 from ..models import Analysis
-from ..report import rank, ranking_csv, rating_source_text, render, slug
+from ..report import rank, ranking_csv, rating_source_text, render, shortlist_csv, slug
 from ..sources import steam_store
 
 STATIC = Path(__file__).parent / "static"
@@ -259,6 +259,57 @@ def _status(job_id: str, job: Job, result_json) -> dict:
 
 def _score_changes(job_id: str, ranked: list[Analysis]) -> dict[int, float | None]:
     return runs.changes({a.game.appid: a.opportunity.score for a in ranked}, _runs.previous_scores(job_id))
+
+
+class ShortlistPut(BaseModel):
+    run_id: str | None = None  # star the game as it is in this run
+    note: Annotated[str, Field(max_length=2000)] | None = None
+
+
+def _snapshot(job_id: str, appid: int) -> dict:
+    """What the shortlist keeps of a game: how it looked in this run (English labels)."""
+    job = _job(job_id)
+    if job.result is None:
+        raise HTTPException(409, _("The run hasn't finished yet."))
+    a = next((x for x in job.result.analyses if x.game.appid == appid), None)
+    if a is None:
+        raise HTTPException(404, _("This game isn't part of the run."))
+    top = a.mining.categories[0] if a.mining and a.mining.categories else None
+    return {"name": a.game.name, "score": a.opportunity.score, "rating": a.game.rating, "reviews": a.game.reviews,
+            "complaint": top.label if top else "", "complaint_share": top.share if top else None,
+            "store_url": a.game.store_url, "source": pipeline.tag_label(job.request.tags), "run_id": job_id}
+
+
+def _shortlist_json() -> list[dict]:
+    return [{**g, "complaint": _(g["complaint"]) if g["complaint"] else ""} for g in _runs.shortlist()]
+
+
+@app.get("/api/shortlist")
+def get_shortlist() -> dict:
+    return {"games": _shortlist_json()}
+
+
+@app.put("/api/shortlist/{appid}")
+def put_shortlist(appid: int, body: ShortlistPut) -> dict:
+    """Star a game of a run, and/or change its note."""
+    if body.run_id is not None:
+        _runs.star(appid, _snapshot(body.run_id, appid))
+    if body.note is not None and not _runs.set_note(appid, body.note.strip()):
+        raise HTTPException(404, _("This game isn't on the shortlist."))
+    return {"games": _shortlist_json()}
+
+
+@app.delete("/api/shortlist/{appid}")
+def delete_shortlist(appid: int) -> dict:
+    if not _runs.unstar(appid):
+        raise HTTPException(404, _("This game isn't on the shortlist."))
+    return {"games": _shortlist_json()}
+
+
+@app.get("/api/shortlist.csv")
+def shortlist_download() -> PlainTextResponse:
+    return PlainTextResponse(shortlist_csv(_runs.shortlist()), media_type="text/csv",
+                             headers={"Content-Disposition": 'attachment; filename="shortlist.csv"'})
 
 
 def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -> dict:

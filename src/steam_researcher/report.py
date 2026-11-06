@@ -203,5 +203,18 @@ def ranking_csv(ranked: list[Analysis], changes: dict[int, float | None] | None 
     return out.getvalue()
 
 
+def shortlist_csv(items: list[dict]) -> str:
+    """The shortlist (RunStore.shortlist) as CSV; labels stay English like the ranking CSV."""
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\n")
+    w.writerow(["appid", "name", "score", "pct_positive", "reviews", "top_complaint", "from_search", "note",
+                "starred", "store_url"])
+    for g in items:
+        complaint = f"{g['complaint']} ({g['complaint_share']:.0%})" if g.get("complaint") else "-"
+        w.writerow([g["appid"], g["name"], round(g["score"]), round(g["rating"]), g["reviews"], complaint,
+                    g["source"], g["note"], dt.date.fromtimestamp(g["added"]).isoformat(), g["store_url"]])
+    return out.getvalue()
+
+
 def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "report"

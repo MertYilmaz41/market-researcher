@@ -108,6 +108,7 @@
           <div id="table-view" class="seg" role="group" aria-label="Table view" data-i18n-attr="aria-label">
             <button type="button" data-view="games" aria-pressed="true" data-i18n>Games</button>
             <button type="button" data-view="markets" aria-pressed="false" data-i18n>Markets</button>
+            <button type="button" data-view="shortlist" aria-pressed="false" data-i18n>Shortlist</button>
           </div>
         </div>
       </div>
@@ -131,6 +132,7 @@
         <table id="ranking">
           <thead>
             <tr>
+              <th class="star-col"></th>
               <th data-key="rank" class="num">#</th>
               <th data-key="name" data-i18n>Game</th>
               <th data-key="score" class="num" data-i18n>Score</th>
@@ -174,6 +176,30 @@
                 <th data-key="gap" class="num" title="Underserved / (underserved + well served)" data-i18n data-i18n-attr="title">Gap</th>
                 <th data-key="underserved_gross" class="num" title="Box Method (x45) gross of the underserved games" data-i18n data-i18n-attr="title">Underserved $</th>
                 <th data-key="median_rating" class="num" title="% positive of the median game with demand" data-i18n data-i18n-attr="title">Median % pos</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="shortlist-view" class="view" hidden>
+        <div class="markets-bar">
+          <p id="shortlist-note" class="muted"></p>
+          <a id="shortlist-csv" class="ghost button" href="/api/shortlist.csv" data-i18n>Download CSV</a>
+        </div>
+        <div class="table-wrap">
+          <table id="shortlist">
+            <thead>
+              <tr>
+                <th data-i18n>Game</th>
+                <th class="num" data-i18n>Score</th>
+                <th class="num" data-i18n>% Pos</th>
+                <th class="num" data-i18n>Reviews</th>
+                <th data-i18n>Top complaint</th>
+                <th data-i18n>From search</th>
+                <th data-i18n>Note</th>
+                <th></th>
               </tr>
             </thead>
             <tbody></tbody>

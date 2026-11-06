@@ -295,3 +295,34 @@ def test_ui_remembers_filters_and_tags(base_url, browser):
     chips = page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)")
     assert chips == ["Job Simulator", "Survival"]
     assert errors == []
+
+
+def test_ui_shortlist(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")
+    page.click("#run")
+    page.wait_for_selector("#ranking tbody tr")
+
+    page.click("#ranking tbody tr:first-child .star")
+    page.wait_for_selector("#ranking tbody tr:first-child .star.on")
+    assert page.text_content("#panel h3") == "Best Sim"  # the star doesn't select the row's game twice
+    page.click('#table-view button[data-view="shortlist"]')
+    page.wait_for_selector("#shortlist tbody tr")
+    assert "Best Sim" in page.inner_text("#shortlist tbody tr") and page.is_visible("#shortlist-csv")
+    page.fill("#shortlist input.note", "Better bus <b>physics</b>")
+    page.press("#shortlist input.note", "Tab")
+    page.wait_for_selector("text=Note saved")
+
+    page.reload()
+    page.wait_for_selector(".tag-chip")
+    page.click('#table-view button[data-view="shortlist"]')
+    page.wait_for_selector("#shortlist tbody tr")
+    assert page.input_value("#shortlist input.note") == "Better bus <b>physics</b>"
+    page.click("#shortlist tbody tr .remove")
+    page.wait_for_function("!document.querySelector('#shortlist tbody tr')")
+    assert "No games yet" in page.text_content("#shortlist-note") and page.is_hidden("#shortlist-csv")
+    assert errors == []

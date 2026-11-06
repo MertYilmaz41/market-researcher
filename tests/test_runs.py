@@ -54,3 +54,15 @@ def test_cli_runs_lists_saved_runs(tmp_path, monkeypatch):
     RunStore().save("tag", "Crafting", PARAMS | {"tags": ["Crafting"]}, TagResult(n_tag_games=1, candidates=[]))
     out = CliRunner().invoke(app, ["runs"]).output
     assert "Crafting" in out and "tag" in out
+
+
+def test_shortlist_keeps_note_and_time_when_starred_again(tmp_path):
+    store = RunStore(tmp_path / "runs.sqlite")
+    store.star(1, {"name": "A", "score": 40})
+    assert store.set_note(1, "worth a look")
+    added = store.shortlist()[0]["added"]
+    store.star(1, {"name": "A", "score": 55})  # starred again from a newer run
+    assert store.shortlist() == [{"name": "A", "score": 55, "appid": 1, "added": added, "note": "worth a look"}]
+    assert not store.set_note(2, "x") and not store.unstar(2)
+    assert store.unstar(1) and store.shortlist() == []
+    assert RunStore(tmp_path / "runs.sqlite").shortlist() == []  # a fresh store reads the same file
