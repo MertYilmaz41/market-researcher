@@ -12,6 +12,14 @@ const TR = {
   "Clear": "Temizle",
   "Filters": "Filtreler",
   "Find opportunities": "Fırsatları bul",
+  "Tags": "Etiketler",
+  "One game": "Tek oyun",
+  "Views": "Görünümler",
+  "Table": "Tablo",
+  "Map": "Harita",
+  "Show games as": "Oyunları göster",
+  "Game details": "Oyun ayrıntıları",
+  "Each game gets a row; click one to inspect it.": "Her oyun bir satırdır; incelemek için birine tıklayın.",
   "Searching...": "Aranıyor...",
   "Minimum reviews": "En az inceleme",
   "% positive from": "% olumlu (en az)",
@@ -198,7 +206,6 @@ const TR = {
   "If any part is 0%, the score is 0: a good opportunity needs all three parts.": "Herhangi bir parça %0 ise puan 0 olur: iyi bir fırsat için üç parçanın da olması gerekir.",
 
   // detail panel
-  "Select a game on the map or in the table.": "Haritadan ya da tablodan bir oyun seçin.",
   "Steam store": "Steam mağazası",
   " · Released {date}": " · Çıkış {date}",
   "Opportunity score {score}. How it is calculated": "Fırsat puanı {score}. Nasıl hesaplandığı",

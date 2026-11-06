@@ -27,43 +27,6 @@
       </div>
     </div>
 
-    <form id="tag-form" class="search" autocomplete="off">
-      <div id="tag-combo" class="combo">
-        <div id="tag-chips" class="tag-chips"></div>
-        <input id="tag" placeholder="Pick Steam tags..." aria-label="Steam tags" data-i18n-attr="aria-label"
-               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tag-list">
-        <button type="button" id="tag-toggle" class="combo-toggle" tabindex="-1" aria-label="Show all tags" data-i18n-attr="aria-label">&#9662;</button>
-        <div id="tag-pop" class="combo-pop" hidden>
-          <ul id="tag-list" class="combo-list" role="listbox" aria-label="Steam tags" data-i18n-attr="aria-label" aria-multiselectable="true"></ul>
-          <div class="combo-foot">
-            <span id="tag-count"></span>
-            <button type="button" id="tag-clear" tabindex="-1" data-i18n>Clear</button>
-          </div>
-        </div>
-      </div>
-      <button type="button" id="filters-toggle" class="ghost" aria-expanded="false" data-i18n>Filters</button>
-      <button type="submit" id="run" class="primary">Find opportunities</button>
-
-      <div id="filters" class="popover" hidden>
-        <label><span data-i18n>Minimum reviews</span> <input id="min-reviews" type="number" min="1" value="100"></label>
-        <label><span data-i18n>% positive from</span> <input id="lo" type="number" min="0" max="100" value="5"></label>
-        <label><span data-i18n>% positive to</span> <input id="hi" type="number" min="0" max="100" value="70"></label>
-        <label><span data-i18n>Games to analyze</span> <input id="max-games" type="number" min="1" max="50" value="15"></label>
-        <label><span data-i18n>Reviews mined per game</span> <input id="reviews" type="number" min="10" max="1000" step="10" value="200"></label>
-        <div class="presets">
-          <span data-i18n>Presets:</span>
-          <button type="button" class="ghost" data-preset="default" data-i18n>Default</button>
-          <button type="button" class="ghost" data-preset="proven" data-i18n>Proven demand</button>
-          <button type="button" class="ghost" data-preset="quick" data-i18n>Quick look</button>
-        </div>
-      </div>
-    </form>
-
-    <form id="game-form" class="search small" autocomplete="off">
-      <input id="appid" placeholder="AppID or Steam URL" aria-label="AppID or Steam store URL" data-i18n-attr="placeholder,aria-label">
-      <button type="submit" class="ghost">Analyze</button>
-    </form>
-
     <div class="top-tools">
       <button type="button" id="help-toggle" class="help-toggle" data-i18n>How it works</button>
       <div id="lang" class="seg" role="group" aria-label="Language" data-i18n-attr="aria-label">
@@ -110,32 +73,75 @@
   </dialog>
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
-  <main class="layout">
-    <section class="card map-card">
-      <div class="card-head">
-        <h2 data-i18n>Opportunity map</h2>
-        <div class="map-head-right">
-          <span id="map-legend" class="muted"></span>
-          <div id="map-view" class="seg" role="group" aria-label="Map view" data-i18n-attr="aria-label">
-            <button type="button" data-view="2d" aria-pressed="false">2D</button>
-            <button type="button" data-view="3d" aria-pressed="true">3D</button>
+  <div class="shell">
+    <aside class="sidebar card">
+      <form id="tag-form" class="side-form" autocomplete="off">
+        <section class="side-section">
+          <span class="label" data-i18n>Tags</span>
+          <div id="tag-combo" class="combo">
+            <div id="tag-chips" class="tag-chips"></div>
+            <input id="tag" placeholder="Pick Steam tags..." aria-label="Steam tags" data-i18n-attr="aria-label"
+                   role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tag-list">
+            <button type="button" id="tag-toggle" class="combo-toggle" tabindex="-1" aria-label="Show all tags" data-i18n-attr="aria-label">&#9662;</button>
+            <div id="tag-pop" class="combo-pop" hidden>
+              <ul id="tag-list" class="combo-list" role="listbox" aria-label="Steam tags" data-i18n-attr="aria-label" aria-multiselectable="true"></ul>
+              <div class="combo-foot">
+                <span id="tag-count"></span>
+                <button type="button" id="tag-clear" tabindex="-1" data-i18n>Clear</button>
+              </div>
+            </div>
           </div>
+        </section>
+        <section class="side-section">
+          <button type="button" id="filters-toggle" class="side-toggle label" aria-expanded="true" aria-controls="filters"><span data-i18n>Filters</span><span class="caret" aria-hidden="true">&#9662;</span></button>
+          <div id="filters" class="filters">
+            <label><span data-i18n>Minimum reviews</span> <input id="min-reviews" type="number" min="1" value="100"></label>
+            <label><span data-i18n>% positive from</span> <input id="lo" type="number" min="0" max="100" value="5"></label>
+            <label><span data-i18n>% positive to</span> <input id="hi" type="number" min="0" max="100" value="70"></label>
+            <label><span data-i18n>Games to analyze</span> <input id="max-games" type="number" min="1" max="50" value="15"></label>
+            <label class="wide"><span data-i18n>Reviews mined per game</span> <input id="reviews" type="number" min="10" max="1000" step="10" value="200"></label>
+            <div class="presets">
+              <span data-i18n>Presets:</span>
+              <button type="button" class="ghost" data-preset="default" data-i18n>Default</button>
+              <button type="button" class="ghost" data-preset="proven" data-i18n>Proven demand</button>
+              <button type="button" class="ghost" data-preset="quick" data-i18n>Quick look</button>
+            </div>
+          </div>
+        </section>
+        <button type="submit" id="run" class="primary block">Find opportunities</button>
+      </form>
+      <section class="side-section">
+        <span class="label" data-i18n>One game</span>
+        <form id="game-form" class="search small" autocomplete="off">
+          <input id="appid" placeholder="AppID or Steam URL" aria-label="AppID or Steam store URL" data-i18n-attr="placeholder,aria-label">
+          <button type="submit" class="ghost">Analyze</button>
+        </form>
+      </section>
+      <nav class="side-section">
+        <span class="label" data-i18n>Views</span>
+        <div id="table-view" class="side-nav" role="group" aria-label="Table view" data-i18n-attr="aria-label">
+          <button type="button" data-view="games" aria-pressed="true" data-i18n>Games</button>
+          <button type="button" data-view="markets" aria-pressed="false" data-i18n>Markets</button>
+          <button type="button" data-view="shortlist" aria-pressed="false" data-i18n>Shortlist</button>
         </div>
-      </div>
-      <div id="map" class="map">
-        <div id="map-empty" class="empty"><p><span data-i18n>Tick one or more tags and press Find opportunities.</span><br><span data-i18n>Each bubble is a game; click one to inspect it. In 3D, drag to orbit and scroll to zoom.</span></p></div>
-        <div id="tooltip" class="tooltip" hidden></div>
-      </div>
-    </section>
-
-    <aside id="panel" class="card panel">
-      <div class="empty" data-i18n>Select a game on the map or in the table.</div>
+      </nav>
     </aside>
 
-    <section class="card table-card">
+    <main class="card main">
       <div class="card-head">
         <h2 id="table-title">Ranking</h2>
         <div class="map-head-right">
+          <div id="games-mode" class="seg" role="group" aria-label="Show games as" data-i18n-attr="aria-label">
+            <button type="button" data-mode="table" aria-pressed="true" data-i18n>Table</button>
+            <button type="button" data-mode="map" aria-pressed="false" data-i18n>Map</button>
+          </div>
+          <div id="map-tools" class="map-head-right" hidden>
+            <span id="map-legend" class="muted"></span>
+            <div id="map-view" class="seg" role="group" aria-label="Map view" data-i18n-attr="aria-label">
+              <button type="button" data-view="2d" aria-pressed="false">2D</button>
+              <button type="button" data-view="3d" aria-pressed="true">3D</button>
+            </div>
+          </div>
           <div class="runs-wrap">
             <button type="button" id="runs-toggle" class="ghost" aria-expanded="false" aria-controls="runs-pop" data-i18n>Past runs</button>
             <div id="runs-pop" class="runs-pop" hidden>
@@ -144,11 +150,6 @@
           </div>
           <a id="download" class="ghost button" hidden data-i18n>Report (.md)</a>
           <a id="download-csv" class="ghost button" hidden>CSV</a>
-          <div id="table-view" class="seg" role="group" aria-label="Table view" data-i18n-attr="aria-label">
-            <button type="button" data-view="games" aria-pressed="true" data-i18n>Games</button>
-            <button type="button" data-view="markets" aria-pressed="false" data-i18n>Markets</button>
-            <button type="button" data-view="shortlist" aria-pressed="false" data-i18n>Shortlist</button>
-          </div>
         </div>
       </div>
       <div id="games-view" class="view">
@@ -190,6 +191,11 @@
           </thead>
           <tbody></tbody>
         </table>
+        <div id="table-empty" class="empty"><p><span data-i18n>Tick one or more tags and press Find opportunities.</span><br><span data-i18n>Each game gets a row; click one to inspect it.</span></p></div>
+      </div>
+      <div id="map" class="map" hidden>
+        <div id="map-empty" class="empty"><p><span data-i18n>Tick one or more tags and press Find opportunities.</span><br><span data-i18n>Each bubble is a game; click one to inspect it. In 3D, drag to orbit and scroll to zoom.</span></p></div>
+        <div id="tooltip" class="tooltip" hidden></div>
       </div>
       </div>
 
@@ -250,8 +256,13 @@
           </table>
         </div>
       </div>
-    </section>
-  </main>
+    </main>
+
+    <aside id="drawer" class="card drawer" aria-label="Game details" data-i18n-attr="aria-label" hidden>
+      <button type="button" id="drawer-close" class="ghost drawer-close" aria-label="Close" data-i18n-attr="aria-label">&times;</button>
+      <div id="panel" class="panel"></div>
+    </aside>
+  </div>
 
   <script type="module" src="/static/app.js"></script>
 </body>

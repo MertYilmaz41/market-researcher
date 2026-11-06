@@ -163,6 +163,43 @@ let savedView = "3d";
 try { savedView = localStorage.getItem("mapView") || "3d"; } catch { /* storage blocked */ }
 setMapView(savedView);
 
+// The Games view shows the ranking as a table or as the map, never both: each gets the whole card.
+let gamesMode = "table";
+function setGamesMode(mode) {
+  gamesMode = mode === "map" ? "map" : "table";
+  $("#games-view .table-wrap").hidden = gamesMode !== "table";
+  $("#map").hidden = gamesMode !== "map";
+  $("#map-tools").hidden = gamesMode !== "map" || tableView !== "games";
+  for (const b of document.querySelectorAll("#games-mode button")) b.setAttribute("aria-pressed", String(b.dataset.mode === gamesMode));
+  if (gamesMode === "map") setMapView(mapView); // resizes the shown map to its new box
+  try { localStorage.setItem("gamesMode", gamesMode); } catch { /* storage blocked */ }
+}
+$("#games-mode").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-mode]");
+  if (b) setGamesMode(b.dataset.mode);
+});
+
+// ---------- details drawer: opens with a game, closes with × or Esc ----------
+function openDrawer() {
+  $("#drawer").hidden = false;
+  document.body.classList.add("drawer-open");
+}
+function closeDrawer() {
+  $("#drawer").hidden = true;
+  document.body.classList.remove("drawer-open");
+  state.selected = null;
+  state.panelGame = null;
+  map.select(null);
+  highlightRow();
+}
+$("#drawer-close").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (e) => {
+  // Esc first closes whatever is open on top (tag list, past runs, score card, help)
+  if (e.key !== "Escape" || $("#drawer").hidden || e.defaultPrevented) return;
+  if (e.target.closest?.("#tag-combo") || !tagPop.hidden || !runsPop.hidden || document.querySelector("dialog[open]") || !scoreTip.hidden) return;
+  closeDrawer();
+});
+
 // ---------- state ----------
 // A search and a single-game analysis can run at the same time. keepPanel: the user analyzed a game
 // during the current search, so its results must not replace that game in the panel.
@@ -192,15 +229,19 @@ function stillRunning(what) {
   toast("info", t("Please wait"), what, t("Wait for it to finish, then try again."));
 }
 
-// ---------- top bar ----------
+// ---------- sidebar ----------
 function openFilters(open = true) {
   $("#filters").hidden = !open;
   $("#filters-toggle").setAttribute("aria-expanded", String(open));
 }
-$("#filters-toggle").addEventListener("click", () => openFilters($("#filters").hidden));
-document.addEventListener("click", (e) => {
-  if (!e.target.closest("#filters, #filters-toggle, #toasts")) openFilters(false);
+$("#filters-toggle").addEventListener("click", () => {
+  openFilters($("#filters").hidden);
+  try { localStorage.setItem("filtersOpen", String(!$("#filters").hidden)); } catch { /* storage blocked */ }
 });
+try {
+  const open = localStorage.getItem("filtersOpen");
+  openFilters(open ? open === "true" : !matchMedia("(max-width: 1000px)").matches);
+} catch { /* storage blocked: stays open */ }
 document.querySelectorAll("input").forEach((i) => i.addEventListener("input", () => i.classList.remove("invalid")));
 
 // ---------- filters and tags are remembered in this browser; presets fill the filter fields ----------
@@ -467,7 +508,6 @@ $("#tag-form").addEventListener("submit", async (e) => {
   }
   const label = tagsLabel(body.tags);
   if (body.lo > body.hi) return rangeError(body);
-  openFilters(false);
   state.keepPanel = false;
   setSearching(true);
   startRun("games");
@@ -564,6 +604,8 @@ $("#game-form").addEventListener("submit", async (e) => {
   setAnalyzing(true);
   const panel = $("#panel");
   const previous = [...panel.childNodes];
+  const wasOpen = !$("#drawer").hidden;
+  openDrawer();
   panel.replaceChildren(el("div", { class: "empty loading" },
     el("div", {},
       el("p", {}, t("Analyzing AppID {appid}...", { appid })),
@@ -581,6 +623,7 @@ $("#game-form").addEventListener("submit", async (e) => {
     notifyAll(g.notices);
   } catch (err) {
     panel.replaceChildren(...previous);
+    if (!wasOpen) closeDrawer();
     state.keepPanel = false;
     notifyError(err, t("Analysis failed"));
   } finally {
@@ -617,6 +660,7 @@ function showResult(result, id, quiet = false) {
   else $("#table-title").textContent = tableTitles[tableView]();
 
   $("#quick-filter").hidden = !state.games.length;
+  $("#table-empty").hidden = state.games.length > 0;
   map.setGames(visibleGames());
   renderTable();
   if (quiet) {
@@ -630,9 +674,9 @@ function showResult(result, id, quiet = false) {
   } else if (state.games.length) {
     selectGame(state.games[0].game.appid);
   } else {
-    state.selected = null;
+    closeDrawer();
     const why = (result.notices || []).find((n) => n.level === "warning");
-    $("#panel").replaceChildren(el("div", { class: "empty" },
+    $("#table-empty").replaceChildren(el("p", {},
       why ? `${why.title}. ${why.hint}` : t("No games to show. Try a lower minimum or a wider % range.")));
   }
 }
@@ -733,6 +777,8 @@ function setTableView(view) {
   if (view === "shortlist") renderShortlist();
   $("#table-title").textContent = tableTitles[view]();
   for (const a of [$("#download"), $("#download-csv")]) a.hidden = view !== "games" || !state.games.length;
+  $("#games-mode").hidden = view !== "games";
+  $("#map-tools").hidden = view !== "games" || gamesMode !== "map";
 }
 $("#table-view").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-view]");
@@ -1266,6 +1312,7 @@ function renderPanel(g, tab = 0) {
 
   $("#panel").replaceChildren(...head.filter(Boolean), tabBar, body);
   $("#panel").scrollTop = 0;
+  openDrawer();
 }
 
 function complaintsTab(g) {
@@ -1435,4 +1482,7 @@ async function setLanguage(value) {
   } catch { /* the old language stays until the next search */ }
 }
 document.querySelectorAll("#lang button").forEach((b) => b.addEventListener("click", () => setLanguage(b.dataset.lang)));
+let savedMode = "table";
+try { savedMode = localStorage.getItem("gamesMode") || "table"; } catch { /* storage blocked */ }
+setGamesMode(savedMode);
 setLanguage(getLang());

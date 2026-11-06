@@ -70,7 +70,7 @@ a:hover { text-decoration: underline; }
 /* ---------- top bar ---------- */
 .topbar {
   position: relative; z-index: 20; flex: none;
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s4);
+  display: flex; justify-content: space-between; align-items: center; gap: var(--s4);
   padding: 10px var(--s5);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(12px);
@@ -85,14 +85,11 @@ a:hover { text-decoration: underline; }
 }
 
 .search { position: relative; display: flex; gap: var(--s2); align-items: center; }
-#tag-form { justify-self: center; width: min(640px, 100%); }
-#tag-form .combo { flex: 1; min-width: 0; }
-/* direct children only: the Filters popover inputs live inside this form too */
 .search > input {
   width: 240px; padding: 9px var(--s3); border-radius: var(--r-md);
   border: 1px solid var(--line); background: var(--bg-2); color: var(--text); font: inherit;
 }
-.search.small > input { width: 170px; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.search.small > input { flex: 1; min-width: 0; width: auto; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .search.small > input::placeholder { font-family: var(--font-body); font-size: var(--fs-base); }
 .search > input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 
@@ -168,24 +165,42 @@ li[aria-selected="true"] .check { background: var(--accent); border-color: var(-
 .combo-foot button:hover { text-decoration: underline; }
 .combo-foot button[hidden] { display: none; }
 
-.popover {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3) 14px; width: 400px; padding: var(--s4);
-  background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .6);
+/* ---------- sidebar: search, filters, one game, views ---------- */
+.sidebar { overflow-y: auto; gap: var(--s5); }
+.side-form { display: flex; flex-direction: column; gap: var(--s5); }
+.side-section { display: flex; flex-direction: column; gap: var(--s2); }
+.side-toggle {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
+  padding: 0; border: 0; background: none; text-align: left;
 }
-.popover[hidden] { display: none; }
-.presets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-size: var(--fs-sm); color: var(--muted); }
-.popover label {
+.side-toggle:hover { color: var(--text); }
+.side-toggle .caret { transition: transform .15s; }
+.side-toggle[aria-expanded="false"] .caret { transform: rotate(-90deg); }
+button.block { width: 100%; padding: 11px 14px; }
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.filters[hidden] { display: none; }
+.filters .wide { grid-column: 1 / -1; }
+.presets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--muted); }
+.presets button { padding: 4px 10px; font-size: var(--fs-sm); }
+.side-nav { display: flex; flex-direction: column; gap: 2px; }
+.side-nav button {
+  padding: 8px var(--s3); border: 0; border-radius: var(--r-sm); background: none; color: var(--text-2); text-align: left;
+}
+.side-nav button:hover { background: var(--card-2); color: var(--text); }
+.side-nav button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.filters label {
   display: flex; flex-direction: column; gap: 6px;
   font-size: var(--fs-xs); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
 }
-.popover input {
+.filters input {
   width: 100%; min-width: 0; padding: 7px 9px; border-radius: var(--r-sm); border: 1px solid var(--line);
   background: var(--bg-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-base);
   letter-spacing: 0; text-transform: none;
 }
-.popover input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.filters input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 
 /* ---------- progress ---------- */
 .progress-bar { height: 4px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
@@ -248,14 +263,13 @@ body.searching .map, body.searching #table-note, body.searching .table-wrap { op
 input.invalid, .search > input.invalid { outline: 2px solid var(--bad) !important; border-color: transparent !important; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 
-/* ---------- layout: map + panel on top, ranking below, all inside the window ---------- */
-.layout {
+/* ---------- layout: sidebar | main | drawer (only while a game is open), all inside the window ---------- */
+.shell {
   flex: 1; min-height: 0;
   display: grid; gap: var(--s4); padding: var(--s4) var(--s5) 20px;
-  grid-template-columns: minmax(0, 1.7fr) minmax(360px, 1fr);
-  grid-template-rows: minmax(0, 1.35fr) minmax(0, 1fr);
-  grid-template-areas: "map panel" "table table";
+  grid-template-columns: 290px minmax(0, 1fr);
 }
+body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380px, min(460px, 34vw)); }
 .card {
   display: flex; flex-direction: column; min-height: 0;
   background: linear-gradient(180deg, var(--card), color-mix(in srgb, var(--card) 85%, transparent));
@@ -264,9 +278,19 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 }
 .card-head { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); flex-wrap: wrap; }
 .card-head .muted { font-size: var(--fs-xs); letter-spacing: .04em; }
-.map-card { grid-area: map; }
-.panel { grid-area: panel; display: block; overflow: auto; }
-.table-card { grid-area: table; }
+.drawer { position: relative; padding: 0; animation: drawer-in .2s ease-out; }
+.drawer[hidden] { display: none; }
+@keyframes drawer-in { from { opacity: 0; transform: translateX(16px); } }
+.panel { flex: 1; min-height: 0; overflow: auto; padding: var(--s4); }
+.drawer-close {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  width: 32px; height: 32px; padding: 0; font-size: 18px; line-height: 1;
+}
+.drawer .title-row { padding-right: 40px; }
+#games-view > .map { min-height: 320px; }
+.map[hidden], .table-wrap[hidden], #map-tools[hidden], #games-mode[hidden], .quick-filter[hidden] { display: none; }
+.main > .card-head .ghost { padding: 4px 12px; font-size: var(--fs-sm); }
+.table-wrap .empty { height: auto; min-height: 220px; }
 
 .map { position: relative; flex: 1; min-height: 0; border-radius: var(--r-md); overflow: hidden; background: radial-gradient(circle at 50% 40%, #1b1e25, var(--bg) 75%); }
 .map canvas { display: block; }
@@ -543,29 +567,16 @@ tbody tr.selected { background: color-mix(in srgb, var(--accent) 16%, transparen
 @media (max-width: 1000px), (max-height: 680px) {
   body { height: auto; min-height: 100vh; overflow: visible; display: block; }
   .topbar { position: sticky; top: 0; }
-  .layout {
-    grid-template-columns: minmax(0, 1fr); grid-template-rows: none; /* lets wide tables scroll inside their card */
-    grid-template-areas: "map" "panel" "table"; padding: var(--s3) var(--s4) var(--s5);
-  }
-  .map { flex: none; height: 400px; }
-  .panel { overflow: visible; }
-  .tabs { position: static; }
+  .shell, body.drawer-open .shell { grid-template-columns: minmax(0, 1fr); padding: var(--s3) var(--s4) var(--s5); }
+  .sidebar { overflow: visible; }
+  #games-view > .map { flex: none; height: 420px; }
   .table-wrap { overflow-x: auto; overflow-y: visible; }
   th { position: static; }
-}
-@media (max-width: 1000px) {
-  /* minmax(0, ...): a plain 1fr can't shrink below the search row's content, which ran off phone screens */
-  .topbar { grid-template-columns: minmax(0, 1fr); gap: var(--s3); padding: var(--s3) var(--s4); }
-  #tag-form { width: 100%; }
-  .search > input { width: 100%; min-width: 0; }
-  .search.small { width: 100%; }
-  .search.small > input { flex: 1; width: auto; }
-  .top-tools { justify-self: start; }
-  .popover { width: min(400px, calc(100vw - 32px)); }
+  /* the drawer becomes a full-screen sheet over the page */
+  .drawer { position: fixed; inset: 0; z-index: 40; border-radius: 0; border: 0; background: var(--card); }
+  body.drawer-open { overflow: hidden; }
 }
 @media (max-width: 560px) {
-  /* phones: the tag field gets its own row; Filters and the search button share the next one */
-  #tag-form { flex-wrap: wrap; }
-  #tag-form .combo { flex-basis: 100%; }
-  #tag-form > button { flex: 1; }
+  .topbar { padding: var(--s3) var(--s4); }
+  .brand p { display: none; }
 }

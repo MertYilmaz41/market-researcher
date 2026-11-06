@@ -130,10 +130,22 @@ def test_ui_smoke(base_url, browser):
     page.mouse.move(5, 5)
     assert page.is_hidden("#score-tip")
 
-    # 2D map: a bubble per game; clicking one shows it in the panel.
+    # The first game opens in the drawer; x closes it, clicking a row opens it again.
+    assert page.is_visible("#drawer") and page.text_content("#panel h3") == "Best Sim"
+    page.click("#drawer-close")
+    assert page.is_hidden("#drawer") and page.locator("#ranking tbody tr.selected").count() == 0
+    page.click("#ranking tbody tr:first-child td:nth-child(3)")
+    assert page.is_visible("#drawer")
+    page.keyboard.press("Escape")
+    assert page.is_hidden("#drawer")
+
+    # 2D map (Map mode): a bubble per game; clicking one shows it in the drawer.
+    page.click('#games-mode button[data-mode="map"]')
+    assert page.is_hidden("#ranking") and page.is_visible("#map-view")
     assert page.locator(".map2d .bubble").count() == 2
     page.locator(".map2d .bubble").last.click()
     assert page.text_content("#panel h3") in ("Best Sim", "Other")
+    page.click('#games-mode button[data-mode="table"]')
 
     # Analyze a game while a (slow) search runs.
     page.evaluate("document.querySelector('#toasts').replaceChildren()")
@@ -282,8 +294,7 @@ def test_ui_remembers_filters_and_tags(base_url, browser):
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")
 
-    page.click("#filters-toggle")
-    page.click("#filters [data-preset=quick]")  # a preset only fills the fields
+    page.click("#filters [data-preset=quick]")  # the Filters section is open on wide screens  # a preset only fills the fields
     assert page.input_value("#max-games") == "8" and page.input_value("#reviews") == "100"
     page.fill("#min-reviews", "250")
     page.press("#min-reviews", "Tab")  # change event
@@ -342,7 +353,10 @@ def test_ui_quick_filter_and_tag_chips(base_url, browser):
     assert page.locator("#ranking tbody tr").count() == 2 and page.text_content("#filter-count") == ""
 
     page.fill("#name-filter", "best")
-    assert page.locator("#ranking tbody tr").count() == 1 and page.locator(".map2d .bubble").count() == 1
+    assert page.locator("#ranking tbody tr").count() == 1
+    page.click('#games-mode button[data-mode="map"]')  # the map is drawn only while shown
+    assert page.locator(".map2d .bubble").count() == 1
+    page.click('#games-mode button[data-mode="table"]')
     assert page.text_content("#ranking tbody tr td.num") == "1"  # keeps its rank
     assert page.text_content("#filter-count") == "1 of 2 games shown"
     page.fill("#name-filter", "")
