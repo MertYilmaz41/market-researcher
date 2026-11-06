@@ -68,7 +68,7 @@ export function createMap(container, { onSelect }) {
 
   // Lights
   // neutral warm light: no tint on the score colors
-  scene.add(new THREE.HemisphereLight(0xfff3e0, 0x14110c, 1.1));
+  scene.add(new THREE.HemisphereLight(0xf2f4f7, 0x101317, 1.1));
   const key = new THREE.DirectionalLight(0xffffff, 1.6);
   key.position.set(6, 12, 8);
   scene.add(key);

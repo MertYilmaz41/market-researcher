@@ -1,27 +1,29 @@
 :root {
-  /* color: Graphite + Amber. The only place colors are defined; palette.js reads these for JS. */
-  --bg: #0f1115;
-  --bg-2: #13161b;
-  --card: #171a21;
-  --card-2: #1e222b;
-  --line: #2a2f3a;
-  --text: #e8e6e1;
-  --text-2: #cfccc4;
-  --muted: #9a978f;
-  --accent: #f5b544;      /* amber: primary actions, picks, focus */
-  --accent-deep: #e8913a; /* end of the primary button gradient */
-  --accent-2: #4fd1c5;    /* teal: links, gradient end, positive reviews */
+  /* color: neutral dark + one accent. The only place colors are defined; palette.js reads these for JS.
+     Amber is for actions and selection only; --accent-2 is for data (links, positive reviews, map axis).
+     Every text color here is >= 4.5:1 on --bg, --card and --card-2. */
+  --bg: #0e1014;
+  --bg-2: #121519;
+  --card: #161a20;
+  --card-2: #1d222a;
+  --line: #262c35;
+  --text: #e6e8eb;
+  --text-2: #c3c8cf;
+  --muted: #8b939e;
+  --accent: #f2a93b;      /* amber: primary actions, picks, focus */
+  --accent-2: #6cb6c9;    /* soft teal-blue: links, positive reviews, "new" */
   --on-accent: #1a1408;   /* text on amber (white fails contrast) */
-  --good: #34d399;
-  --warn: #fb923c;        /* orange, so warnings don't read as the amber accent */
-  --bad: #f87171;
-  --info: #60a5fa;
-  /* opportunity score 0 -> 100 (colorblind-safe): blue -> teal -> gold */
-  --score-0: #3d4f8c;
-  --score-1: #2f7fa0;
-  --score-2: #3fae9e;
-  --score-3: #a3cc5a;
-  --score-4: #f5b544;
+  --good: #4cc38a;
+  --on-good: #06261a;     /* text on --good */
+  --warn: #e8834a;        /* orange, so warnings don't read as the amber accent */
+  --bad: #e5625e;
+  --info: #6ea8e8;
+  /* opportunity score 0 -> 100 (colorblind-safe, lightness rises): blue -> teal -> gold */
+  --score-0: #3b4a7a;
+  --score-1: #3f8fa8;
+  --score-2: #5fb59a;
+  --score-3: #b9cf63;
+  --score-4: #f2c14e;
 
   /* type: display for headings, body for text, mono for every number */
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
@@ -50,10 +52,7 @@ body {
   height: 100vh;
   display: flex; flex-direction: column;
   overflow: hidden;
-  background:
-    radial-gradient(1200px 600px at 10% -10%, color-mix(in srgb, var(--accent) 9%, transparent) 0%, transparent 60%),
-    radial-gradient(900px 500px at 110% 10%, color-mix(in srgb, var(--accent-2) 7%, transparent) 0%, transparent 55%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-size: var(--fs-base);
   line-height: 1.5;
@@ -81,7 +80,7 @@ a:hover { text-decoration: underline; }
 .brand p { margin: 0; color: var(--muted); font-size: var(--fs-xs); letter-spacing: .02em; }
 .logo {
   display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-md);
-  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--on-accent); font-size: 18px;
+  background: var(--accent); color: var(--on-accent); font-size: 18px;
 }
 
 .search { position: relative; display: flex; gap: var(--s2); align-items: center; }
@@ -100,8 +99,10 @@ button, .button {
 .button[hidden] { display: none; }
 .button:hover { text-decoration: none; }
 button.primary {
-  border: 0; color: var(--on-accent); font-weight: 600; background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-  box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+  border: 0; color: var(--on-accent); font-weight: 600; background: var(--accent);
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, white);
 }
 button.busy { cursor: progress; animation: busy-pulse 1.6s ease-in-out infinite; }
 @keyframes busy-pulse { 50% { opacity: .65; } }
@@ -206,7 +207,7 @@ button.block { width: 100%; padding: 11px 14px; }
 .progress-bar { height: 4px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
 .progress-bar span {
   display: block; height: 100%; width: 0; border-radius: 99px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .4s ease;
+  background: var(--accent); transition: width .4s ease;
 }
 /* no known fraction (single-game analysis): a segment sliding across */
 .progress-bar.indeterminate span { width: 35%; animation: slide 1.3s ease-in-out infinite; }
@@ -272,7 +273,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380px, min(460px, 34vw)); }
 .card {
   display: flex; flex-direction: column; min-height: 0;
-  background: linear-gradient(180deg, var(--card), color-mix(in srgb, var(--card) 85%, transparent));
+  background: var(--card);
   border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s4);
   box-shadow: 0 10px 30px -15px rgba(0, 0, 0, .7);
 }
@@ -292,7 +293,7 @@ body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380
 .main > .card-head .ghost { padding: 4px 12px; font-size: var(--fs-sm); }
 .table-wrap .empty { height: auto; min-height: 220px; }
 
-.map { position: relative; flex: 1; min-height: 0; border-radius: var(--r-md); overflow: hidden; background: radial-gradient(circle at 50% 40%, #1b1e25, var(--bg) 75%); }
+.map { position: relative; flex: 1; min-height: 0; border-radius: var(--r-md); overflow: hidden; background: radial-gradient(circle at 50% 40%, var(--card-2), var(--bg) 75%); }
 .map canvas { display: block; }
 .empty { display: grid; place-items: center; text-align: center; height: 100%; min-height: 160px; color: var(--muted); padding: var(--s5); }
 .empty p { margin: 0; line-height: 1.7; }
@@ -362,7 +363,7 @@ body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380
 .bars { display: grid; gap: 10px; margin: var(--s3) 0 var(--s4); }
 .bar { display: grid; grid-template-columns: 130px 1fr 48px; align-items: center; gap: 10px; font-size: var(--fs-sm); }
 .bar .track { height: 6px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
-.bar .fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.bar .fill { height: 100%; border-radius: 99px; background: var(--accent); }
 .bar .val { text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-sm); }
 .how-scored {
   display: block; margin: -4px 0 var(--s3); padding: 0; border: 0; background: none;
@@ -389,7 +390,7 @@ body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380
 .tip-part-head i { flex: 1; color: var(--muted); font-style: normal; font-size: var(--fs-xs); }
 .tip-part-head b, .tip-row b { font-family: var(--font-mono); font-weight: 500; }
 .tip-part .track { height: 4px; border-radius: 99px; background: var(--card); overflow: hidden; }
-.tip-part .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.tip-part .fill { height: 100%; background: var(--accent); }
 .tip-sum { border-top: 1px solid var(--line); padding-top: var(--s2); }
 .tip-row { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s2); padding: 3px 0; }
 .tip-row p { grid-column: 1 / -1; margin: 0; }
@@ -531,8 +532,8 @@ body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380
 .markets-bar p { margin: 0; flex: 1 1 320px; }
 .markets-bar button { flex: none; }
 .top-tools { display: flex; align-items: center; gap: var(--s2); }
-.help-toggle { border: 0; background: var(--good); color: #062a1c; font-weight: 600;
-  box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--good) 60%, transparent); }
+.help-toggle { border: 0; background: var(--good); color: var(--on-good); font-weight: 600;
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--good) 50%, transparent); }
 .help-toggle:hover { background: color-mix(in srgb, var(--good) 85%, white); }
 .help { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 64px); padding: 0; border: 1px solid var(--line);
   border-radius: var(--radius); background: var(--card); color: var(--text); }
