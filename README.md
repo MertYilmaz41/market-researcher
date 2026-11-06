@@ -48,8 +48,8 @@ Click the tag field and tick one or more Steam tags (up to 5; typing only filter
 
 - **Opportunity map (2D | 3D):** each bubble is a game. Left–right is demand and height is dissatisfaction; in 3D, depth is fixability. Size is estimated revenue and color is the score (blue = low, gold = high). Click a bubble to inspect it. In 3D, drag to orbit and scroll to zoom.
 - **Market strip:** how many games in the tag have demand, how many are underserved and how many are well served (85%+ positive), with a short verdict.
-- **Opportunity summary (optional):** under the market strip, press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-opportunity-summary).
-- **Detail panel:** score breakdown, review numbers and their source, the last 12 months of reviews, revenue estimate, what players complain about (with quotes, trends and design pillars), the core fantasy, risk checks and a monthly review chart.
+- **Opportunity summary (optional):** under the market strip, press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-summaries).
+- **Detail panel:** score breakdown, review numbers and their source, the last 12 months of reviews, revenue estimate, what players complain about (with quotes, trends and design pillars), the core fantasy, risk checks and a monthly review chart. Its **Summary** tab (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the complaint categories (e.g. price, cheaters), each with a quote from a review. It is saved with the run and added to the report.
 - **Score card:** hover or focus any score to see its three parts, their weights, each risk penalty and why.
 - **Ranking table:** click a column header to sort and a row to select a game. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV**.
 - **Markets:** switch the table to **Markets** and press **Build market ranking** to rank every tag (about 7 minutes the first time, then from the cache). Click a tag to search it.
@@ -63,6 +63,7 @@ Click the tag field and tick one or more Steam tags (up to 5; typing only filter
 uv run sr discover --tag "Job Simulator"           # list candidate games
 uv run sr discover -t Crafting -t Survival         # games with all of these tags
 uv run sr analyze 1330660                          # deep dive on one game (Steam AppID)
+uv run sr analyze 1330660 --summary                # plus the game summary (needs Ollama)
 uv run sr report --tag "Job Simulator"             # rank a tag, writes reports/job-simulator.md
 uv run sr markets --top 30                         # rank every tag by underserved games
 uv run sr report --tag "Job Simulator" --summary   # plus the opportunity summary (needs Ollama)
@@ -85,16 +86,16 @@ uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report
 
 The first run of a tag takes about 30 seconds because of API rate limits. After that, data comes from the cache in `~/.cache/steam-researcher` (refreshed daily, weekly for store details). Saved runs are kept separately in `~/.local/share/steam-researcher`, so clearing the cache keeps them.
 
-### Optional: local AI for the opportunity summary
+### Optional: local AI for the summaries
 
-The summary is written on your own computer by [Ollama](https://ollama.com) with the free `gemma3:12b` model (about 8 GB; a GPU with 12 GB+ of memory keeps it fast). Nothing is sent to an online service. Everything else works without it.
+The opportunity summary and the game summaries are written on your own computer by [Ollama](https://ollama.com) with the free `gemma3:12b` model (about 8 GB; a GPU with 12 GB+ of memory keeps it fast). Nothing is sent to an online service. Everything else works without it.
 
 ```powershell
 winget install Ollama.Ollama
 ollama pull gemma3:12b
 ```
 
-Treat the summary as a first draft: check each point against the games it names.
+Treat the summaries as a first draft: check each point against the games and quotes it names.
 
 ## Data sources
 
@@ -107,6 +108,6 @@ SteamDB isn't used because it has no public API.
 ## Limitations
 
 - **Revenue is a rough estimate:** full price, before Steam's cut, discounts and regional pricing.
-- **Review mining is keyword-based and English-only.** On hand-labeled reviews from games it was never tuned on, it finds 62% of complaints, and 86% of what it reports is right. Read the quotes, not just the percentages.
+- **Review mining is keyword-based and English-only.** On hand-labeled reviews from games it was never tuned on, it finds 64% of complaints, and 80% of what it reports is right. Read the quotes, not just the percentages.
 - **No price history:** only the current price is checked for deep discounts.
 - **SteamSpy tag lists may be incomplete**, and search results use SteamSpy's review counts until a game is analyzed.
