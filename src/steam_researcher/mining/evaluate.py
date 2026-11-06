@@ -2,6 +2,7 @@
 
     uv run python -m steam_researcher.mining.evaluate [path ...]
     uv run python -m steam_researcher.mining.evaluate --miner llm --model qwen3:14b   (local LLM, see llm.py)
+    uv run python -m steam_researcher.mining.evaluate --miner verify   (keywords, then the LLM drops wrong ones)
 
 Tune mining/lexicon.py against labeled_reviews.jsonl only. labeled_reviews_holdout.jsonl (other games)
 is never tuned on: it shows whether a change helps on reviews the lexicon wasn't fitted to.
@@ -100,8 +101,8 @@ def table(scores: dict[str, Score], total: Score) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Score a complaint miner against hand-labeled reviews.")
     ap.add_argument("paths", nargs="*", type=Path, help="labeled JSONL files (default: tuning set and held-out set)")
-    ap.add_argument("--miner", choices=["keywords", "llm"], default="keywords")
-    ap.add_argument("--model", default=config.LLM_MODEL, help="Ollama model for --miner llm")
+    ap.add_argument("--miner", choices=["keywords", "llm", "verify"], default="keywords")
+    ap.add_argument("--model", default=config.LLM_MODEL, help="Ollama model for --miner llm / verify")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     for path in args.paths or [FIXTURE, HOLDOUT]:
@@ -110,13 +111,16 @@ def main() -> None:
         if args.miner == "llm":
             detections = llm.classify([r["text"] for r in rows], args.model)
             name = f"LLM {args.model}"
+        elif args.miner == "verify":
+            detections = llm.verify([r["text"] for r in rows], [detect(r["text"]) for r in rows], args.model)
+            name = f"keywords checked by {args.model}"
         else:
             detections = [detect(r["text"]) for r in rows]
             name = "keywords"
         per_review = (time.perf_counter() - start) / len(rows)
         print(f"{path.name}: {len(rows)} labeled reviews, {name}, {per_review:.2f} s per review "
               f"(~{per_review * 200 / 60:.1f} min for a game's 200 negative reviews)")
-        if args.miner == "llm" and (share := llm.vram_share(args.model)) is not None:
+        if args.miner != "keywords" and (share := llm.vram_share(args.model)) is not None:
             print(f"model in GPU memory: {share:.0%}")
         print(table(*evaluate(rows, detections)), end="\n\n")
 

@@ -6,6 +6,8 @@
 classify() returns the same codes as the keyword miner (mining/lexicon.py categories, plus
 "idea_praise"), so evaluate.py scores both against the same hand-labeled reviews. Reviews are sent
 in small batches; Ollama's structured output (a JSON schema) keeps the answer parseable.
+verify() is the other way round: the keywords find candidates, and the model may only drop them
+(evaluate --miner verify).
 """
 
 import json
@@ -54,6 +56,18 @@ idea, concept or potential ("great concept but...", "I wanted to love it", "so m
 
 Answer with JSON only."""
 
+VERIFY_SYSTEM = """You check complaint labels on negative Steam game reviews for a game designer.
+A keyword search flagged each review with candidate categories. For each candidate, decide whether
+the reviewer really complains about that in this game. Keep it only if so, and copy the exact words
+from the review that state the complaint. Drop a candidate when its words are used otherwise: praise
+("the controls feel great"), another game, a negation ("no bugs at all"), or a passing mention.
+Never add a category that isn't a candidate.
+
+Categories:
+{categories}
+
+Answer with JSON only."""
+
 
 class LLMUnavailable(RuntimeError):
     """Ollama isn't running (missing_model is None), or the model isn't downloaded."""
@@ -90,11 +104,14 @@ def schema() -> dict:
 
 def _request(texts: list[str], model: str) -> dict:
     numbered = "\n\n".join(f"Review {i}:\n{t[:MAX_CHARS]}" for i, t in enumerate(texts, 1))
+    return _body(model, system_prompt(), f"Label these {len(texts)} reviews.\n\n{numbered}", schema())
+
+
+def _body(model: str, system: str, user: str, fmt: dict) -> dict:
     body = {
         "model": model,
-        "messages": [{"role": "system", "content": system_prompt()},
-                     {"role": "user", "content": f"Label these {len(texts)} reviews.\n\n{numbered}"}],
-        "format": schema(),
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "format": fmt,
         "stream": False,
         "options": {"temperature": 0, "num_ctx": 8192},
     }
@@ -156,6 +173,64 @@ def classify(texts: list[str], model: str = config.LLM_MODEL, *, client: httpx.C
         content = post_chat(_request(chunk, model), client)
         found += parse(content, [t[:MAX_CHARS] for t in chunk])
     return found
+
+
+def verify_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {"reviews": {"type": "array", "items": {
+            "type": "object",
+            "properties": {
+                "review": {"type": "integer"},
+                "keep": {"type": "array", "items": {
+                    "type": "object",
+                    "properties": {"category": {"type": "string", "enum": [c.code for c in CATEGORIES]},
+                                   "quote": {"type": "string"}},
+                    "required": ["category", "quote"],
+                }},
+            },
+            "required": ["review", "keep"],
+        }}},
+        "required": ["reviews"],
+    }
+
+
+def _verify_request(texts: list[str], candidates: list[set[str]], model: str) -> dict:
+    system = VERIFY_SYSTEM.format(categories="\n".join(f"- {c.code}: {DEFINITIONS[c.code]}" for c in CATEGORIES))
+    numbered = "\n\n".join(f"Review {i}:\nCandidates: {', '.join(sorted(c))}\n{t[:MAX_CHARS]}"
+                           for i, (t, c) in enumerate(zip(texts, candidates), 1))
+    return _body(model, system, f"Check the candidates of these {len(texts)} reviews.\n\n{numbered}", verify_schema())
+
+
+def parse_verified(content: str, texts: list[str], candidates: list[set[str]]) -> list[set[str]]:
+    """The model's JSON answer -> the candidates it kept, per review. A code that wasn't a candidate,
+    or whose quote isn't in the review, is not kept."""
+    out: list[set[str]] = [set() for _ in texts]
+    for item in json.loads(content).get("reviews", []):
+        i = item.get("review")
+        if not isinstance(i, int) or not 1 <= i <= len(texts):
+            continue
+        for c in item.get("keep", []):
+            if isinstance(c, dict) and c.get("category") in candidates[i - 1] and grounded(c.get("quote", ""), texts[i - 1]):
+                out[i - 1].add(c["category"])
+    return out
+
+
+def verify(texts: list[str], found: list[set[str]], model: str = config.LLM_MODEL, *,
+           client: httpx.Client | None = None, batch: int = config.LLM_BATCH) -> list[set[str]]:
+    """The keyword detections with the ones the model rejects dropped. IDEA is passed through as is;
+    reviews without a complaint candidate aren't sent."""
+    client = client or httpx.Client(base_url=config.LLM_URL, timeout=600)
+    out = [{IDEA} & f for f in found]
+    todo = [i for i, f in enumerate(found) if f - {IDEA}]
+    for start in range(0, len(todo), batch):
+        idx = todo[start:start + batch]
+        chunk = [texts[i][:MAX_CHARS] for i in idx]
+        cands = [found[i] - {IDEA} for i in idx]
+        content = post_chat(_verify_request(chunk, cands, model), client)
+        for i, kept in zip(idx, parse_verified(content, chunk, cands)):
+            out[i] |= kept
+    return out
 
 
 def vram_share(model: str, client: httpx.Client | None = None) -> float | None:
