@@ -56,7 +56,7 @@ Click the tag field and tick one or more Steam tags (up to 5; typing only filter
 - **Shortlist:** star (☆) a game in the ranking or the panel to keep it. Switch the table to **Shortlist** to see the starred games with the score they had when you starred them, add a note to each, or download the list as CSV. It stays after a restart and a cache clear.
 - **Past runs:** reopen any earlier search or market ranking, even after a restart.
 - **Single game:** paste an AppID or a Steam store link into the box at the top right.
-- **How it works:** the **?** button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
+- **How it works:** the green **How it works** button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
 - **Language:** the **EN | TR** switch at the top right changes the whole interface, including messages and the score card.
 
 **Command line:**

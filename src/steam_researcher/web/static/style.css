@@ -490,7 +490,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .markets-bar p { margin: 0; flex: 1 1 320px; }
 .markets-bar button { flex: none; }
 .top-tools { display: flex; align-items: center; gap: var(--s2); }
-.help-toggle { width: 32px; height: 32px; padding: 0; border-radius: 50%; font-weight: 600; }
+.help-toggle { border: 0; background: var(--good); color: #062a1c; font-weight: 600;
+  box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--good) 60%, transparent); }
+.help-toggle:hover { background: color-mix(in srgb, var(--good) 85%, white); }
 .help { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 64px); padding: 0; border: 1px solid var(--line);
   border-radius: var(--radius); background: var(--card); color: var(--text); }
 .help::backdrop { background: rgb(0 0 0 / .55); }
