@@ -222,6 +222,8 @@ TR: dict[str, str] = {
         "Şikayetlerin {fix:.0%} kadarı küçük bir ekibin düzeltebileceği şeyler (hatalar, arayüz, performans...), "
         "kapsam ya da tür değil.",
     "Reviews couldn't be mined, so {fix:.0%} is assumed.": "İncelemeler çıkarılamadı, bu yüzden {fix:.0%} varsayıldı.",
+    "Reviews were read, but none matched a complaint category, so {fix:.0%} is assumed.":
+        "İncelemeler okundu ama hiçbiri bir şikâyet kategorisine uymadı, bu yüzden {fix:.0%} varsayıldı.",
 
     # ---- review numbers and recent demand (report.py)
     "Steam's own numbers": "Steam'in kendi rakamları",

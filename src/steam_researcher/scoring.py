@@ -71,7 +71,10 @@ def explain(a: Analysis) -> dict:
                              rating=rating, max=config.MAX_RATING, min=config.MIN_RATING),
         "fixability": (_("{fix:.0%} of complaint mentions are things a small team can fix "
                          "(bugs, UI, performance...), not scope or genre.", fix=o.fixability) if mined else
-                       _("Reviews couldn't be mined, so {fix:.0%} is assumed.", fix=config.DEFAULT_FIXABILITY)),
+                       _("Reviews couldn't be mined, so {fix:.0%} is assumed.", fix=config.DEFAULT_FIXABILITY)
+                       if a.mining is None else
+                       _("Reviews were read, but none matched a complaint category, so {fix:.0%} is assumed.",
+                         fix=config.DEFAULT_FIXABILITY)),
     }
     parts = [{"key": k, "label": _(PART_LABELS[k]), "value": getattr(o, k), "weight": w, "basis": basis[k]}
              for k, w in config.SCORE_WEIGHTS.items()]

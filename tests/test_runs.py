@@ -36,6 +36,7 @@ def test_store_creates_no_file_until_used(tmp_path):
 def test_compare_key_ignores_tag_order_and_case():
     assert runs.compare_key(["A", "b"], 100, 5, 70) == runs.compare_key(["B", "a"], 100, 5, 70)
     assert runs.compare_key(["A"], 100, 5, 70) != runs.compare_key(["A"], 100, 5, 60)
+    assert runs.compare_key(["A"], 100, 5, 70, 200) != runs.compare_key(["A"], 100, 5, 70, 1000)
 
 
 def test_changes():

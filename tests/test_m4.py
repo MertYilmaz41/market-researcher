@@ -113,6 +113,16 @@ def test_explain_notes_review_bombs_and_unmined_reviews():
     assert "assumed" in e["parts"][2]["basis"] and e["parts"][2]["value"] == 0.5
 
 
+def test_explain_tells_unread_reviews_from_reviews_without_complaints():
+    from steam_researcher.models import MiningResult
+
+    a = _analysis_for(game(), mined=False)
+    assert a.mining is None and "couldn't be mined" in scoring.explain(a)["parts"][2]["basis"]
+    a.mining = MiningResult(n_negative=40, n_positive=40, categories=[], idea_praise_share=0, fixability=0,
+                            core_phrases=[], liked=[])
+    assert "none matched a complaint category" in scoring.explain(a)["parts"][2]["basis"]
+
+
 def test_explain_names_a_zero_part():
     e = scoring.explain(_analysis_for(game(pos=900, neg=100)))  # 90% positive: not dissatisfied
     assert e["zero_part"] == "Dissatisfaction" and e["score"] == 0 and e["combined"] == 0
@@ -146,3 +156,17 @@ def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):
     monkeypatch.setattr(pipeline, "review_sample", down)
     a = pipeline.analyze_game(None, 1)
     assert a.mining is None and a.review_error
+
+
+def test_recent_figures_count_back_from_the_analysis_time():
+    """A saved run shows the last-12-months figures of the day it was made, not of today."""
+    from steam_researcher.models import HistPoint
+
+    day = 24 * 3600
+    then = 1_700_000_000  # Nov 2023
+    a = analysis(50, "Sim")
+    a.histogram = [HistPoint(date=then - 400 * day, up=100, down=0), HistPoint(date=then - 30 * day, up=10, down=10)]
+    a.analyzed_at = then
+    assert report.recent_text(a) == "20 (17%), 50% positive"
+    a.analyzed_at = None  # older saved runs: count back from now, as before (nothing in the last year)
+    assert report.recent_text(a) == "0 (0%)"

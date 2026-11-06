@@ -25,9 +25,10 @@ from .report import rank
 ADAPTERS = {"tag": TypeAdapter(TagResult), "market": TypeAdapter(MarketsResult)}
 
 
-def compare_key(tags: list[str], min_reviews: int, lo: float, hi: float) -> str:
-    """Runs with the same tags (any order or case) and filters can be compared."""
-    return json.dumps([sorted(t.casefold() for t in tags), min_reviews, lo, hi])
+def compare_key(tags: list[str], min_reviews: int, lo: float, hi: float, reviews: int | None = None) -> str:
+    """Runs with the same tags (any order or case), filters and reviews read per game can be compared:
+    a bigger review sample alone moves complaint shares and fixability, so its score changes would mislead."""
+    return json.dumps([sorted(t.casefold() for t in tags), min_reviews, lo, hi, reviews])
 
 
 class RunStore:
@@ -57,7 +58,7 @@ class RunStore:
         if kind == "tag":
             ranked = rank(result.analyses)
             n, scores = len(ranked), {a.game.appid: a.opportunity.score for a in ranked}
-            key = compare_key(params["tags"], params["min_reviews"], params["lo"], params["hi"])
+            key = compare_key(params["tags"], params["min_reviews"], params["lo"], params["hi"], params.get("reviews"))
         else:
             n, scores, key = len(result.rows), {}, None
         data = ADAPTERS[kind].dump_json(result).decode()

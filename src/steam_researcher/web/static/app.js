@@ -117,11 +117,11 @@ async function apiError(res) {
 
 // ---------- opportunity map: 2D (always works) and 3D (needs three.js from the CDN + WebGL) ----------
 const onMapSelect = (appid) => selectGame(appid);
-const map2d = createMap2d($("#map"), { onSelect: onMapSelect });
+const map2d = createMap2d($("#map"), { onSelect: onMapSelect, describe: mapLine });
 let map3d = null;
 try {
   const { createMap } = await import("/static/map3d.js");
-  const m = createMap($("#map"), { onSelect: onMapSelect });
+  const m = createMap($("#map"), { onSelect: onMapSelect, describe: mapLine });
   if (!m.available) throw new Error("WebGL is disabled in this browser");
   map3d = m;
 } catch (err) {
@@ -1016,6 +1016,14 @@ const sortValue = {
 const recentText = (g) => g.recent_share == null ? "-"
   : `${fmt(g.recent_reviews)} (${pct(g.recent_share)})` + (g.recent_rating == null ? "" : t(", {pct} pos", { pct: percent(g.recent_rating) }));
 const adjText = (g) => t(" ({pct} without review bombs)", { pct: percent(g.opportunity.effective_rating) });
+// The map tooltip's summary line: the same rating text as the table and the drawer, plus the revenue the
+// bubble size stands for. A declaration, so the maps (made near the top) can use it.
+function mapLine(g) {
+  const o = g.opportunity;
+  const adj = Math.round(o.effective_rating) !== Math.round(g.rating) ? adjText(g) : "";
+  return t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(o.score), n: fmt(g.reviews), pct: percent(g.rating) })
+    + adj + " · " + (g.price ? t("Est. revenue {money}", { money: money(g.box.gross_mid) }) : "F2P");
+}
 
 // Score change since the previous run with the same tags and filters (only present when one exists).
 function delta(g) {

@@ -296,6 +296,7 @@ const TR = {
   "Combined": "Birleşik",
   "Est. revenue": "Tahmini gelir",
   "Est. revenue (x45)": "Tahmini gelir (x45)",
+  "Est. revenue {money}": "Tahmini gelir {money}",
   "Estimated revenue": "Tahmini gelir",
   "Hide games with risk penalties": "Risk cezası olan oyunları gizle",
   "Reviews read per game": "Oyun başına okunan inceleme",

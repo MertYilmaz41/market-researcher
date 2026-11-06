@@ -13,7 +13,7 @@ function svg(tag, attrs = {}, text = null) {
   return node;
 }
 
-export function createMap2d(container, { onSelect }) {
+export function createMap2d(container, { onSelect, describe }) {
   const tooltip = container.querySelector("#tooltip");
   const root = svg("svg", { class: "map2d", role: "img", "aria-label": t("Opportunity map, 2D") });
   container.prepend(root);
@@ -40,7 +40,7 @@ export function createMap2d(container, { onSelect }) {
     tooltip.replaceChildren(
       Object.assign(document.createElement("b"), { textContent: g.game.name }),
       Object.assign(document.createElement("span"), {
-        textContent: t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(o.score), n: fmt(g.reviews), pct: percent(g.rating) }),
+        textContent: describe ? describe(g) : t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(o.score), n: fmt(g.reviews), pct: percent(g.rating) }),
       }),
       Object.assign(document.createElement("span"), {
         textContent: t("demand {demand} · dissatisfaction {dissatisfaction} · fixability {fixability}",
@@ -78,10 +78,13 @@ export function createMap2d(container, { onSelect }) {
     );
 
     // Bubble size by revenue, relative within this result (like the 3D spheres).
+    // Free-to-play games have no Box Method revenue: smallest bubble, and left out of the scale.
     const grosses = games.map((g) => Math.log10(Math.max(1, g.box.gross_mid)));
-    const lo = Math.min(...grosses), hi = Math.max(...grosses);
+    const priced = grosses.filter((_, i) => games[i].price > 0);
+    const lo = Math.min(...priced), hi = Math.max(...priced);
     const unit = Math.min(w, h) / 100;
-    const items = games.map((g, i) => ({ g, r: (2.4 + 4.6 * (hi > lo ? (grosses[i] - lo) / (hi - lo) : 0.5)) * unit }));
+    const size = (i) => (games[i].price > 0 ? (hi > lo ? (grosses[i] - lo) / (hi - lo) : 0.5) : 0);
+    const items = games.map((g, i) => ({ g, r: (2.4 + 4.6 * size(i)) * unit }));
     items.sort((a, b) => b.r - a.r); // big ones first, so small ones stay clickable on top
 
     let pick = null;

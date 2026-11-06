@@ -155,6 +155,9 @@ class Analysis(BaseModel):
     mining: MiningResult | None
     review_error: str | None = None
     opportunity: Opportunity
+    # When it was analyzed (unix time). The "last 12 months" figures shown later count back from here,
+    # so a saved run keeps the numbers its flags were based on. None in runs saved before this field.
+    analyzed_at: float | None = None
 
     @property
     def has_histogram(self) -> bool:

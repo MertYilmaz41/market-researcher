@@ -87,10 +87,10 @@ def rating_source_text(g: Game) -> str:
 
 def recent_text(a: Analysis) -> str:
     """Reviews in the last 12 months, their share of all reviews and their % positive (histogram)."""
-    recent, total, _age = risk.recent_activity(a.histogram)
+    recent, total, _age = risk.recent_activity(a.histogram, a.analyzed_at)
     if not total:
         return "-"
-    lately = risk.recent_rating(a.histogram)
+    lately = risk.recent_rating(a.histogram, a.analyzed_at)
     text = _("{n:,} ({share:.0%})", n=recent, share=recent / total)
     return text + (_(", {rating:.0f}% positive", rating=lately) if lately is not None else "")
 
@@ -192,8 +192,8 @@ def ranking_csv(ranked: list[Analysis], changes: dict[int, float | None] | None 
                 "reviews_last_12_months", "pct_positive_last_12_months", "est_gross_x45", "top_complaint", "risks", "store_url"])
     for i, a in enumerate(ranked, 1):
         change = changes.get(a.game.appid, "")
-        recent, total, _age = risk.recent_activity(a.histogram)
-        lately = risk.recent_rating(a.histogram)
+        recent, total, _age = risk.recent_activity(a.histogram, a.analyzed_at)
+        lately = risk.recent_rating(a.histogram, a.analyzed_at)
         w.writerow([
             i, a.game.appid, a.game.name, round(a.opportunity.score),
             "new" if a.game.appid in changes and change is None else ("" if change == "" else round(change)),

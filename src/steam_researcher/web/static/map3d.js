@@ -35,7 +35,7 @@ function label(text, cls = "axis-label") {
   return new CSS2DObject(el);
 }
 
-export function createMap(container, { onSelect }) {
+export function createMap(container, { onSelect, describe }) {
   const tooltip = container.querySelector("#tooltip");
   let renderer;
   try {
@@ -140,11 +140,13 @@ export function createMap(container, { onSelect }) {
   function setGames(games) {
     clear();
     container.querySelector("#map-empty").hidden = games.length > 0;
+    // Free-to-play games have no Box Method revenue: smallest sphere, and left out of the scale.
     const grosses = games.map((g) => Math.log10(Math.max(1, g.box.gross_mid)));
-    const lo = Math.min(...grosses), hi = Math.max(...grosses);
+    const priced = grosses.filter((_, i) => games[i].price > 0);
+    const lo = Math.min(...priced), hi = Math.max(...priced);
     games.forEach((game, i) => {
       const p = position(game);
-      const t = hi > lo ? (grosses[i] - lo) / (hi - lo) : 0.5;
+      const t = game.price > 0 ? (hi > lo ? (grosses[i] - lo) / (hi - lo) : 0.5) : 0;
       const r = 0.28 + 0.55 * t;
       const color = scoreColor(game.opportunity.score);
       const mesh = new THREE.Mesh(
@@ -199,7 +201,7 @@ export function createMap(container, { onSelect }) {
     const b = document.createElement("b");
     b.textContent = g.game.name;
     const s = document.createElement("span");
-    s.textContent = t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(g.opportunity.score), n: fmt(g.reviews), pct: percent(g.rating) });
+    s.textContent = describe ? describe(g) : t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(g.opportunity.score), n: fmt(g.reviews), pct: percent(g.rating) });
     tooltip.append(b, s);
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y}px`;

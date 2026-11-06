@@ -123,7 +123,7 @@ def game_json(a: Analysis) -> dict:
     """Everything the frontend needs for one game; no math happens in JS."""
     g = a.game
     box = boxmethod.estimate(g.reviews, g.base_price)
-    recent, total, _age = risk.recent_activity(a.histogram)
+    recent, total, _age = risk.recent_activity(a.histogram, a.analyzed_at)
     data = a.model_dump(mode="json")
     # Text in the request's language: flag messages, complaint names, design pillars, trends.
     for flag, out in zip(a.flags, data["flags"]):
@@ -144,7 +144,7 @@ def game_json(a: Analysis) -> dict:
         has_histogram=a.has_histogram,
         recent_reviews=recent,
         recent_share=recent / total if total else None,
-        recent_rating=risk.recent_rating(a.histogram),
+        recent_rating=risk.recent_rating(a.histogram, a.analyzed_at),
         score_explained=scoring.explain(a),
     )
     return data

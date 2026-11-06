@@ -36,7 +36,7 @@ def app_details(http: HttpClient, appid: int) -> AppDetails | None:
     data = http.get_json(
         f"{STORE}/api/appdetails",
         {"appids": appid, "cc": "us", "l": "english"},
-        ttl=config.TTL_APPDETAILS,
+        ttl=config.TTL_STORE_DETAILS,
     )
     return parse_app_details(appid, data or {})
 

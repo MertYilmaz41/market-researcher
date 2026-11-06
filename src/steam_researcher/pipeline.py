@@ -1,5 +1,6 @@
 """Shared steps used by `discover`, `analyze` and `report`."""
 
+import time
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -103,6 +104,7 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
     flags = risk.assess(game, details, hist) + (risk.check_scope(mining) if mining else [])
     opportunity = scoring.score(game, flags, mining, risk.rating_without_bombs(hist))
     return Analysis(
+        analyzed_at=time.time(),
         game=game,
         details=details,
         histogram=hist,

@@ -57,7 +57,10 @@ RUNS_DB = DATA_DIR / "runs.sqlite"
 TTL_TAG_LIST = 24 * 3600
 TTL_TAG_NAMES = 7 * 24 * 3600  # the Steam tag catalog rarely changes
 TTL_HISTOGRAM = 24 * 3600
-TTL_APPDETAILS = 7 * 24 * 3600
+TTL_APPDETAILS = 7 * 24 * 3600  # SteamSpy game details
+# Steam's appdetails carry the current discount, which drives the deep_discount penalty; Steam sales
+# last 1-2 weeks, so a week-old answer could miss a sale or keep one that ended.
+TTL_STORE_DETAILS = 24 * 3600
 TTL_REVIEWS = 24 * 3600
 
 # Review sample for mining: half most helpful (all time), half newest.
