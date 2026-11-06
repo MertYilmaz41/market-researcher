@@ -365,6 +365,7 @@ def test_ui_help_dialog(base_url, browser):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
     page.goto(base_url)
+    page.wait_for_selector(".tag-chip")  # app.js is running
     page.click("#help-toggle")
     assert page.is_visible("#help") and page.locator("#help section").count() == 7
     assert "80%" in page.inner_text("#help")

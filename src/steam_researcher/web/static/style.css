@@ -70,7 +70,7 @@ a:hover { text-decoration: underline; }
 /* ---------- top bar ---------- */
 .topbar {
   position: relative; z-index: 20; flex: none;
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s5);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s4);
   padding: 10px var(--s5);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(12px);
@@ -92,7 +92,7 @@ a:hover { text-decoration: underline; }
   width: 240px; padding: 9px var(--s3); border-radius: var(--r-md);
   border: 1px solid var(--line); background: var(--bg-2); color: var(--text); font: inherit;
 }
-.search.small > input { width: 200px; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.search.small > input { width: 170px; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .search.small > input::placeholder { font-family: var(--font-body); font-size: var(--fs-base); }
 .search > input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 
