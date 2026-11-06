@@ -203,6 +203,35 @@ document.addEventListener("click", (e) => {
 });
 document.querySelectorAll("input").forEach((i) => i.addEventListener("input", () => i.classList.remove("invalid")));
 
+// ---------- filters and tags are remembered in this browser; presets fill the filter fields ----------
+const FILTER_IDS = ["min-reviews", "lo", "hi", "max-games", "reviews"];
+const PRESETS = {
+  default: { "min-reviews": 100, lo: 5, hi: 70, "max-games": 15, reviews: 200 },
+  proven: { "min-reviews": 500, lo: 5, hi: 70, "max-games": 15, reviews: 200 },
+  quick: { "min-reviews": 100, lo: 5, hi: 70, "max-games": 8, reviews: 100 },
+};
+
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem("filters") || "null"); } catch { return null; }
+}
+
+function saveFilters() {
+  const saved = loadSaved() || {};
+  const values = Object.fromEntries(FILTER_IDS.map((id) => [id, $(`#${id}`).value]));
+  // The free-text fallback has no picks: keep the tags remembered from before.
+  const tags = tagPicker.freeText ? saved.tags : tagPicker.picked;
+  try { localStorage.setItem("filters", JSON.stringify({ values, tags })); } catch { /* storage blocked */ }
+}
+
+for (const id of FILTER_IDS) $(`#${id}`).addEventListener("change", saveFilters);
+document.querySelectorAll("#filters [data-preset]").forEach((b) => b.addEventListener("click", () => {
+  for (const [id, v] of Object.entries(PRESETS[b.dataset.preset])) {
+    $(`#${id}`).value = v;
+    $(`#${id}`).classList.remove("invalid");
+  }
+  saveFilters();
+}));
+
 const labelOf = (input) =>
   input.closest("label")?.firstChild?.textContent.trim() || input.getAttribute("aria-label") || t("This field");
 
@@ -222,6 +251,14 @@ const tagList = $("#tag-list");
 // box takes comma-separated tags typed by hand.
 const tagPicker = { tags: [], picked: ["Job Simulator"], shown: [], active: -1, freeText: false };
 
+{ // the last filters and tags used in this browser
+  const saved = loadSaved();
+  if (saved?.values) {
+    for (const id of FILTER_IDS) if (saved.values[id] != null && saved.values[id] !== "") $(`#${id}`).value = saved.values[id];
+  }
+  if (Array.isArray(saved?.tags)) tagPicker.picked = saved.tags.filter((x) => typeof x === "string").slice(0, MAX_TAGS);
+}
+
 const isPicked = (t) => tagPicker.picked.includes(t);
 const tagsLabel = (tags) => tags.join(" + ");
 
@@ -239,6 +276,7 @@ function matchTags(query) {
 }
 
 function renderChips() {
+  saveFilters();
   $("#tag-chips").replaceChildren(...tagPicker.picked.map((tag) =>
     el("span", { class: "tag-chip" }, tag,
       el("button", { type: "button", tabindex: "-1", "aria-label": t("Remove {tag}", { tag }),
@@ -362,6 +400,8 @@ renderChips();
     const res = await api("/api/tags");
     if (!res.ok) throw await apiError(res);
     tagPicker.tags = (await res.json()).tags || [];
+    const known = tagPicker.picked.filter((tag) => tagPicker.tags.includes(tag)); // e.g. a tag Steam renamed
+    if (known.length !== tagPicker.picked.length) { tagPicker.picked = known; renderChips(); }
     if (document.activeElement === tagInput) openTagList();
   } catch (err) {
     // Fallback: type tags by hand, comma-separated.
@@ -884,6 +924,7 @@ async function openRun(r) {
     $("#min-reviews").value = res2.min_reviews;
     $("#lo").value = res2.lo;
     $("#hi").value = res2.hi;
+    saveFilters();
     state.keepPanel = false;
     showResult(res2, r.id);
   } catch (err) {

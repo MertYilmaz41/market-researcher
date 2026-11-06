@@ -175,6 +175,7 @@ li[aria-selected="true"] .check { background: var(--accent); border-color: var(-
   box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .6);
 }
 .popover[hidden] { display: none; }
+.presets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-size: var(--fs-sm); color: var(--muted); }
 .popover label {
   display: flex; flex-direction: column; gap: 6px;
   font-size: var(--fs-xs); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);

@@ -254,6 +254,10 @@ const TR = {
   "None found in the {n} negative reviews no category matched.": "Hiçbir kategoriye girmeyen {n} olumsuz incelemede başka şikayet bulunmadı.",
   "A summary is being written.": "Bir özet yazılıyor.",
   "under a minute left": "bir dakikadan az kaldı",
+  "Presets:": "Hazır ayarlar:",
+  "Default": "Varsayılan",
+  "Proven demand": "Kanıtlı talep",
+  "Quick look": "Hızlı bakış",
   "~{n} min left": "~{n} dk kaldı",
 };
 

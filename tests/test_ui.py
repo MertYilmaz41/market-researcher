@@ -270,3 +270,28 @@ def test_ui_game_summary_tab(base_url, browser):
     assert page.get_attribute("#panel .tabs button.active", "role") == "tab"
     assert "Summary" in page.text_content("#panel .tabs button.active")  # stays on the tab
     assert errors == []
+
+
+def test_ui_remembers_filters_and_tags(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")
+
+    page.click("#filters-toggle")
+    page.click("#filters [data-preset=quick]")  # a preset only fills the fields
+    assert page.input_value("#max-games") == "8" and page.input_value("#reviews") == "100"
+    page.fill("#min-reviews", "250")
+    page.press("#min-reviews", "Tab")  # change event
+    page.click("#tag-toggle")
+    page.locator('#tag-list li[role=option][data-tag="Survival"]').click()
+    page.keyboard.press("Escape")
+
+    page.reload()
+    page.wait_for_selector(".tag-chip")
+    assert page.input_value("#min-reviews") == "250" and page.input_value("#max-games") == "8"
+    chips = page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)")
+    assert chips == ["Job Simulator", "Survival"]
+    assert errors == []
