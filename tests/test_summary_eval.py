@@ -74,3 +74,9 @@ def test_only_the_complaints_the_model_read_count():
 
 def test_translation_errors_are_not_bugs():
     assert summary_eval.categories_in("Çeviri hataları oyunu zorlaştırıyor") == set()
+
+
+def test_realism_counts_only_as_a_lack_of_it():
+    assert summary_eval.categories_in("Integrate a campaign mode with realistic lore") == set()
+    assert summary_eval.categories_in("Physics feel unrealistic") == {"realism"}
+    assert summary_eval.categories_in("Fizikler gerçekçilikten uzak") == {"realism"}

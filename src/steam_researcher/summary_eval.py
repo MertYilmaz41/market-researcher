@@ -33,7 +33,7 @@ from .runs import RunStore
 
 OUT = Path("reports/summary-eval")
 MIN_SHARE = 0.05  # a complaint below this share in a game's evidence doesn't support a claim about it
-LANG = "tr"
+LANG = "tr"  # --lang en writes to reports/summary-eval-en instead
 
 # Words that say which complaint a point is about (Turkish and English, lower case).
 CATEGORY_WORDS = {
@@ -43,7 +43,8 @@ CATEGORY_WORDS = {
     "content": r"içerik|content|ilerleme|progression|shallow|sığ|tekrar|repetitive",
     "performance": r"performans|performance|\bfps\b|kare hız|optimi|takılma|stutter|\blag\b",
     "abandoned": r"terk|abandon|güncelleme|update|bitmemiş|unfinished|yarım kal",
-    "realism": r"gerçekçi|realis",
+    # only a lack of realism: "realistic physics" is often what players love
+    "realism": r"unrealistic|not realistic|lack of realism|gerçekçi değil|gerçekçilikten uzak|gerçekçilik eksik",
     "scope_unrealistic": r"kapsam|scope|ambitio|iddialı",
 }
 
@@ -206,12 +207,16 @@ def blind(written: list) -> None:
 
 
 def main() -> None:
+    global LANG, OUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--models", nargs="+", default=[config.LLM_MODEL])
     ap.add_argument("--runs", nargs="*", default=[], help="saved run ids (default: the latest tag runs)")
     ap.add_argument("--n-runs", type=int, default=3)
     ap.add_argument("--recheck", action="store_true", help="count again from raw.json, without the models")
+    ap.add_argument("--lang", choices=sorted(summary.LANGUAGES), default=LANG, help="language the summaries are written in")
     args = ap.parse_args()
+    if args.lang != LANG:
+        LANG, OUT = args.lang, Path(f"reports/summary-eval-{args.lang}")
     run(args.models, args.runs, args.n_runs, args.recheck)
 
 
