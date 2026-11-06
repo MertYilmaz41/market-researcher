@@ -41,7 +41,7 @@ export function createMap(container, { onSelect }) {
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   } catch (e) {
-    return { setGames() {}, select() {}, setVisible() {}, relabel() {}, available: false }; // no WebGL: app.js falls back to 2D
+    return { setGames() {}, select() {}, setVisible() {}, relabel() {}, recolor() {}, available: false }; // no WebGL: app.js falls back to 2D
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.prepend(renderer.domElement);
@@ -73,9 +73,14 @@ export function createMap(container, { onSelect }) {
   key.position.set(6, 12, 8);
   scene.add(key);
 
-  // Floor grid + bounding box + axes
-  const grid = new THREE.GridHelper(HALF * 2, 10, color("--line").offsetHSL(0, 0, 0.08), color("--line"));
-  scene.add(grid);
+  // Floor grid + bounding box + axes. recolor() re-reads the colors after a theme switch.
+  let grid = null;
+  function makeGrid() {
+    if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
+    grid = new THREE.GridHelper(HALF * 2, 10, color("--line").offsetHSL(0, 0, 0.08), color("--line"));
+    scene.add(grid);
+  }
+  makeGrid();
   const box = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(HALF * 2, HEIGHT, HALF * 2)),
     new THREE.LineBasicMaterial({ color: color("--line"), transparent: true, opacity: 0.8 }),
@@ -86,13 +91,16 @@ export function createMap(container, { onSelect }) {
   const axisMat = (c) => new THREE.LineBasicMaterial({ color: c });
   const origin = new THREE.Vector3(-HALF, 0, HALF);
   const axes = [
-    [new THREE.Vector3(HALF, 0, HALF), color("--accent"), () => t("Demand →"), new THREE.Vector3(HALF + 0.6, 0, HALF + 0.6)],
-    [new THREE.Vector3(-HALF, HEIGHT, HALF), color("--accent-2"), () => t("Dissatisfaction ↑"), new THREE.Vector3(-HALF, HEIGHT + 0.6, HALF)],
-    [new THREE.Vector3(-HALF, 0, -HALF), color("--good"), () => t("Fixability →"), new THREE.Vector3(-HALF - 0.6, 0, -HALF - 0.6)],
+    [new THREE.Vector3(HALF, 0, HALF), "--accent", () => t("Demand →"), new THREE.Vector3(HALF + 0.6, 0, HALF + 0.6)],
+    [new THREE.Vector3(-HALF, HEIGHT, HALF), "--accent-2", () => t("Dissatisfaction ↑"), new THREE.Vector3(-HALF, HEIGHT + 0.6, HALF)],
+    [new THREE.Vector3(-HALF, 0, -HALF), "--good", () => t("Fixability →"), new THREE.Vector3(-HALF - 0.6, 0, -HALF - 0.6)],
   ];
   const axisLabels = []; // [label, text()]: relabel() refills them in the current language
-  for (const [end, color, text, at] of axes) {
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([origin, end]), axisMat(color)));
+  const axisLines = [];  // [material, token]
+  for (const [end, token, text, at] of axes) {
+    const mat = axisMat(color(token));
+    axisLines.push([mat, token]);
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([origin, end]), mat));
     const l = label(text());
     axisLabels.push([l, text]);
     l.position.copy(at);
@@ -102,7 +110,7 @@ export function createMap(container, { onSelect }) {
   // Selection ring (billboarded each frame)
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(1, 1.12, 64),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: color("--text"), transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
   );
   ring.visible = false;
   scene.add(ring);
@@ -248,5 +256,14 @@ export function createMap(container, { onSelect }) {
     for (const [l, text] of axisLabels) l.element.textContent = text();
   }
 
-  return { setGames, select, setVisible, relabel, available: true };
+  // After a theme switch: the scene's own colors (the page's CSS covers the labels and the background).
+  function recolor() {
+    scene.fog.color.copy(color("--bg"));
+    makeGrid();
+    box.material.color.copy(color("--line"));
+    ring.material.color.copy(color("--text"));
+    for (const [mat, token] of axisLines) mat.color.copy(color(token));
+  }
+
+  return { setGames, select, setVisible, relabel, recolor, available: true };
 }

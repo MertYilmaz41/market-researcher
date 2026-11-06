@@ -62,6 +62,7 @@ In the sidebar, click the tag field and tick one or more Steam tags (up to 5; ty
 - **One game:** paste an AppID or a Steam store link into the *One game* box in the sidebar; the game opens in the details panel.
 - **How it works:** the green **How it works** button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
 - **Language:** the **EN | TR** switch at the top right changes the whole interface, including messages and the score card.
+- **Dark | light theme:** the ☾ | ☀ switch right of EN | TR. The page follows your system setting until you pick one, then remembers it.
 
 **Command line:**
 

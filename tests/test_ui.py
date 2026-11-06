@@ -399,6 +399,18 @@ def test_ui_help_dialog(base_url, browser):
     page.mouse.move(5, 5)
     assert page.is_hidden("#term-tip")
 
+    # Dark | light: the switch sets the theme on <html> and remembers it across a reload.
+    assert page.get_attribute("html", "data-theme") in ("dark", "light")
+    page.click('#theme button[data-theme="light"]')
+    assert page.get_attribute("html", "data-theme") == "light"
+    bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
+    page.reload()
+    page.wait_for_selector(".tag-chip")
+    assert page.get_attribute("html", "data-theme") == "light"
+    assert page.get_attribute('#theme button[data-theme="light"]', "aria-pressed") == "true"
+    page.click('#theme button[data-theme="dark"]')
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") != bg
+
     page.click('#lang button[data-lang="tr"]')
     page.click("#help-toggle")
     assert page.text_content("#help-title") == "Nasıl çalışır?" and "Skor" in page.inner_text("#help")

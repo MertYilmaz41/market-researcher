@@ -1515,9 +1515,8 @@ function risksTab(g) {
 }
 
 
-const POSITIVE = cssVar("--accent-2"), NEGATIVE = cssVar("--bad"); // History bars
-
 function historyTab(g) {
+  const POSITIVE = cssVar("--accent-2"), NEGATIVE = cssVar("--bad"); // read now: the theme may have changed
   const h = g.histogram || [];
   if (!h.length) return el("div", { class: "callout" }, t("No review histogram available."));
   const W = 600, H = 170, pad = 18;
@@ -1591,6 +1590,23 @@ async function setLanguage(value) {
 }
 document.querySelectorAll("#lang button").forEach((b) => b.addEventListener("click", () => setLanguage(b.dataset.lang)));
 
+// ---------- dark | light ----------
+// The theme is set before the first paint by the script in index.html; this keeps the switch in sync,
+// remembers the choice and redraws what holds colors outside CSS (the 3D scene, the History chart).
+function setTheme(theme) {
+  theme = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = theme;
+  for (const b of document.querySelectorAll("#theme button")) b.setAttribute("aria-pressed", String(b.dataset.theme === theme));
+  try { localStorage.setItem("theme", theme); } catch { /* storage blocked: not remembered */ }
+  map3d?.recolor();
+  map2d.relabel(); // redraws
+  const active = document.querySelector("#panel .tabs button.active");
+  if (state.panelGame && active) renderPanel(state.panelGame, [...active.parentNode.children].indexOf(active));
+}
+document.querySelectorAll("#theme button").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.theme)));
+for (const b of document.querySelectorAll("#theme button")) {
+  b.setAttribute("aria-pressed", String(b.dataset.theme === document.documentElement.dataset.theme));
+}
 let savedMode = "table";
 try { savedMode = localStorage.getItem("gamesMode") || "table"; } catch { /* storage blocked */ }
 setGamesMode(savedMode);
