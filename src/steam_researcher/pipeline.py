@@ -12,7 +12,7 @@ from .http import HttpClient, RetryableStatus
 from .i18n import _
 from .mining import mine
 from .discover import filter_candidates
-from .models import Analysis, Game, HistPoint, Review
+from .models import Analysis, Game, HistPoint, OpportunitySummary, Review
 from .notices import BROAD_TAG_GAMES, friendly_error
 from .sources import steam_search, steam_store, steamspy
 
@@ -168,6 +168,7 @@ class TagResult:
     n_enough_reviews: int = 0  # games with >= min_reviews (explains "0 candidates")
     failed: list[tuple[str, str]] = field(default_factory=list)  # (game name, friendly reason)
     market: MarketStats | None = None  # the whole tag, not just the analyzed games
+    summaries: dict[str, OpportunitySummary] = field(default_factory=dict)  # language -> LLM summary (summary.py)
 
 
 def run_tag(

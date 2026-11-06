@@ -234,6 +234,18 @@ const TR = {
   "Positive": "Olumlu",
   "Negative": "Olumsuz",
   "Monthly reviews. A tall spike after launch can mean a streamer effect (mostly blue) or a review bomb (mostly red).": "Aylık incelemeler. Çıkıştan sonraki yüksek bir sıçrama yayıncı etkisi (çoğu mavi) ya da inceleme bombardımanı (çoğu kırmızı) olabilir.",
+  "Opportunity summary": "Fırsat özeti",
+  "Writing... (about a minute)": "Yazılıyor... (yaklaşık bir dakika)",
+  "not written yet": "henüz yazılmadı",
+  "Writing...": "Yazılıyor...",
+  "Write summary": "Özeti yaz",
+  "What players love, the complaints these games share, and what a better game would do. Written by the local model {model} (Ollama) from this ranking, in about a minute.": "Oyuncuların sevdiği, bu oyunların ortak şikayetleri ve daha iyi bir oyunun ne yapması gerektiği. Yerel model {model} (Ollama) bu sıralamadan yaklaşık bir dakikada yazar.",
+  "Written by the local model {model}. It can be wrong: check each point against the games it names.": "Yerel model {model} yazdı. Yanılabilir: her maddeyi andığı oyunlarla karşılaştırın.",
+  "What players love": "Oyuncuların sevdiği",
+  "Shared complaints": "Ortak şikayetler",
+  "A better game would": "Daha iyi bir oyun",
+  "Caveats": "Dikkat",
+  "The opportunity summary is being written.": "Fırsat özeti yazılıyor.",
 };
 
 let lang = "en";

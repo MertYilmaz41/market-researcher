@@ -14,9 +14,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
-from .. import boxmethod, config, market, notices, pipeline, risk, runs, scoring
+from .. import boxmethod, config, market, notices, pipeline, risk, runs, scoring, summary
 from ..http import HttpClient
-from ..i18n import LANGS, N_, _, use
+from ..i18n import LANGS, N_, _, lang, use
+from ..mining import llm
 from ..models import Analysis
 from ..report import rank, ranking_csv, rating_source_text, render, slug
 from ..sources import steam_store
@@ -100,6 +101,7 @@ class Job:
 _jobs: dict[str, Job] = {}
 _runs = runs.RunStore()
 _lock = threading.Lock()
+_summary_lock = threading.Lock()  # one summary at a time: the local model has one GPU
 
 
 def game_json(a: Analysis) -> dict:
@@ -262,9 +264,15 @@ def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -
         "market": result.market.model_dump() if result.market else None,
         "well_served": config.WELL_SERVED_RATING,
         "games": games,
+        "summary": _summary_json(result.summaries.get(lang())),
+        "llm_model": config.LLM_MODEL,
         "compared": bool(changes),
         "notices": [n.model_dump() for n in post],
     }
+
+
+def _summary_json(s) -> dict | None:
+    return s.model_dump() if s is not None else None
 
 
 def market_result_json(job_id: str, r: MarketRunRequest, result: pipeline.MarketsResult) -> dict:
@@ -353,9 +361,33 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
     text = render(tag=label, analyses=res.analyses, n_candidates=len(res.candidates),
                   n_tag_games=res.n_tag_games, min_reviews=r.min_reviews, lo=r.lo, hi=r.hi,
                   not_games=res.not_games, unlisted=res.unlisted,
-                  market=market.summary(res.market) if res.market else "")
+                  market=market.summary(res.market) if res.market else "",
+                  summary=res.summaries.get(lang()))
     return PlainTextResponse(text, media_type="text/markdown", headers={
         "Content-Disposition": f'attachment; filename="{slug(label)}.md"'})
+
+
+@app.post("/api/tag-runs/{job_id}/summary")
+def write_summary(job_id: str):
+    """The run's opportunity summary in the request's language, written by the local LLM once and saved."""
+    job = _job(job_id)
+    if job.result is None:
+        raise HTTPException(409, _("The run hasn't finished yet."))
+    res, language = job.result, lang()
+    with _summary_lock:
+        s = res.summaries.get(language)
+        if s is None:
+            try:
+                s = summary.write(pipeline.tag_label(job.request.tags), res.analyses, res.market, language)
+            except llm.LLMUnavailable as e:
+                notice = notices.llm_unavailable(e.missing_model)
+                return JSONResponse(status_code=503, content={"detail": notice.message, "notice": notice.model_dump()})
+            except Exception as e:
+                notice = notices.friendly_error(e)
+                return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
+            res.summaries[language] = s
+            _runs.update_result(job_id, res)
+    return {"summary": _summary_json(s)}
 
 
 @app.get("/api/games/{appid}")

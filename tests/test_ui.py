@@ -15,6 +15,7 @@ uvicorn = pytest.importorskip("uvicorn")
 
 from steam_researcher import pipeline  # noqa: E402
 from steam_researcher.market import TagMarket, market_stats  # noqa: E402
+from steam_researcher.models import OpportunitySummary, SummaryPoint  # noqa: E402
 from steam_researcher.runs import RunStore  # noqa: E402
 from steam_researcher.web import server  # noqa: E402
 
@@ -57,6 +58,9 @@ def base_url(tmp_path_factory):
     mp.setattr(pipeline, "run_tag", run_tag)
     mp.setattr(pipeline, "run_markets", run_markets)
     mp.setattr(pipeline, "analyze_game", lambda http, appid, n: analysis(45, "Lone Game", appid=appid))
+    mp.setattr(server.summary, "write", lambda tag, analyses, market, lang, **kw: OpportunitySummary(
+        pitch="A bus sim that works.", model="gemma3:12b",
+        loved=[SummaryPoint(text="Driving the <b>bus</b>.", games=["Other"])]))
     mp.setattr(server, "_runs", RunStore(tmp_path_factory.mktemp("runs") / "runs.sqlite"))
     mp.setattr(server, "_jobs", {})
 
@@ -218,4 +222,27 @@ def test_ui_turkish(base_url, browser):
     page.click('#lang button[data-lang="en"]')
     assert page.text_content("#run") == "Find opportunities"
     assert page.text_content('#ranking th[data-key="score"]') == "Score"
+    assert errors == []
+
+
+def test_ui_opportunity_summary(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")
+    page.click("#run")
+    page.wait_for_selector("#ranking tbody tr")
+    assert page.is_visible("#opp-summary") and "not written yet" in page.text_content("#opp-summary summary")
+
+    page.click("#opp-summary summary")
+    page.click("#opp-summary .opp-body button")
+    page.wait_for_selector("#opp-summary .opp-pitch")
+    body = page.inner_text("#opp-summary .opp-body")
+    assert "A bus sim that works." in body and "WHAT PLAYERS LOVE" in body.upper()
+    assert "Driving the <b>bus</b>." in body  # model text is shown as text, never as HTML
+
+    page.click("#opp-summary .opp-games button")  # a game chip opens that game
+    assert page.text_content("#panel h3") == "Other"
     assert errors == []

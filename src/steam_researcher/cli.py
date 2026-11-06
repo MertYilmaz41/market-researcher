@@ -9,11 +9,12 @@ from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
 
-from . import boxmethod, config, market, notices, runs
+from . import boxmethod, config, market, notices, runs, summary
 from .cache import Cache
 from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
-from .i18n import LANG, LANGS, _, fmt, num
+from .i18n import LANG, LANGS, _, fmt, lang, num
+from .mining.llm import LLMUnavailable
 from .models import Analysis, MiningResult
 from .pipeline import TagResult, UnknownTag, analyze_game, run_markets, run_tag, tag_games, tag_label, verify_games
 from .report import money, percent, rank, rating_source_text, recent_text, render, risk_label, severity, slug
@@ -196,6 +197,7 @@ def report(
     max_games: int = typer.Option(15, min=1, max=50, help="Analyze up to N candidates, highest review count first"),
     reviews: int = typer.Option(200, "--reviews", min=10, max=1000, help="Max negative and max positive reviews per game"),
     out: Path = typer.Option(None, "--out", "-o", help="Markdown file (default: reports/<tag>.md)"),
+    with_summary: bool = typer.Option(False, "--summary", help="Also write an opportunity summary with a local LLM (Ollama)"),
     no_cache: bool = NO_CACHE_OPT,
 ):
     """Steps 1-4 for a whole tag: rank games by opportunity and write a Markdown report."""
@@ -219,11 +221,19 @@ def report(
         _print_notices(post)
         raise typer.Exit(1)
     analyses = result.analyses
+    if with_summary:
+        try:
+            with console.status(_("Writing the opportunity summary with {model} (about a minute)...",
+                                  model=config.LLM_MODEL)):
+                result.summaries[lang()] = summary.write(label, analyses, result.market, lang())
+        except LLMUnavailable as e:
+            _print_notices([notices.llm_unavailable(e.missing_model)])
 
     text = render(
         tag=label, analyses=analyses, n_candidates=len(result.candidates), n_tag_games=result.n_tag_games,
         min_reviews=min_reviews, lo=lo, hi=hi, not_games=result.not_games, unlisted=result.unlisted,
         market=market.summary(result.market) if result.market else "",
+        summary=result.summaries.get(lang()),
     )
     out = out or Path("reports") / f"{slug(label)}.md"
     out.parent.mkdir(parents=True, exist_ok=True)

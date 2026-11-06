@@ -165,6 +165,23 @@ class Analysis(BaseModel):
         return any(f.code in config.EXCLUDE_FLAGS for f in self.flags)
 
 
+class SummaryPoint(BaseModel):
+    text: str
+    games: list[str]  # names of the analyzed games the point rests on
+
+
+class OpportunitySummary(BaseModel):
+    """What a local LLM made of a tag run (summary.py): written text, no numbers change."""
+
+    pitch: str = ""  # the opportunity in one sentence
+    loved: list[SummaryPoint] = []  # what players like in these games
+    complaints: list[SummaryPoint] = []  # shared complaints
+    build: list[SummaryPoint] = []  # what a better game should do
+    caveats: list[SummaryPoint] = []  # risks and limits
+    model: str = ""
+    seconds: float = 0.0
+
+
 class BoxEstimate(BaseModel):
     units_low: int
     units_mid: int

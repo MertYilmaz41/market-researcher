@@ -68,6 +68,16 @@ SHORT_PLAYTIME_MINUTES = 120
 SHORT_PLAYTIME_WEIGHT = 0.5
 RECENT_MIN_NEGATIVE = 10  # negative reviews from the last 12 months needed to say if a complaint is still common
 
+# Local LLM via Ollama. It writes the opportunity summary of a tag run (summary.py). Complaint
+# detection with it (mining/llm.py) is measurement only: on the held-out reviews it stayed at
+# 48-71% precision (keywords: 86%), so the keyword miner is used.
+#   python -m steam_researcher.mining.evaluate --miner llm --model <name>
+LLM_URL = "http://localhost:11434"
+LLM_MODEL = "gemma3:12b"  # the most precise of the models measured (Nov 2026)
+LLM_BATCH = 8  # reviews per request (complaint detection)
+SUMMARY_GAMES = 10  # top-ranked games the opportunity summary reads
+SUMMARY_CTX = 16384  # context window for the summary request (its evidence is ~5-8k tokens)
+
 # Risk heuristics
 SPIKE_LAUNCH_PERIODS = 2  # ignore the first N histogram periods (launch is always busy)
 SPIKE_MEDIAN_FACTOR = 5.0  # period >= 5x the median period...

@@ -563,6 +563,7 @@ function showResult(result, id, quiet = false) {
   $("#table-note").textContent = notes.join(" ");
   renderMarketStrip(result.market, result.well_served);
   state.runId = id;
+  renderSummary();
   $("#download").href = `/api/tag-runs/${id}/report.md?lang=${getLang()}`;
   $("#download-csv").href = `/api/tag-runs/${id}/ranking.csv?lang=${getLang()}`;
   if (!quiet) setTableView("games");
@@ -608,6 +609,63 @@ function renderMarketStrip(m, wellServed) {
     stat(money(m.underserved_gross), t("Underserved $"), "", t("Box Method (x45) gross of the underserved games")),
     el("div", { class: "verdict" }, verdict),
   );
+}
+
+// ---------- opportunity summary: written on request by a local LLM (Ollama), saved with the run ----------
+function renderSummary() {
+  const box = $("#opp-summary");
+  const r = state.result;
+  box.hidden = !r || !state.games.length;
+  if (box.hidden) return;
+  const s = r.summary;
+  box.querySelector(".opp-state").textContent = s ? "" : state.summarizing ? t("Writing... (about a minute)") : t("not written yet");
+  const body = box.querySelector(".opp-body");
+  if (!s) {
+    const button = el("button", { type: "button", class: "ghost", onclick: writeSummary });
+    setButtonBusy(button, !!state.summarizing, state.summarizing ? t("Writing...") : t("Write summary"));
+    body.replaceChildren(el("div", { class: "opp-empty" },
+      el("p", {}, t("What players love, the complaints these games share, and what a better game would do. Written by the local model {model} (Ollama) from this ranking, in about a minute.", { model: r.llm_model })),
+      button));
+    return;
+  }
+  const byName = new Map(state.games.map((g) => [g.game.name, g.game.appid]));
+  const chips = (names) => el("div", { class: "opp-games" }, names.map((name) =>
+    byName.has(name)
+      ? el("button", { type: "button", class: "chip", onclick: () => selectGame(byName.get(name)) }, name)
+      : el("span", { class: "chip" }, name)));
+  const section = (title, points) => !points.length ? null : el("div", {},
+    el("h4", {}, title),
+    el("ul", {}, points.map((p) => el("li", {}, p.text, p.games.length ? chips(p.games) : null))));
+  body.replaceChildren(
+    s.pitch ? el("p", { class: "opp-pitch" }, s.pitch) : null,
+    el("p", { class: "opp-note muted" }, t("Written by the local model {model}. It can be wrong: check each point against the games it names.", { model: s.model })),
+    el("div", { class: "opp-sections" },
+      section(t("What players love"), s.loved),
+      section(t("Shared complaints"), s.complaints),
+      section(t("A better game would"), s.build),
+      section(t("Caveats"), s.caveats)),
+  );
+}
+
+async function writeSummary() {
+  if (state.summarizing) return stillRunning(t("The opportunity summary is being written."));
+  const id = state.runId;
+  state.summarizing = true;
+  renderSummary();
+  try {
+    const res = await api(`/api/tag-runs/${id}/summary`, { method: "POST" });
+    if (!res.ok) throw await apiError(res);
+    const data = await res.json();
+    if (state.runId === id && state.result) {
+      state.result.summary = data.summary;
+      $("#opp-summary").open = true;
+    }
+  } catch (err) {
+    notifyError(err);
+  } finally {
+    state.summarizing = false;
+    renderSummary();
+  }
 }
 
 // ---------- Games | Markets ----------

@@ -61,6 +61,18 @@ class RunStore:
             db.commit()
         return run_id
 
+    def update_result(self, run_id: str, result: TagResult | MarketsResult) -> bool:
+        """Replace a saved run's result (e.g. a summary was added), keeping its time and comparisons."""
+        with self._lock:
+            db = self._db()
+            row = db.execute("SELECT kind FROM runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                return False
+            db.execute("UPDATE runs SET result = ? WHERE id = ?",
+                       (ADAPTERS[row[0]].dump_json(result).decode(), run_id))
+            db.commit()
+        return True
+
     def list(self, limit: int = 50) -> list[dict]:
         with self._lock:
             rows = self._db().execute(

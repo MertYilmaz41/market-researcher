@@ -444,4 +444,23 @@ TR: dict[str, str] = {
         "Tahminler indirimsiz fiyatı kullanır; Steam payı, bölgesel fiyatlar ve indirimler düşülmemiştir. İnceleme analizi",
     "keyword-based and English-only; read the quotes before trusting the percentages.":
         "anahtar kelimeye dayalıdır ve yalnızca İngilizcedir; yüzdelere güvenmeden önce alıntıları okuyun.",
+    # Opportunity summary (local LLM)
+    "The model {model} isn't downloaded": "{model} modeli indirilmemiş",
+    "The opportunity summary is written by {model}, a local model run by Ollama.":
+        "Fırsat özetini, Ollama'nın çalıştırdığı yerel model {model} yazıyor.",
+    "Download it once in a terminal: ollama pull {model}": "Bir terminalde bir kez indirin: ollama pull {model}",
+    "Ollama isn't running": "Ollama çalışmıyor",
+    "The opportunity summary is written by a local model, and Ollama runs it.":
+        "Fırsat özetini yerel bir model yazıyor ve onu Ollama çalıştırıyor.",
+    "Start the Ollama app (or install it from ollama.com), then try again.":
+        "Ollama uygulamasını başlatın (ya da ollama.com'dan kurun), sonra tekrar deneyin.",
+    "Writing the opportunity summary with {model} (about a minute)...":
+        "Fırsat özeti {model} ile yazılıyor (yaklaşık bir dakika)...",
+    "Opportunity summary": "Fırsat özeti",
+    "Written by the local model {model} from the evidence of the top {n} games below. It can be wrong: check it against the games.":
+        "Yerel model {model}, aşağıdaki ilk {n} oyunun verilerinden yazdı. Yanılabilir: oyunlarla karşılaştırarak okuyun.",
+    "What players love": "Oyuncuların sevdiği",
+    "Shared complaints": "Ortak şikayetler",
+    "A better game would": "Daha iyi bir oyun",
+    "Caveats": "Dikkat",
 }

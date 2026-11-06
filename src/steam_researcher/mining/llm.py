@@ -1,0 +1,170 @@
+"""Complaint detection with a local LLM (Ollama), an alternative to the keyword lexicon.
+
+    ollama pull qwen3:14b
+    uv run python -m steam_researcher.mining.evaluate --miner llm --model qwen3:14b
+
+classify() returns the same codes as the keyword miner (mining/lexicon.py categories, plus
+"idea_praise"), so evaluate.py scores both against the same hand-labeled reviews. Reviews are sent
+in small batches; Ollama's structured output (a JSON schema) keeps the answer parseable.
+"""
+
+import json
+import re
+
+import httpx
+
+from .. import config
+from .lexicon import CATEGORIES
+
+IDEA = "idea_praise"
+MAX_CHARS = 1500  # long reviews say their complaints early; keeps a batch inside the context window
+
+# What each category means, written for the model. Matches how tests/fixtures/labeled_reviews*.jsonl
+# were labeled (e.g. a game still unfinished years after release is "abandoned", not "content").
+DEFINITIONS = {
+    "controls": "controls, camera, steering, movement or physics feel clunky, unresponsive, awkward or hard to handle",
+    "bugs": "bugs, glitches, crashes, freezes, getting stuck, broken features, lost saves, or the game won't start",
+    "ui_ux": "only the interface itself: confusing menus or screens, missing or poor tutorial, the game doesn't "
+             "explain what to do. Boring or tedious gameplay is content, not ui_ux",
+    "content": "too little to do, too short, repetitive or tedious gameplay, shallow progression, missing features",
+    "performance": "only technical speed on the player's computer: low frame rate, stutter, long loading, poor "
+                   "optimization. Not online connection problems",
+    "abandoned": "developers stopped updating or supporting it, unfinished for years, broken promises or roadmap, "
+                 "devs ignore players, cash grab",
+    "realism": "not a real or authentic simulation of its activity, unrealistic or arcade-like mechanics or details",
+    "scope_unrealistic": "expects AAA scale an indie can't deliver, e.g. compares it to GTA or wants a huge open world",
+}
+
+SYSTEM = """You label negative Steam game reviews for a game designer.
+For each review, list the complaint categories the reviewer clearly states about this game. Most
+reviews have one or two; many have none. Be strict: when in doubt, leave a category out.
+For every category, copy the exact words from the review that state the complaint (a short phrase,
+in the review's own language). If you can't point to such words, don't use the category.
+
+Not complaints (no category): the developer's opinions or controversies (but a developer that stopped
+updating or supporting the game is abandoned); the price;
+refund stories; what other games do better; things the reviewer liked; "no bugs at all".
+Reviews can be in any language.
+
+Categories:
+{categories}
+
+Also set idea_praise to true when the reviewer, while recommending against the game, praises its
+idea, concept or potential ("great concept but...", "I wanted to love it", "so much potential").
+
+Answer with JSON only."""
+
+
+class LLMUnavailable(RuntimeError):
+    """Ollama isn't running (missing_model is None), or the model isn't downloaded."""
+
+    def __init__(self, message: str, missing_model: str | None = None):
+        super().__init__(message)
+        self.missing_model = missing_model
+
+
+def system_prompt() -> str:
+    return SYSTEM.format(categories="\n".join(f"- {c.code}: {DEFINITIONS[c.code]}" for c in CATEGORIES))
+
+
+def schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {"reviews": {"type": "array", "items": {
+            "type": "object",
+            "properties": {
+                "review": {"type": "integer"},
+                "complaints": {"type": "array", "items": {
+                    "type": "object",
+                    "properties": {"category": {"type": "string", "enum": [c.code for c in CATEGORIES]},
+                                   "quote": {"type": "string"}},
+                    "required": ["category", "quote"],
+                }},
+                "idea_praise": {"type": "boolean"},
+            },
+            "required": ["review", "complaints", "idea_praise"],
+        }}},
+        "required": ["reviews"],
+    }
+
+
+def _request(texts: list[str], model: str) -> dict:
+    numbered = "\n\n".join(f"Review {i}:\n{t[:MAX_CHARS]}" for i, t in enumerate(texts, 1))
+    body = {
+        "model": model,
+        "messages": [{"role": "system", "content": system_prompt()},
+                     {"role": "user", "content": f"Label these {len(texts)} reviews.\n\n{numbered}"}],
+        "format": schema(),
+        "stream": False,
+        "options": {"temperature": 0, "num_ctx": 8192},
+    }
+    if model.startswith("qwen3"):
+        body["think"] = False  # thinking makes Qwen3 several times slower and doesn't help labeling
+    elif model.startswith("gpt-oss"):
+        body["think"] = "low"  # gpt-oss can't turn thinking off, only down
+    return body
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\W+", " ", text.lower()).strip()
+
+
+def grounded(quote: str, review: str) -> bool:
+    """Does the model's quote really appear in the review? (Ignores case and punctuation.)"""
+    q = _squash(quote)
+    return bool(q) and q in _squash(review)
+
+
+def parse(content: str, texts: list[str]) -> list[set[str]]:
+    """The model's JSON answer -> one set of codes per review. Unknown codes and indexes are dropped,
+    and so is a complaint whose quote isn't in the review (the model made it up)."""
+    known = {c.code for c in CATEGORIES}
+    out: list[set[str]] = [set() for _ in texts]
+    for item in json.loads(content).get("reviews", []):
+        i = item.get("review")
+        if not isinstance(i, int) or not 1 <= i <= len(texts):
+            continue
+        for c in item.get("complaints", []):
+            if isinstance(c, dict) and c.get("category") in known and grounded(c.get("quote", ""), texts[i - 1]):
+                out[i - 1].add(c["category"])
+        if item.get("idea_praise") is True:
+            out[i - 1].add(IDEA)
+    return out
+
+
+def post_chat(body: dict, client: httpx.Client | None = None) -> str:
+    """Send one /api/chat request to Ollama; returns the answer's content (JSON text)."""
+    client = client or httpx.Client(base_url=config.LLM_URL, timeout=600)
+    try:
+        res = client.post("/api/chat", json=body)
+    except httpx.ConnectError:
+        raise LLMUnavailable(f"Ollama isn't running at {config.LLM_URL}. Start the Ollama app.") from None
+    if res.status_code == 404:
+        model = body["model"]
+        raise LLMUnavailable(f"The model {model} isn't downloaded. Run: ollama pull {model}", model)
+    res.raise_for_status()
+    return res.json()["message"]["content"]
+
+
+def classify(texts: list[str], model: str = config.LLM_MODEL, *, client: httpx.Client | None = None,
+             batch: int = config.LLM_BATCH) -> list[set[str]]:
+    """Complaint codes (plus IDEA) found in each review, in order."""
+    client = client or httpx.Client(base_url=config.LLM_URL, timeout=600)
+    found: list[set[str]] = []
+    for start in range(0, len(texts), batch):
+        chunk = texts[start:start + batch]
+        content = post_chat(_request(chunk, model), client)
+        found += parse(content, [t[:MAX_CHARS] for t in chunk])
+    return found
+
+
+def vram_share(model: str, client: httpx.Client | None = None) -> float | None:
+    """How much of the loaded model sits in GPU memory (1.0 = all of it), from Ollama's /api/ps."""
+    client = client or httpx.Client(base_url=config.LLM_URL, timeout=10)
+    try:
+        for m in client.get("/api/ps").json().get("models", []):
+            if m.get("name") == model or m.get("model") == model:
+                return m["size_vram"] / m["size"] if m.get("size") else None
+    except httpx.HTTPError:
+        return None
+    return None

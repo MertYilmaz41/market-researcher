@@ -1,6 +1,7 @@
 """Score the keyword miner against hand-labeled reviews (tests/fixtures/labeled_reviews.jsonl).
 
     uv run python -m steam_researcher.mining.evaluate [path ...]
+    uv run python -m steam_researcher.mining.evaluate --miner llm --model qwen3:14b   (local LLM, see llm.py)
 
 Tune mining/lexicon.py against labeled_reviews.jsonl only. labeled_reviews_holdout.jsonl (other games)
 is never tuned on: it shows whether a change helps on reviews the lexicon wasn't fitted to.
@@ -10,11 +11,15 @@ praises the idea while panning the game (`idea_praise`). The miner's detections 
 those: precision = how many detections are right, recall = how many real complaints are found.
 """
 
+import argparse
 import json
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import config
+from . import llm
 from .keywords import _IDEA, _hits, clean
 from .lexicon import CATEGORIES
 
@@ -40,7 +45,9 @@ class Score:
 
 
 def load(path: Path = FIXTURE) -> list[dict]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    """Labeled reviews; ones a labeler marked unsure are left out."""
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [r for r in rows if not r.get("unsure")]
 
 
 def detect(text: str) -> set[str]:
@@ -52,13 +59,14 @@ def detect(text: str) -> set[str]:
     return found
 
 
-def evaluate(labeled: list[dict]) -> tuple[dict[str, Score], Score]:
-    """Per-category scores (plus IDEA), and the micro total over the complaint categories."""
+def evaluate(labeled: list[dict], detections: list[set[str]] | None = None) -> tuple[dict[str, Score], Score]:
+    """Per-category scores (plus IDEA), and the micro total over the complaint categories.
+    detections: what another miner found in each review (default: the keyword miner)."""
     codes = [c.code for c in CATEGORIES] + [IDEA]
     scores = {code: Score() for code in codes}
-    for row in labeled:
+    detections = detections or [detect(row["text"]) for row in labeled]
+    for row, found in zip(labeled, detections):
         truth = set(row["labels"]) | ({IDEA} if row.get("idea_praise") else set())
-        found = detect(row["text"])
         for code in codes:
             s = scores[code]
             s.tp += code in truth and code in found
@@ -89,8 +97,32 @@ def table(scores: dict[str, Score], total: Score) -> str:
     return "\n".join(lines)
 
 
-if __name__ == "__main__":
-    for path in [Path(p) for p in sys.argv[1:]] or [FIXTURE, HOLDOUT]:
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Score a complaint miner against hand-labeled reviews.")
+    ap.add_argument("paths", nargs="*", type=Path, help="labeled JSONL files (default: tuning set and held-out set)")
+    ap.add_argument("--miner", choices=["keywords", "llm"], default="keywords")
+    ap.add_argument("--model", default=config.LLM_MODEL, help="Ollama model for --miner llm")
+    args = ap.parse_args()
+    sys.stdout.reconfigure(encoding="utf-8")
+    for path in args.paths or [FIXTURE, HOLDOUT]:
         rows = load(path)
-        print(f"{path.name}: {len(rows)} labeled reviews")
-        print(table(*evaluate(rows)), end="\n\n")
+        start = time.perf_counter()
+        if args.miner == "llm":
+            detections = llm.classify([r["text"] for r in rows], args.model)
+            name = f"LLM {args.model}"
+        else:
+            detections = [detect(r["text"]) for r in rows]
+            name = "keywords"
+        per_review = (time.perf_counter() - start) / len(rows)
+        print(f"{path.name}: {len(rows)} labeled reviews, {name}, {per_review:.2f} s per review "
+              f"(~{per_review * 200 / 60:.1f} min for a game's 200 negative reviews)")
+        if args.miner == "llm" and (share := llm.vram_share(args.model)) is not None:
+            print(f"model in GPU memory: {share:.0%}")
+        print(table(*evaluate(rows, detections)), end="\n\n")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except llm.LLMUnavailable as e:
+        sys.exit(str(e))

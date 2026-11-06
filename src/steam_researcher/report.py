@@ -10,7 +10,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from . import boxmethod, config, risk
 from .i18n import N_, _, fmt, lang, num
-from .models import Analysis, Game
+from .models import Analysis, Game, OpportunitySummary
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "templates"),
@@ -139,8 +139,10 @@ def render(
     not_games: list[str],
     unlisted: list[str],
     market: str = "",  # market.summary() of the whole tag
+    summary: OpportunitySummary | None = None,  # the run's LLM summary in the report language
 ) -> str:
     _env.filters["md"] = md
+    _env.filters["risk_label"] = risk_label
     _env.globals["_"] = _
     template = _env.get_template("report.md.j2")
     text = template.render(
@@ -156,6 +158,8 @@ def render(
         not_games=not_games,
         unlisted=unlisted,
         market=market,
+        summary=summary,
+        summary_games=min(config.SUMMARY_GAMES, len(rank(analyses))),
         well_served=config.WELL_SERVED_RATING,
         money=money,
         pct=pct,

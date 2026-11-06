@@ -48,6 +48,7 @@ Click the tag field and tick one or more Steam tags (up to 5; typing only filter
 
 - **Opportunity map (2D | 3D):** each bubble is a game. Left–right is demand and height is dissatisfaction; in 3D, depth is fixability. Size is estimated revenue and color is the score (blue = low, gold = high). Click a bubble to inspect it. In 3D, drag to orbit and scroll to zoom.
 - **Market strip:** how many games in the tag have demand, how many are underserved and how many are well served (85%+ positive), with a short verdict.
+- **Opportunity summary (optional):** under the market strip, press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-opportunity-summary).
 - **Detail panel:** score breakdown, review numbers and their source, the last 12 months of reviews, revenue estimate, what players complain about (with quotes, trends and design pillars), the core fantasy, risk checks and a monthly review chart.
 - **Score card:** hover or focus any score to see its three parts, their weights, each risk penalty and why.
 - **Ranking table:** click a column header to sort and a row to select a game. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV**.
@@ -64,6 +65,7 @@ uv run sr discover -t Crafting -t Survival         # games with all of these tag
 uv run sr analyze 1330660                          # deep dive on one game (Steam AppID)
 uv run sr report --tag "Job Simulator"             # rank a tag, writes reports/job-simulator.md
 uv run sr markets --top 30                         # rank every tag by underserved games
+uv run sr report --tag "Job Simulator" --summary   # plus the opportunity summary (needs Ollama)
 uv run sr runs                                     # saved runs (also in the web UI's Past runs)
 uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report
 ```
@@ -82,6 +84,17 @@ uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report
 | Help | `uv run sr --help`, `uv run sr report --help` |
 
 The first run of a tag takes about 30 seconds because of API rate limits. After that, data comes from the cache in `~/.cache/steam-researcher` (refreshed daily, weekly for store details). Saved runs are kept separately in `~/.local/share/steam-researcher`, so clearing the cache keeps them.
+
+### Optional: local AI for the opportunity summary
+
+The summary is written on your own computer by [Ollama](https://ollama.com) with the free `gemma3:12b` model (about 8 GB; a GPU with 12 GB+ of memory keeps it fast). Nothing is sent to an online service. Everything else works without it.
+
+```powershell
+winget install Ollama.Ollama
+ollama pull gemma3:12b
+```
+
+Treat the summary as a first draft: check each point against the games it names.
 
 ## Data sources
 

@@ -285,6 +285,18 @@ def friendly_error(exc: BaseException) -> Notice:
                   hint=_("Try again. If it keeps happening, run the CLI with SR_DEBUG=1 for details."))
 
 
+def llm_unavailable(missing_model: str | None) -> Notice:
+    """The opportunity summary needs Ollama (a local LLM) running with the model downloaded."""
+    if missing_model:
+        return Notice(level="warning", title=_("The model {model} isn't downloaded", model=missing_model),
+                      message=_("The opportunity summary is written by {model}, a local model run by Ollama.",
+                                model=missing_model),
+                      hint=_("Download it once in a terminal: ollama pull {model}", model=missing_model))
+    return Notice(level="warning", title=_("Ollama isn't running"),
+                  message=_("The opportunity summary is written by a local model, and Ollama runs it."),
+                  hint=_("Start the Ollama app (or install it from ollama.com), then try again."))
+
+
 def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
     fold = tag.strip().casefold()
     # A real Steam tag that SteamSpy can't search (known: Steam's catalog, which may gain new tags).
