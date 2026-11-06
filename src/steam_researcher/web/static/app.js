@@ -616,7 +616,8 @@ function showResult(result, id, quiet = false) {
   if (!quiet) setTableView("games");
   else $("#table-title").textContent = tableTitles[tableView]();
 
-  map.setGames(state.games);
+  $("#quick-filter").hidden = !state.games.length;
+  map.setGames(visibleGames());
   renderTable();
   if (quiet) {
     const g = state.games.find((x) => x.game.appid === state.selected);
@@ -856,6 +857,12 @@ function searchTag(tag) {
   $("#tag-form").requestSubmit();
 }
 
+// From a tag chip in the panel: the same, and say that the picked tags were replaced.
+function searchOneTag(tag) {
+  if (!state.searching) toast("info", t("Searching {tag}", { tag }), t("Only this tag; your other tags were set aside."));
+  searchTag(tag);
+}
+
 // ---------- Past runs: every finished search and market ranking is saved on the server ----------
 const runsPop = $("#runs-pop");
 
@@ -970,9 +977,28 @@ function delta(g) {
 
 const risks = (g) => g.flags.filter((f) => f.severity !== "info");
 
+// Quick filter above the ranking: by name, and without games that have a risk penalty.
+// Ranks stay those of the full ranking.
+function visibleGames() {
+  const q = $("#name-filter").value.trim().toLocaleLowerCase();
+  const hideRisky = $("#hide-risky").checked;
+  return state.games.filter((g) => (!q || g.game.name.toLocaleLowerCase().includes(q))
+    && !(hideRisky && g.opportunity.penalty > 0));
+}
+
+function applyQuickFilter() {
+  map.setGames(visibleGames());
+  renderTable();
+}
+$("#name-filter").addEventListener("input", applyQuickFilter);
+$("#hide-risky").addEventListener("change", applyQuickFilter);
+
 function renderTable() {
   const { key, asc } = state.sort;
-  const rows = [...state.games].sort((a, b) => {
+  const shown = visibleGames();
+  $("#filter-count").textContent = shown.length < state.games.length
+    ? t("{n} of {total} games shown", { n: shown.length, total: state.games.length }) : "";
+  const rows = shown.sort((a, b) => {
     const va = sortValue[key](a), vb = sortValue[key](b);
     return (va < vb ? -1 : va > vb ? 1 : 0) * (asc ? 1 : -1);
   });
@@ -1209,7 +1235,8 @@ function renderPanel(g, tab = 0) {
       names: (g.score_explained?.penalties || []).map((p) => p.label).join(", ") || o.penalized.join(", ") })) : null,
     g.score_explained ? scoreAnchor(el("button", { type: "button", class: "how-scored" }, t("How is this score calculated?")), g) : null,
     Object.keys(game.tags || {}).length
-      ? el("div", { class: "chips" }, Object.keys(game.tags).slice(0, 10).map((t) => el("span", { class: "chip" }, t)))
+      ? el("div", { class: "chips" }, Object.keys(game.tags).slice(0, 10).map((tag) => el("button", {
+        type: "button", class: "chip", title: t("Search {tag}", { tag }), onclick: () => searchOneTag(tag) }, tag)))
       : null,
   ];
 

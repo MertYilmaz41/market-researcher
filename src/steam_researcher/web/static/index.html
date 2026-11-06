@@ -128,6 +128,11 @@
         <summary><b data-i18n>Opportunity summary</b> <span class="opp-state muted"></span></summary>
         <div class="opp-body"></div>
       </details>
+      <div id="quick-filter" class="quick-filter" hidden>
+        <input id="name-filter" type="search" placeholder="Find a game..." aria-label="Find a game by name" data-i18n-attr="placeholder,aria-label">
+        <label><input id="hide-risky" type="checkbox"> <span data-i18n>Hide risky games</span></label>
+        <span id="filter-count" class="muted"></span>
+      </div>
       <div class="table-wrap">
         <table id="ranking">
           <thead>

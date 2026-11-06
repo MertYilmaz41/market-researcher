@@ -45,6 +45,8 @@ def base_url(tmp_path_factory):
                 args[-1]("Analyzing games", i, 3000)
                 time.sleep(0.01)
         r = fake_result()
+        r.analyses[0].opportunity.penalty = 20  # "Other" is a risky game (for the quick filter)
+        r.analyses[1].game.tags = {"Crafting": 90, "Building": 40}  # Best Sim's tag chips
         r.market = market_stats([a.game for a in r.analyses], 100, 5, 70)
         return r
 
@@ -325,4 +327,33 @@ def test_ui_shortlist(base_url, browser):
     page.click("#shortlist tbody tr .remove")
     page.wait_for_function("!document.querySelector('#shortlist tbody tr')")
     assert "No games yet" in page.text_content("#shortlist-note") and page.is_hidden("#shortlist-csv")
+    assert errors == []
+
+
+def test_ui_quick_filter_and_tag_chips(base_url, browser):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
+    page.goto(base_url)
+    page.wait_for_selector(".tag-chip")
+    page.click("#run")
+    page.wait_for_selector("#ranking tbody tr")
+    assert page.locator("#ranking tbody tr").count() == 2 and page.text_content("#filter-count") == ""
+
+    page.fill("#name-filter", "best")
+    assert page.locator("#ranking tbody tr").count() == 1 and page.locator(".map2d .bubble").count() == 1
+    assert page.text_content("#ranking tbody tr td.num") == "1"  # keeps its rank
+    assert page.text_content("#filter-count") == "1 of 2 games shown"
+    page.fill("#name-filter", "")
+    page.check("#hide-risky")  # "Other" has a risk penalty in the fake result
+    names = page.eval_on_selector_all("#ranking tbody tr", "rs => rs.map(r => r.children[2].textContent)")
+    assert names == ["Best Sim"]
+    page.uncheck("#hide-risky")
+
+    # A tag chip in the panel searches that one tag.
+    page.locator("#panel .chips button.chip").first.click()
+    page.wait_for_selector("text=Only this tag")
+    page.wait_for_function("document.querySelector('#table-title').textContent.includes('Crafting')")
+    assert page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)") == ["Crafting"]
     assert errors == []
