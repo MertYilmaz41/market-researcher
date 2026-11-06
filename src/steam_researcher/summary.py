@@ -53,20 +53,23 @@ features that the evidence doesn't mention. Write all text, the pitch too, in {l
 Answer with JSON only."""
 
 
-GAME_SYSTEM = """You help an indie game designer learn from one Steam game that many people bought but
-rate poorly. Part 1 of the evidence is what a keyword search found in its reviews. Part 2 is negative
-reviews that the keyword search couldn't put in any complaint category.
+GAME_SYSTEM = """Write all your text in {language}, even though the evidence is in English.
+
+You help an indie game designer learn from one Steam game that many people bought but rate poorly.
+Part 1 of the evidence is what a keyword search found in its reviews. Part 2 is negative reviews
+that the keyword search couldn't put in any complaint category.
 
 Using only this evidence, write:
 - why: one or two sentences on why players are unhappy with this game.
-- fix: 3 to 5 concrete things a new game for these players should do differently. Each rests on a
-  share, quote or phrase from the evidence; not generic advice such as "polish the game".
+- fix: 3 to 5 concrete things a new game for these players should do differently, one short
+  sentence each, without quotes. Each rests on the evidence; not generic advice such as "polish
+  the game".
 - other: up to 5 complaints from part 2 that the keyword categories (bugs, controls, interface,
   content, performance, abandoned, realism, scope) don't cover, e.g. price, monetization, cheaters,
-  a missing mode. Each with quote: the exact words of one review in part 2. Empty if there are none.
+  a missing mode. text: the complaint in a few words, without a quote. quote: the exact words of one
+  review in part 2 that state it, in the review's own language. Empty if there are none.
 
-Don't invent features, numbers or complaints the evidence doesn't mention. Write why, fix and the
-text of other in {language}; keep each quote in the review's own words.
+Don't invent features, numbers or complaints the evidence doesn't mention.
 Answer with JSON only."""
 
 
@@ -228,6 +231,7 @@ def write_game(a: Analysis, negative: list[Review], lang: str, *, model: str = c
     """Ask the local model about one game. Raises llm.LLMUnavailable if Ollama or the model is missing."""
     text, texts = game_evidence(a, negative)
     start = time.monotonic()
+    text += f"\n\nWrite why, fix and the text of other in {LANGUAGES[lang]}."  # the evidence is English
     content = llm.post_chat(request(text, lang, model, GAME_SYSTEM, game_schema()), client)
     out = parse_game(content, texts)
     out.model, out.seconds = model, round(time.monotonic() - start, 1)
