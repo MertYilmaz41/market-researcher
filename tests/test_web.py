@@ -4,6 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from steam_researcher import notices, pipeline
+from steam_researcher.cache import Cache
+from steam_researcher.http import HttpClient
 from steam_researcher.models import HistPoint
 from steam_researcher.pipeline import TagResult
 from steam_researcher.runs import RunStore
@@ -19,6 +21,8 @@ def run_store(tmp_path, monkeypatch):
     store = RunStore(tmp_path / "runs.sqlite")
     monkeypatch.setattr(server, "_runs", store)
     monkeypatch.setattr(server, "_jobs", {})
+    # the shared HTTP client gets a temp cache too: tests never open the user's real cache
+    monkeypatch.setattr(server, "_http_client", HttpClient(cache=Cache(tmp_path / "cache.sqlite")))
     return store
 
 
@@ -434,3 +438,13 @@ def test_shortlist_star_note_csv_and_remove(client, monkeypatch, run_store):
     assert client.put("/api/shortlist/1", json={"note": "x"}).status_code == 404
     assert client.put("/api/shortlist/99", json={"run_id": run_id}).status_code == 404  # not in the run
     assert client.put("/api/shortlist/1", json={"run_id": "nope"}).status_code == 404
+
+
+def test_one_http_client_for_the_whole_server(monkeypatch, client):
+    """A search and a lookup share one client, so one per-host rate limit covers both."""
+    seen = []
+    monkeypatch.setattr(pipeline, "run_tag", lambda http, *a: seen.append(http) or fake_result())
+    monkeypatch.setattr(pipeline, "analyze_game", lambda http, appid, n: seen.append(http) or analysis(42, "Solo", appid=appid))
+    wait(client, client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"])
+    client.get("/api/games/5")
+    assert len(seen) == 2 and seen[0] is seen[1] is server._http()

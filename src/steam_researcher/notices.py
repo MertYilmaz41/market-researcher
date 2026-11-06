@@ -13,14 +13,14 @@ import httpx
 from pydantic import BaseModel
 
 from . import config
-from .http import RetryableStatus
+from .http import HOST_INTERVAL, RetryableStatus
 from .i18n import _
 from .models import Analysis
 
 Level = Literal["success", "info", "warning", "error"]
 
 TAG_EXAMPLES = "Job Simulator, Colony Sim, Management, Base Building, Life Sim, Farming Sim"
-SECONDS_PER_GAME = 3.0  # rough first-run cost at 200 reviews per game (rate limits)
+SLOW_RUN_SECONDS = 180  # warn before a first run longer than this (a default 15-game run is ~2-3 min)
 BROAD_TAG_GAMES = 1000
 FEW_CANDIDATES = 3
 WEAK_SCORE = 20
@@ -34,6 +34,14 @@ class Notice(BaseModel):
 
 
 # ---------- before a run ----------
+
+def first_run_seconds_per_game(reviews: int) -> float:
+    """Uncached cost of one game, set by Steam's review API (one request at a time, HOST_INTERVAL apart):
+    2 for the review summary, plus pages of 100 for the helpful and the newest halves of both samples
+    (pipeline.review_sample). The other hosts run alongside it."""
+    half = -(-(reviews - reviews // 2) // 100) + -(-(reviews // 2) // 100)
+    return (2 + 2 * half) * HOST_INTERVAL["api.steampowered.com"]
+
 
 def for_filters(min_reviews: int, lo: float, hi: float, max_games: int, reviews: int) -> list[Notice]:
     out = []
@@ -56,8 +64,8 @@ def for_filters(min_reviews: int, lo: float, hi: float, max_games: int, reviews:
             message=_("Ratings under {min:g}% are often troll-bombed or broken listings.", min=config.MIN_RATING),
             hint=_("The method starts at {min:g}%.", min=config.MIN_RATING),
         ))
-    seconds = max_games * SECONDS_PER_GAME * max(1.0, reviews / 200)
-    if seconds > 60:
+    seconds = max_games * first_run_seconds_per_game(reviews)
+    if seconds > SLOW_RUN_SECONDS:
         out.append(Notice(
             level="info", title=_("This may take a while"),
             message=_("The first run of a tag with these settings can take about {min} min "

@@ -116,3 +116,33 @@ def test_explain_notes_review_bombs_and_unmined_reviews():
 def test_explain_names_a_zero_part():
     e = scoring.explain(_analysis_for(game(pos=900, neg=100)))  # 90% positive: not dissatisfied
     assert e["zero_part"] == "Dissatisfaction" and e["score"] == 0 and e["combined"] == 0
+
+
+def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):
+    """A failed positive fetch must not throw away the negative sample: complaints and fixability still count."""
+    import httpx
+
+    from steam_researcher import pipeline
+    from steam_researcher.models import Review
+
+    def sample(http, appid, kind, limit):
+        if kind == "positive":
+            raise httpx.ReadTimeout("slow")
+        return [Review(recommendation_id=str(i), text="Crashes constantly, full of bugs.", voted_up=False,
+                       votes_up=1, playtime_minutes=600, timestamp=0) for i in range(5)]
+
+    monkeypatch.setattr(pipeline.steamspy, "game_details", lambda http, appid: game())
+    monkeypatch.setattr(pipeline.steam_store, "app_details", lambda http, appid: None)
+    monkeypatch.setattr(pipeline.steam_store, "review_histogram", lambda http, appid: [])
+    monkeypatch.setattr(pipeline, "official_reviews", lambda http, g, hist: g)
+    monkeypatch.setattr(pipeline, "review_sample", sample)
+    a = pipeline.analyze_game(None, 1)
+    assert a.review_error is None and a.mining.categories[0].code == "bugs"
+    assert a.opportunity.fixability == 1.0  # mined, not the 0.5 default
+
+    def down(http, appid, kind, limit):
+        raise httpx.ReadTimeout("slow")
+
+    monkeypatch.setattr(pipeline, "review_sample", down)
+    a = pipeline.analyze_game(None, 1)
+    assert a.mining is None and a.review_error

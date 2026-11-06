@@ -87,13 +87,18 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
     game = official_reviews(http, game, hist)
 
     mining, review_error = None, None
+    fetch_errors = (RuntimeError, httpx.HTTPError, RetryableStatus)
     try:
         negative = review_sample(http, appid, "negative", review_limit)
-        positive = review_sample(http, appid, "positive", review_limit)
-        mining = mine(negative, positive)
-    except (RuntimeError, httpx.HTTPError, RetryableStatus) as e:
+    except fetch_errors as e:
         # Steam's review API is sometimes very slow; still rank the game on its other data.
         review_error = friendly_error(e).message
+    else:
+        try:
+            positive = review_sample(http, appid, "positive", review_limit)
+        except fetch_errors:  # complaints and fixability come from the negatives; only "what players love" is lost
+            positive = []
+        mining = mine(negative, positive)
 
     flags = risk.assess(game, details, hist) + (risk.check_scope(mining) if mining else [])
     opportunity = scoring.score(game, flags, mining, risk.rating_without_bombs(hist))

@@ -13,6 +13,8 @@ import pytest
 playwright = pytest.importorskip("playwright.sync_api")
 uvicorn = pytest.importorskip("uvicorn")
 
+from steam_researcher.cache import Cache  # noqa: E402
+from steam_researcher.http import HttpClient  # noqa: E402
 from steam_researcher import pipeline  # noqa: E402
 from steam_researcher.market import TagMarket, market_stats  # noqa: E402
 from steam_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, SummaryPoint  # noqa: E402
@@ -69,6 +71,7 @@ def base_url(tmp_path_factory):
     mp.setattr(server.pipeline, "review_sample", lambda http, appid, kind, limit: [])
     mp.setattr(server, "_runs", RunStore(tmp_path_factory.mktemp("runs") / "runs.sqlite"))
     mp.setattr(server, "_jobs", {})
+    mp.setattr(server, "_http_client", HttpClient(cache=Cache(tmp_path_factory.mktemp("cache") / "cache.sqlite")))
 
     port = _free_port()
     srv = uvicorn.Server(uvicorn.Config(server.app, host="127.0.0.1", port=port, log_level="warning"))

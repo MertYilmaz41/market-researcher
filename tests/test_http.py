@@ -105,3 +105,15 @@ def test_rate_limit_waits_longer_than_other_failures():
 
 def test_review_api_has_short_timeout():
     assert http_mod.HOST_TIMEOUT["api.steampowered.com"] < http_mod.DEFAULT_TIMEOUT
+
+
+def test_cache_prune_drops_only_expired_entries(tmp_path, monkeypatch):
+    cache = Cache(tmp_path / "c.sqlite")
+    assert cache.conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    cache.set("old", {"a": "x" * 100_000}, ttl=10)
+    cache.set("fresh", {"b": 1}, ttl=10**13)
+    monkeypatch.setattr("steam_researcher.cache.time.time", lambda: 10**12)
+    before = cache.size()
+    assert cache.prune() == 1
+    assert cache.get("fresh") == {"b": 1} and cache.get("old") is None
+    assert cache.size() < before  # VACUUM gave the space back

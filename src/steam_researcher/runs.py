@@ -31,7 +31,8 @@ def compare_key(tags: list[str], min_reviews: int, lo: float, hi: float) -> str:
 
 
 class RunStore:
-    def __init__(self, path: Path = config.RUNS_DB):
+    def __init__(self, path: Path | None = None):
+        path = path or config.RUNS_DB  # read at call time, so tests can point it elsewhere
         self.path = path
         self._conn: sqlite3.Connection | None = None
         self._lock = threading.Lock()

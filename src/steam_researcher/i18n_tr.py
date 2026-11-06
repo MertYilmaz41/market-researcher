@@ -472,4 +472,6 @@ TR: dict[str, str] = {
     "The local model {model} is reading the game (under a minute)...":
         "Yerel model {model} oyunu okuyor (bir dakikadan kısa)...",
     "({model}, {seconds:.0f} s; it can be wrong)": "({model}, {seconds:.0f} sn; yanılabilir)",
+    "Removed {n:,} expired entries. Cache file: {before:.0f} MB -> {after:.0f} MB.":
+        "Süresi dolmuş {n:,} kayıt silindi. Önbellek dosyası: {before:.0f} MB -> {after:.0f} MB.",
 }

@@ -41,6 +41,13 @@ def test_filters_each_rule():
     assert titles(notices.for_filters(100, 5, 70, 40, 400)) == ["This may take a while"]
 
 
+def test_first_run_estimate_follows_the_review_api_pace():
+    assert notices.first_run_seconds_per_game(200) == 9.0  # 2 summary + 4 pages, 1.5 s apart
+    assert notices.first_run_seconds_per_game(300) == 15.0  # 150 + 150 per kind: 2 + 2 pages each
+    (n,) = notices.for_filters(100, 5, 70, 40, 400)
+    assert "about 10 min" in n.message  # 40 games x 15 s
+
+
 # ---------- after a tag run ----------
 
 def test_success_notice_names_top_game():

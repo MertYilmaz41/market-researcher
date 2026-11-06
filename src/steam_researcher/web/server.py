@@ -105,6 +105,18 @@ _jobs: dict[str, Job] = {}
 _runs = runs.RunStore()
 _lock = threading.Lock()
 _summary_lock = threading.Lock()  # one summary at a time: the local model has one GPU
+_http_client: HttpClient | None = None
+_http_lock = threading.Lock()
+
+
+def _http() -> HttpClient:
+    """One client for the whole server, made on first use. Each HttpClient keeps its own per-host rate
+    limit, so separate clients for a search and a lookup running together hit Steam twice as fast (429s)."""
+    global _http_client
+    with _http_lock:
+        if _http_client is None:
+            _http_client = HttpClient()
+        return _http_client
 
 
 def game_json(a: Analysis) -> dict:
@@ -157,7 +169,7 @@ def _run(job_id: str) -> None:
                     setattr(job, k, v)
 
     try:
-        http = HttpClient()
+        http = _http()
         if job.kind == "market":
             result = pipeline.run_markets(http, r.min_reviews, r.lo, r.hi, step)
         else:
@@ -219,7 +231,7 @@ def versioned_index() -> str:
 @app.get("/api/tags")
 def tags():
     try:
-        return {"tags": steam_store.tag_names(HttpClient())}
+        return {"tags": steam_store.tag_names(_http())}
     except Exception as e:
         notice = notices.friendly_error(e)
         return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
@@ -476,7 +488,7 @@ def write_game_summary(job_id: str, appid: int):
         s = res.game_summaries.get(appid, {}).get(language)
         if s is None:
             try:
-                negative = pipeline.review_sample(HttpClient(), appid, "negative", job.request.reviews)
+                negative = pipeline.review_sample(_http(), appid, "negative", job.request.reviews)
                 s = summary.write_game(a, negative, language)
             except llm.LLMUnavailable as e:
                 notice = notices.llm_unavailable(e.missing_model)
@@ -494,7 +506,7 @@ def game(appid: int, reviews: int = 300):
     if appid <= 0:
         raise HTTPException(422, _("AppID must be a positive number."))
     try:
-        a = pipeline.analyze_game(HttpClient(), appid, max(10, min(reviews, 1000)))
+        a = pipeline.analyze_game(_http(), appid, max(10, min(reviews, 1000)))
     except Exception as e:
         notice = notices.friendly_error(e)
         return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})

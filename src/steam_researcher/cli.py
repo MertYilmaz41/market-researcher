@@ -440,6 +440,16 @@ def ui(
     uvicorn.run("steam_researcher.web.server:app", host="127.0.0.1", port=port, log_level="warning")
 
 
+@cache_app.command("prune")
+def cache_prune():
+    """Delete expired cached responses and shrink the cache file."""
+    cache = Cache()
+    before = cache.size()
+    n = cache.prune()
+    console.print(_("Removed {n:,} expired entries. Cache file: {before:.0f} MB -> {after:.0f} MB.",
+                    n=n, before=before / 1e6, after=cache.size() / 1e6))
+
+
 @cache_app.command("clear")
 def cache_clear():
     """Delete all cached API responses."""
