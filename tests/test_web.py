@@ -370,3 +370,38 @@ def test_turkish_validation_and_game_not_found(client, monkeypatch):
     assert res.json()["detail"].startswith("Analiz edilecek oyun:")
     monkeypatch.setattr(pipeline, "analyze_game", lambda *a: None)
     assert client.get("/api/games/6", headers={"X-Lang": "tr"}).json()["notice"]["title"] == "Oyun bulunamadı"
+
+
+def test_eta_follows_the_pace_of_the_current_step():
+    assert server.eta(done=3, total=15, done0=0, since=0, now=30) == 120  # 10 s each, 12 to go
+    assert server.eta(done=8, total=10, done0=5, since=100, now=130) == 20  # counted from the step's start
+    assert server.eta(done=0, total=15, done0=0, since=0, now=30) is None  # nothing done yet: no pace
+    assert server.eta(done=2, total=15, done0=0, since=0, now=1) is None  # too early to tell
+    assert server.eta(done=15, total=15, done0=0, since=0, now=30) is None  # finished
+
+
+def test_running_job_reports_eta(client, monkeypatch):
+    import threading
+
+    clock = [0.0]
+    release = threading.Event()
+
+    def run_tag(http, tags, *args):
+        on_step = args[-1]
+        on_step("Analyzing games", 0, 5)  # the step starts at t=0
+        clock[0] = 20.0
+        on_step("Analyzing games", 1, 5)
+        release.wait(5)
+        return fake_result()
+
+    monkeypatch.setattr(pipeline, "run_tag", run_tag)
+    monkeypatch.setattr(server, "_now", lambda: clock[0])
+    run_id = client.post("/api/tag-runs", json={"tags": ["X"]}).json()["id"]
+    for _ in range(100):
+        job = client.get(f"/api/tag-runs/{run_id}").json()
+        if job["done"] == 1:
+            break
+        time.sleep(0.02)
+    release.set()
+    assert job["done"] == 1 and job["eta"] == 80  # 20 s for the first game, 4 to go
+    assert wait(client, run_id)["eta"] is None

@@ -471,6 +471,13 @@ function statusBox(box, title, frac, count, message) {
   box.querySelector(".search-status-text").textContent = message || "";
 }
 
+// "12 / 15 · ~3 min left": the server estimates the time left from the pace so far (null: no estimate yet).
+function progressCount(count, eta) {
+  if (eta == null || !count) return count;
+  const left = eta < 60 ? t("under a minute left") : t("~{n} min left", { n: Math.round(eta / 60) });
+  return `${count} · ${left}`;
+}
+
 function searchStatus(tag, frac, count, message) {
   statusBox($("#search-status"), tag == null ? null : t("Searching \"{tag}\"...", { tag }), frac, count, message);
 }
@@ -487,7 +494,7 @@ async function poll(id, tag) {
     if (job.status === "cancelled" || runCtl.games.cancelled) throw new CancelledRun();
     if (job.status === "error") throw new ApiError(job.error);
     if (job.status === "done") return showResult(job.result, id);
-    searchStatus(tag, job.total ? job.done / job.total : 0, job.total ? `${job.done} / ${job.total}` : "", job.message);
+    searchStatus(tag, job.total ? job.done / job.total : 0, progressCount(job.total ? `${job.done} / ${job.total}` : "", job.eta), job.message);
     await new Promise((r) => setTimeout(r, 1000));
     if (runCtl.games.cancelled) throw new CancelledRun();
   }
@@ -724,7 +731,7 @@ $("#markets-run").addEventListener("click", async () => {
       if (job.status === "error") throw new ApiError(job.error);
       if (job.status === "done") { showMarkets(job.result); break; }
       statusBox(box, t("Building the market ranking..."), job.total ? job.done / job.total : 0,
-        job.total ? t("{done} / {total} tags", { done: job.done, total: job.total }) : "", job.message);
+        progressCount(job.total ? t("{done} / {total} tags", { done: job.done, total: job.total }) : "", job.eta), job.message);
       await new Promise((r2) => setTimeout(r2, 1000));
       if (runCtl.markets.cancelled) throw new CancelledRun();
     }

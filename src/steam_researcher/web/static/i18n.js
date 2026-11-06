@@ -253,6 +253,8 @@ const TR = {
   "Complaints no category covers": "Hiçbir kategoriye girmeyen şikayetler",
   "None found in the {n} negative reviews no category matched.": "Hiçbir kategoriye girmeyen {n} olumsuz incelemede başka şikayet bulunmadı.",
   "A summary is being written.": "Bir özet yazılıyor.",
+  "under a minute left": "bir dakikadan az kaldı",
+  "~{n} min left": "~{n} dk kaldı",
 };
 
 let lang = "en";

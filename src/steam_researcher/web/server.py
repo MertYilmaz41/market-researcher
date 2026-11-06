@@ -3,6 +3,7 @@
 import contextvars
 import hashlib
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -94,6 +95,8 @@ class Job:
     message: str = N_("Starting...")  # translated when it is set (the job runs in its starter's language)
     done: int = 0
     total: int = 0
+    step_start: float = 0.0  # when the current step began (monotonic), and its done count then
+    step_done: int = 0
     result: pipeline.TagResult | pipeline.MarketsResult | None = None
     error: dict | None = None  # a Notice dict
 
@@ -143,6 +146,8 @@ def _run(job_id: str) -> None:
         with _lock:
             if job.status == "cancelled":  # the pipeline calls this often: stop at the next step
                 raise pipeline.Cancelled
+            if total != job.total or done < job.done:  # a new step (listing, checking, analyzing...)
+                job.step_start, job.step_done = _now(), done
             job.message, job.done, job.total = message, done, total
 
     def finish(**fields) -> None:
@@ -229,9 +234,22 @@ def _start(kind: str, req: TagRunRequest | MarketRunRequest) -> str:
     return job_id
 
 
+_now = time.monotonic  # the clock for time estimates (tests set it)
+
+
+def eta(done: int, total: int, done0: int, since: float, now: float) -> float | None:
+    """Seconds left in the current step, at its pace so far. None until there is a pace to go on
+    (one item done and a few seconds passed): cached runs finish before an estimate would help."""
+    if not total or done >= total or done - done0 < 1 or now - since < 3:
+        return None
+    return round((now - since) / (done - done0) * (total - done))
+
+
 def _status(job_id: str, job: Job, result_json) -> dict:
     with _lock:
+        running = job.status == "running"
         out = {"status": job.status, "message": job.message, "done": job.done, "total": job.total,
+               "eta": eta(job.done, job.total, job.step_done, job.step_start, _now()) if running else None,
                "error": job.error}
         result = job.result
     if result is not None:
