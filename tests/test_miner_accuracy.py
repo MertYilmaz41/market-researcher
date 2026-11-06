@@ -49,3 +49,26 @@ def test_patterns_from_the_claude_labeled_set():
     assert IDEA not in detect("The game is not fun at all.")
     assert "controls" not in detect("The controls feel great, the story does not.")
     assert "ui_ux" in detect("The English translation is half baked.")
+    assert "abandoned" in detect("Why would they remove multiplayer? It was fun with friends, but it's gone now.")
+    assert "abandoned" in detect("If companies can terminate a game at anytime, I should get a refund.")
+    assert "abandoned" in detect("Don't buy it, it'll be shut down in 8 months.")
+    assert "abandoned" in detect("Complete lack of developers response on the forums.")
+    assert "abandoned" not in detect("The game terminated unexpectedly twice.")
+
+
+def test_game_level_comparison():
+    from steam_researcher.mining.evaluate import games
+
+    rows = [
+        {"appid": 1, "playtime_minutes": 600, "text": "Crashes constantly, lots of bugs.", "labels": ["bugs"]},
+        {"appid": 1, "playtime_minutes": 600, "text": "Buggy and the devs abandoned it.", "labels": ["bugs", "abandoned"]},
+        {"appid": 1, "playtime_minutes": 30, "text": "So little to do here.", "labels": ["content"]},
+        {"appid": 2, "playtime_minutes": 600, "text": "Nothing wrong, just not for me.", "labels": []},
+    ]
+    found = [{"bugs"}, {"bugs"}, {"content", IDEA}, set()]
+    g1, g2 = games(rows, found)
+    assert g1.labeled["bugs"] == g1.found["bugs"] == 2 / 2.5  # the short-playtime review counts half
+    assert g1.labeled["abandoned"] == 1 / 2.5 and g1.found["abandoned"] == 0
+    assert g1.top_agrees and g1.top3_overlap == 2 / 3
+    assert g1.fixability == (1.0, 1.0)
+    assert g2.fixability == (None, None) and not g2.top_agrees
