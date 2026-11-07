@@ -24,6 +24,8 @@ FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 FIXTURE = FIXTURES / "labeled_reviews.jsonl"
 HOLDOUT = FIXTURES / "labeled_reviews_holdout.jsonl"
 IDEA = "idea_praise"
+UNLABELED = {"price", "cheaters"}  # categories the label sets don't mark (LABELING.md rule 4): not scored
+LABELED = [c.code for c in CATEGORIES if c.code not in UNLABELED]
 
 
 @dataclass
@@ -59,7 +61,7 @@ def detect(text: str) -> set[str]:
 def evaluate(labeled: list[dict], detections: list[set[str]] | None = None) -> tuple[dict[str, Score], Score]:
     """Per-category scores (plus IDEA), and the micro total over the complaint categories.
     detections: what another miner found in each review (default: the keyword miner)."""
-    codes = [c.code for c in CATEGORIES] + [IDEA]
+    codes = LABELED + [IDEA]
     scores = {code: Score() for code in codes}
     detections = detections or [detect(row["text"]) for row in labeled]
     for row, found in zip(labeled, detections):
@@ -141,7 +143,7 @@ def games(labeled: list[dict], detections: list[set[str]] | None = None) -> list
         total = sum(weights) or 1
 
         def shares(sets: list[set[str]]) -> dict[str, float]:
-            return {c: sum(w for w, s in zip(weights, sets) if c in s) / total for c in _FIXABLE}
+            return {c: sum(w for w, s in zip(weights, sets) if c in s) / total for c in _FIXABLE if c in LABELED}
 
         out.append(GameScore(appid, len(pairs), shares([set(r["labels"]) for r, _ in pairs]),
                              shares([f for _, f in pairs])))
@@ -194,7 +196,9 @@ def main() -> None:
         detections = [detect(r["text"]) for r in rows]
         per_review = (time.perf_counter() - start) / len(rows)
         print(f"{path.name}: {len(rows)} labeled reviews, keywords, {per_review * 1000:.1f} ms per review")
-        print(table(*evaluate(rows, detections)), end="\n\n")
+        print(table(*evaluate(rows, detections)))
+        print("not scored (no labels): " + ", ".join(f"{c} {sum(c in d for d in detections)} hits" for c in sorted(UNLABELED)),
+              end="\n\n")
         if args.games:
             print(game_table(games(rows, detections)), end="\n\n")
 

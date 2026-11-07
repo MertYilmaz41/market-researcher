@@ -123,3 +123,12 @@ def test_recent_share_and_trend():
 def test_no_trend_with_few_recent_reviews():
     m = mine([timed("buggy", timestamp=0)] * 20 + [timed("buggy", timestamp=2_000_000_000)] * 3, [], now=2_000_000_000)
     assert m.categories[0].recent_share is None and m.categories[0].trend == ""
+
+
+def test_price_and_cheater_complaints():
+    got = codes(mine([rev("Not worth the money, pay to win and full of microtransactions."),
+                      rev("Servers are full of cheaters and hackers."),
+                      rev("No cheaters so far, and not overpriced. But it is boring.")], []))
+    assert got["price"] == 1 and got["cheaters"] == 1
+    # a single-player cheat menu, or a complaint about anti-cheat software, is not about cheaters
+    assert "cheaters" not in codes(mine([rev("Added kernel-level anti-cheat and the cheat menu is gone.")], []))

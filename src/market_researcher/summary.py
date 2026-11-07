@@ -66,8 +66,8 @@ Using only this evidence, write:
   sentence each, without quotes. Each rests on the evidence; not generic advice such as "polish
   the game".
 - other: up to 5 complaints from part 2 that the keyword categories (bugs, controls, interface,
-  content, performance, abandoned, realism, scope) don't cover, e.g. price, monetization, cheaters,
-  a missing mode. text: the complaint in a few words, without a quote. quote: the exact words of one
+  content, performance, abandoned, realism, scope, price, cheaters) don't cover, e.g. the story,
+  server problems, a missing mode. text: the complaint in a few words, without a quote. quote: the exact words of one
   review in part 2 that state it, in the review's own language. Empty if there are none.
 
 Don't invent features, numbers or complaints the evidence doesn't mention.

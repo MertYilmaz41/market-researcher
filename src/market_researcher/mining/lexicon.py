@@ -69,7 +69,7 @@ CATEGORIES: tuple[Category, ...] = (
          r"not enough (?:content|to do|variety)", r"nothing to do", r"(?:only|just) (?:a few|one|two) (?:levels?|maps?|missions?|jobs?)",
          r"(?:no|lack of|shallow|bad|poor|slow|grindy) progression",
          r"progression (?:is|feels|was) (?:\w+ )?(?:slow|bad|shallow|boring|grindy|lacking)", r"same thing", r"gets old", r"(?:short|done) (?:in|after) \d+ (?:hours?|minutes?|mins?)",
-         r"overpriced", r"too short", r"rinse(?:,| and| &)? repeat", r"monoton\w*", r"repet+[ie]tive|repett?ative|repetition",
+         r"too short", r"rinse(?:,| and| &)? repeat", r"monoton\w*", r"repet+[ie]tive|repett?ative|repetition",
          r"tedium", r"dumbed down|watered down", r"hardly anything|almost nothing|barely anything",
          r"step backwards?|downgrade",
          r"(?:beat|finished|completed|done with) (?:\w+ ){0,2}in (?:about |under |like |less than )?(?:\d+|an?) (?:mins?|minutes|hours?|hrs?)",
@@ -116,6 +116,20 @@ CATEGORIES: tuple[Category, ...] = (
          r"arcade-?y", r"(?:too|more|feels?|very|pure(?:ly)?) arcade", r"not accurate", r"inaccurate",
          r"lacks? (?:of )?realism", r"(?:a |an )?(?:real|actual|proper|true|realistic) (?:\w+ )?sim(?:ulator|ulation)?s?", r"lack of realism", r"no (?:physics |real )?simulation",
          r"realism (?:is|isn'?t|was|wasn'?t) (?:\w+ )?(?:there|lacking|missing|bad|poor|non-?existent)"),
+    ),
+    # Not in the label sets (LABELING.md rule 4 left price out), so evaluate.py doesn't score them; each
+    # pattern was kept only if 80%+ of its hits in all fixture sets were real complaints of that kind (Nov 2026).
+    Category(
+        "price", "Not worth the price / pay-to-win",
+        "Fair price, no pay-to-win", False, True,  # not fixable: price is a business choice (see the fixability term)
+        (r"over-?priced", r"(?:not|isn'?t|wasn'?t|ain'?t) worth (?:the |its |it'?s |the full |full )?(?:price|money|\$ ?\d+|cost|asking price|price tag)",
+         r"wait (?:for|until|till) (?:a |it'?s |it to be |its )?(?:\w+ )?(?:sale|discount|\$ ?\d+)", r"buy (?:it )?(?:on|during|in) (?:a )?(?:\w+ ){0,2}sale",
+         r"pay[- ]?(?:2|to)[- ]?win", r"p2w", r"micro-?transactions?", r"mtx", r"predatory"),
+    ),
+    Category(
+        "cheaters", "Cheaters / hackers",
+        "Fair, protected multiplayer", True, True,
+        (r"cheaters?", r"hackers?", r"aim ?bots?", r"wall ?hack(?:s|ing|ers?)?"),
     ),
     Category(
         "scope_unrealistic", "Players expect AAA-scale scope",

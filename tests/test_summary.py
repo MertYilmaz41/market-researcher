@@ -162,28 +162,28 @@ def review(text, votes=0):
 
 NEGATIVE = [review("The game crashes every ten minutes, constant bugs.", 50),  # a category matches: not sent
             review("Way too expensive for what it is, and the DLC policy is greedy.", 5),
-            review("Cheaters in every single match and nobody bans them.", 30),
+            review("Servers drop every single match and nobody fixes them.", 30),
             review("meh")]  # too short to say anything
 
 
 def game_answer(body):
-    return {"why": "It costs too much and cheaters ruin matches.",
-            "fix": ["Fair price", " ", "Anti-cheat from day one"],
-            "other": [{"text": "Cheaters", "quote": "cheaters in every single match"},
+    return {"why": "It costs too much and the servers drop matches.",
+            "fix": ["Fair price", " ", "Stable servers from day one"],
+            "other": [{"text": "Server drops", "quote": "servers drop every single match"},
                       {"text": "Bad music", "quote": "the music is awful"}]}  # not in any review: dropped
 
 
 def test_game_evidence_sends_only_reviews_no_category_matched():
     text, texts = summary.game_evidence(analysis(60, "Bus Sim"), NEGATIVE)
-    assert texts[0].startswith("cheaters in every") and len(texts) == 2  # most helpful first
+    assert texts[0].startswith("servers drop every") and len(texts) == 2  # most helpful first
     assert "crashes every ten minutes" not in text and "## Bus Sim" in text and "# Part 2: 2 negative" in text
 
 
 def test_write_game_keeps_only_grounded_other_complaints():
     requests = []
     s = summary.write_game(analysis(60, "Bus Sim"), NEGATIVE, "tr", client=fake_ollama(game_answer, requests))
-    assert s.why.startswith("It costs") and s.fix == ["Fair price", "Anti-cheat from day one"]
-    assert [(o.text, o.quote) for o in s.other] == [("Cheaters", "cheaters in every single match")]
+    assert s.why.startswith("It costs") and s.fix == ["Fair price", "Stable servers from day one"]
+    assert [(o.text, o.quote) for o in s.other] == [("Server drops", "servers drop every single match")]
     assert s.n_uncovered == 2 and s.model == config.LLM_MODEL
     assert "Turkish" in requests[0]["messages"][0]["content"]
     assert requests[0]["format"]["required"] == ["why", "fix", "other"]

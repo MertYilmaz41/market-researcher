@@ -298,6 +298,10 @@ TR: dict[str, str] = {
     "Players expect AAA-scale scope": "Oyuncular AAA ölçeğinde kapsam bekliyor",
     "Out of indie scope: don't chase it, position the game honestly":
         "Bağımsız ekip kapsamının dışında: peşinden koşma, oyunu dürüstçe konumlandır",
+    "Not worth the price / pay-to-win": "Fiyatına değmez / parayla kazanma",
+    "Fair price, no pay-to-win": "Adil fiyat, parayla kazanma yok",
+    "Cheaters / hackers": "Hileciler / hackerlar",
+    "Fair, protected multiplayer": "Adil, korunan çok oyunculu mod",
     "still common lately": "son zamanlarda hâlâ yaygın",
     "less common lately": "son zamanlarda daha az",
     "rarely mentioned lately": "son zamanlarda nadiren anılıyor",
