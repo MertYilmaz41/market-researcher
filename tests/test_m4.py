@@ -135,7 +135,7 @@ def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):
     from steam_researcher import pipeline
     from steam_researcher.models import Review
 
-    def sample(http, appid, kind, limit):
+    def sample(http, appid, kind, limit, on_page=None):
         if kind == "positive":
             raise httpx.ReadTimeout("slow")
         return [Review(recommendation_id=str(i), text="Crashes constantly, full of bugs.", voted_up=False,
@@ -150,7 +150,7 @@ def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):
     assert a.review_error is None and a.mining.categories[0].code == "bugs"
     assert a.opportunity.fixability == 1.0  # mined, not the 0.5 default
 
-    def down(http, appid, kind, limit):
+    def down(http, appid, kind, limit, on_page=None):
         raise httpx.ReadTimeout("slow")
 
     monkeypatch.setattr(pipeline, "review_sample", down)
@@ -170,3 +170,35 @@ def test_recent_figures_count_back_from_the_analysis_time():
     assert report.recent_text(a) == "20 (17%), 50% positive"
     a.analyzed_at = None  # older saved runs: count back from now, as before (nothing in the last year)
     assert report.recent_text(a) == "0 (0%)"
+
+
+# --- plain-language verdict and checks (web UI game panel) -----------------------------------------
+
+def test_verdict_bands():
+    assert [scoring.verdict(s) for s in (80, 65, 50, 45, 10)] == [
+        "Strong opportunity", "Strong opportunity", "Worth a closer look", "Worth a closer look", "Weak opportunity"]
+
+
+def test_why_reads_the_three_parts():
+    a = _analysis_for(game(), [flag("netcode")])  # 1,000 reviews at 40%, every complaint fixable
+    assert scoring.why(a) == ("Solid demand (1,000 reviews), many of them unhappy (40% positive), "
+                              "and nearly every complaint is something a developer can fix.")
+    assert "couldn't be read for complaints" in scoring.why(_analysis_for(game(), mined=False))
+    assert "players mostly like it" in scoring.why(_analysis_for(game(pos=900, neg=100)))
+    from steam_researcher.i18n import use
+    with use("tr"):
+        assert "1.000" in scoring.why(a)
+
+
+def test_checks_list_every_check_passed_or_flagged():
+    from steam_researcher import config, risk
+
+    a = _analysis_for(game(), [flag("netcode")])
+    out = risk.checks(a)
+    assert [c["code"] for c in out] == [c for c in config.RISK_LABELS
+                                        if c not in ("rating_without_spikes", "not_game", "unlisted")]
+    net = next(c for c in out if c["code"] == "netcode")
+    assert net["flagged"] and net["points"] == 15 and net["detail"] == "netcode"
+    passed = {c["code"]: c for c in out if not c["flagged"]}
+    assert passed["deep_discount"]["detail"] == "full price" and passed["cheap_price"]["detail"] == "$9.99"
+    assert all(c["points"] == 0 and c["severity"] is None for c in passed.values())

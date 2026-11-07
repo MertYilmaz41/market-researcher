@@ -1,12 +1,12 @@
 // 3D opportunity map: one sphere per game.
 //   x = demand, y = dissatisfaction (review-bomb adjusted), z = fixability
-//   size = estimated gross revenue (log), color = opportunity score (blue -> teal -> gold)
+//   size = estimated gross revenue (log), color = opportunity score (gray -> violet)
 // Colors come from style.css :root via palette.js.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import * as palette from "/static/palette.js";
-import { fmt, percent, t } from "/static/i18n.js";
+import { t } from "/static/i18n.js";
 
 const HALF = 5;      // x/z span: -5..5
 const HEIGHT = 8;    // y span: 0..8
@@ -15,7 +15,7 @@ const CENTER = new THREE.Vector3(0, HEIGHT * 0.4, 0);
 const color = (name) => new THREE.Color(palette.cssVar(name));
 
 export function scoreColor(score) {
-  return new THREE.Color(palette.scoreColor(score));
+  return new THREE.Color(palette.mapColor(score));
 }
 
 function position(game) {
@@ -51,7 +51,7 @@ export function createMap(container, { onSelect, describe }) {
   container.append(labels.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(color("--bg"), 22, 45);
+  scene.fog = new THREE.Fog(color("--panel"), 22, 45);
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
   camera.position.set(11, 9, 13);
 
@@ -198,12 +198,7 @@ export function createMap(container, { onSelect, describe }) {
     renderer.domElement.style.cursor = hit ? "pointer" : "grab";
     if (!hit) { tooltip.hidden = true; return; }
     const g = hit.userData.game;
-    tooltip.replaceChildren();
-    const b = document.createElement("b");
-    b.textContent = g.game.name;
-    const s = document.createElement("span");
-    s.textContent = describe ? describe(g) : t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(g.opportunity.score), n: fmt(g.reviews), pct: percent(g.rating) });
-    tooltip.append(b, s);
+    tooltip.replaceChildren(describe(g));
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y}px`;
     tooltip.hidden = false;
@@ -261,11 +256,16 @@ export function createMap(container, { onSelect, describe }) {
 
   // After a theme switch: the scene's own colors (the page's CSS covers the labels and the background).
   function recolor() {
-    scene.fog.color.copy(color("--bg"));
+    scene.fog.color.copy(color("--panel"));
     makeGrid();
     box.material.color.copy(color("--line"));
     ring.material.color.copy(color("--text"));
     for (const [mat, token] of axisLines) mat.color.copy(color(token));
+    for (const s of spheres) {
+      const c = scoreColor(s.userData.game.opportunity.score);
+      s.material.color.copy(c);
+      s.material.emissive.copy(c);
+    }
   }
 
   return { setGames, select, setVisible, relabel, recolor, available: true };

@@ -24,7 +24,7 @@ import datetime as dt
 import random
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import correlation, fmean
 
@@ -100,14 +100,14 @@ class Outcomes:
         return self.sold / self.entrants if self.entrants else 0.0
 
 
-def outcomes(hists: Sequence[Sequence[HistPoint]], start: int, months: int = HORIZON) -> Outcomes:
-    """Success of the games released in months [start, start + months)."""
+def outcomes(hists: Sequence[Sequence[HistPoint]], start: int, months: int = HORIZON, outcome: int = OUTCOME) -> Outcomes:
+    """Success of the games released in months [start, start + months), each over its first `outcome` months."""
     out = Outcomes()
     for hist in hists:
         rel = release_month(hist)
         if rel is None or not start <= rel < start + months:
             continue
-        up, down = window(hist, rel, OUTCOME)
+        up, down = window(hist, rel, outcome)
         out.entrants += 1
         if up + down >= SUCCESS_REVIEWS:
             out.sold += 1
@@ -123,21 +123,26 @@ class Row:
     market: MarketStats  # the tag at T
     after: Outcomes  # entrants in the HORIZON months after T
     before: Outcomes  # entrants in the HORIZON months before T (the tag's base rate)
+    # Entrants released HORIZON + OUTCOME to OUTCOME months before T: their whole OUTCOME window ends
+    # by T, so their success was known at T (unlike `before`, whose outcomes run past T).
+    past: Outcomes = field(default_factory=Outcomes)
 
     @property
     def usable(self) -> bool:
         return self.after.entrants >= MIN_ENTRANTS and self.market.n_underserved + self.market.n_well_served >= MIN_RATED
 
 
-def tag_row(tag: str, games: Sequence[tuple[Game, Sequence[HistPoint]]], t: int) -> Row:
+def tag_row(tag: str, games: Sequence[tuple[Game, Sequence[HistPoint]]], t: int,
+            horizon: int = HORIZON, outcome: int = OUTCOME) -> Row:
     then = [past for g, h in games if (past := game_at(g, h, t)) is not None]
     hists = [h for _, h in games]
     return Row(
         tag=tag,
         t=t,
         market=market_stats(then, config.MIN_REVIEWS, config.MIN_RATING, config.MAX_RATING),
-        after=outcomes(hists, t),
-        before=outcomes(hists, t - HORIZON),
+        after=outcomes(hists, t, horizon, outcome),
+        before=outcomes(hists, t - horizon, horizon, outcome),
+        past=outcomes(hists, t - horizon - outcome, horizon, outcome),
     )
 
 
@@ -207,12 +212,12 @@ STATS: dict[str, Callable[[Sequence[Row]], float]] = {
 }
 
 
-def quintiles(rows: Sequence[Row]) -> list[tuple[int, int, int, int]]:
-    """Within each cutoff, rows sorted by gap and cut into fifths; fifth i of every cutoff pooled:
-    (rows, entrants, hits, sold) per fifth, lowest gap first."""
+def quintiles(rows: Sequence[Row], key: Callable[[Row], float] = lambda r: r.market.gap) -> list[tuple[int, int, int, int]]:
+    """Within each cutoff, rows sorted by key (the gap) and cut into fifths; fifth i of every cutoff
+    pooled: (rows, entrants, hits, sold) per fifth, lowest key first."""
     out = [[0, 0, 0, 0] for _ in range(5)]
     for part in _by_cutoff(rows).values():
-        ordered = sorted(part, key=lambda r: r.market.gap)
+        ordered = sorted(part, key=key)
         for j, r in enumerate(ordered):
             q = out[j * 5 // len(ordered)]
             q[0] += 1
@@ -246,8 +251,110 @@ def verdict(rows: Sequence[Row]) -> tuple[str, list[tuple[str, bool]]]:
     return ("holds" if all(ok for _, ok in checks) else "does not hold"), checks
 
 
-def render(rows: Sequence[Row], skipped_tags: Sequence[str]) -> str:
+# --- other market measures --------------------------------------------------------------------------
+# Written down on Nov 7 2026, after the full run showed the gap fails and before any of these was
+# measured per cutoff (only "market size vs hit rate", pooled over all four cutoffs, had been seen).
+# Each is known at T. Tuned on TUNE_CUTOFFS, checked once on CHECK_CUTOFFS.
+TUNE_CUTOFFS = ("2019-01", "2020-01")
+CHECK_CUTOFFS = ("2021-01", "2022-01")
+# Recent check (fixed Nov 7 2026, before any result for it was seen): with 24 + 24 month windows, 2022-01
+# is the last cutoff whose outcomes are complete. With 12-month windows (entrants in the 12 months after T,
+# success within their first 12 months, the same 500 reviews / 80%) T can be 2023-01 and 2024-01, so
+# these show whether a link still holds on today's busier Steam. Never tuned on. A candidate is adopted
+# only if it also holds here: the tuning sign, and its 95% interval excludes 0.
+RECENT_CUTOFFS = ("2023-01", "2024-01")
+RECENT_WINDOW = 12
+CANDIDATES: dict[str, Callable[[Row], float | None]] = {
+    "games with demand (market size)": lambda r: r.market.n_demand,
+    "underserved games": lambda r: r.market.n_underserved,
+    "well-served games": lambda r: r.market.n_well_served,
+    "earlier entrants' hit rate (released 48-24 months before T)":
+        lambda r: r.past.hit_rate if r.past.entrants >= MIN_ENTRANTS else None,
+    "releases in the 24 months before T": lambda r: r.before.entrants,
+}
+
+
+@dataclass
+class Candidate:
+    name: str
+    tune: tuple[float, float, float]  # rho, 95% interval, on the tuning cutoffs
+    check: tuple[float, float, float]  # the same on the check cutoffs
+    check_fixed: float  # check rho with market size held fixed (nan for market size itself)
+    fifths: tuple[float, float]  # check: hit rate of the fifth the sign favors, and of the other end
+    recent: tuple[float, float, float]  # rho and 95% interval on the recent cutoffs (12-month windows)
+    passed: bool
+
+
+def _rho_ci(rows: Sequence[Row], key: Callable[[Row], float]) -> tuple[float, float, float]:
+    stat = per_cutoff(lambda rs: spearman([key(r) for r in rs], [r.after.hit_rate for r in rs]))
+    return (stat(rows), *bootstrap(rows, stat))
+
+
+def candidate(name: str, measure: Callable[[Row], float | None], rows: Sequence[Row],
+              recent_rows: Sequence[Row] = ()) -> Candidate:
+    """Adopted only if: on the tuning cutoffs the interval excludes 0; on the check cutoffs the rho has
+    the same sign, its interval excludes 0, it keeps that sign with market size held fixed (except
+    market size itself), and the favored fifth's hit rate is >= MIN_FIFTH_RATIO x the other end's; and on
+    the recent cutoffs (recent_rows) the sign holds and its interval excludes 0."""
+    rows = [r for r in rows if measure(r) is not None]
+    recent_rows = [r for r in recent_rows if measure(r) is not None]
+    key = lambda r: measure(r)  # noqa: E731
+    tune = _rho_ci([r for r in rows if month_text(r.t) in TUNE_CUTOFFS], key)
+    check_rows = [r for r in rows if month_text(r.t) in CHECK_CUTOFFS]
+    check = _rho_ci(check_rows, key)
+    size = name.startswith("games with demand")
+    fixed = float("nan") if size else per_cutoff(lambda rs: partial_spearman(
+        [key(r) for r in rs], [r.after.hit_rate for r in rs], [r.market.n_demand for r in rs]))(check_rows)
+    sign = 1 if tune[0] >= 0 else -1
+    q = quintiles(check_rows, key)
+    rates = [hits / n if n else 0.0 for _, n, hits, _ in q] or [0.0]
+    best, worst = (rates[-1], rates[0]) if sign > 0 else (rates[0], rates[-1])
+    recent = _rho_ci(recent_rows, key) if recent_rows else (float("nan"),) * 3
+    passed = (sign * recent[1] > 0 and sign * recent[2] > 0
+              and sign * tune[1] > 0 and sign * tune[2] > 0 and sign * check[0] > 0 and sign * check[1] > 0
+              and sign * check[2] > 0 and (size or sign * fixed > 0) and len(q) == 5
+              and best >= MIN_FIFTH_RATIO * worst and best > 0)
+    return Candidate(name, tune, check, fixed, (best, worst), recent, passed)
+
+
+def render_candidates(rows: Sequence[Row], recent_rows: Sequence[Row] = ()) -> list[str]:
+    lines = ["", "## Other market measures (candidates fixed in advance)", "",
+             f"Each vs the hit rate, Spearman within each T. Tuned on {', '.join(TUNE_CUTOFFS)}; checked once on "
+             f"{', '.join(CHECK_CUTOFFS)}. Adopted only if the tuning interval excludes 0 and, on the check cutoffs, "
+             f"the sign holds, its interval excludes 0, it holds with market size fixed, and the favored fifth's "
+             f"hit rate is >= {MIN_FIFTH_RATIO} x the other end's, and on the recent cutoffs "
+             f"({', '.join(RECENT_CUTOFFS)}, {RECENT_WINDOW}-month windows) the sign holds and its interval excludes 0. "
+             "Market size vs hit rate pooled over all four cutoffs (+0.28) had been seen before these were written down.", "",
+             "| Measure | Tuning rho (95%) | Check rho (95%) | Check, size fixed | Check fifths: favored vs other end | Recent rho (95%) | Adopted |",
+             "|---|---|---|---|---|---|---|"]
+    for name, measure in CANDIDATES.items():
+        c = candidate(name, measure, rows, recent_rows)
+        fixed = "-" if c.check_fixed != c.check_fixed else f"{c.check_fixed:+.2f}"
+        lines.append(f"| {c.name} | {c.tune[0]:+.2f} ({c.tune[1]:+.2f} to {c.tune[2]:+.2f}) | "
+                     f"{c.check[0]:+.2f} ({c.check[1]:+.2f} to {c.check[2]:+.2f}) | {fixed} | "
+                     f"{c.fifths[0]:.1%} vs {c.fifths[1]:.1%} | {c.recent[0]:+.2f} ({c.recent[1]:+.2f} to {c.recent[2]:+.2f}) | "
+                     f"{'yes' if c.passed else 'no'} |")
+    return lines
+
+
+def render_recent(recent_rows: Sequence[Row]) -> list[str]:
+    """The gap tests on the recent cutoffs, for information: the verdict stays the 24-month one."""
+    lines = ["", f"## Recent check ({', '.join(RECENT_CUTOFFS)}; entrants and success over {RECENT_WINDOW} months)", "",
+             f"Usable rows: {len(recent_rows)}, tags: {len({r.tag for r in recent_rows})}. Never tuned on.", "",
+             "| Test | rho | 95% interval |", "|---|---|---|"]
+    for name in ("gap vs hit rate", "gap vs sold rate", "gap vs hit rate, market size held fixed"):
+        stat = per_cutoff(STATS[name])
+        lo, hi = bootstrap(recent_rows, stat)
+        lines.append(f"| {name} | {stat(recent_rows):+.2f} | {lo:+.2f} to {hi:+.2f} |")
+    lines += ["", "| Fifth by unmet share | Rows | Entrants | Hit rate | Sold rate |", "|---|---|---|---|---|"]
+    for i, (k, n, hits, sold) in enumerate(quintiles(recent_rows), 1):
+        lines.append(f"| {i} | {k} | {n:,} | {hits / n if n else 0:.1%} | {sold / n if n else 0:.1%} |")
+    return lines
+
+
+def render(rows: Sequence[Row], skipped_tags: Sequence[str], recent: Sequence[Row] = ()) -> str:
     used = [r for r in rows if r.usable]
+    recent_used = [r for r in recent if r.usable]
     result, checks = verdict(used)
     lines = [
         "# Backtest: does the unmet share predict later success?",
@@ -278,6 +385,9 @@ def render(rows: Sequence[Row], skipped_tags: Sequence[str]) -> str:
               "| Fifth | Rows | Entrants | Hit rate | Sold rate |", "|---|---|---|---|---|"]
     for i, (k, n, hits, sold) in enumerate(quintiles(used), 1):
         lines.append(f"| {i} | {k} | {n:,} | {hits / n if n else 0:.1%} | {sold / n if n else 0:.1%} |")
+    if recent_used:
+        lines += render_recent(recent_used)
+    lines += render_candidates(used, recent_used)
     lines += ["", "## Rows", "",
               "| Tag | T | Demand games | Underserved | Well served | Unmet share | Entrants | Hit rate | Sold rate | Hit rate before T |",
               "|---|---|---|---|---|---|---|---|---|---|"]
@@ -362,8 +472,10 @@ def main() -> None:
     cutoffs = [parse_month(c) for c in args.cutoffs]
     rows = [tag_row(tag, [(g, hists[g.appid]) for g in games], t)
             for tag, games in tag_lists.items() for t in cutoffs]
+    recent = [tag_row(tag, [(g, hists[g.appid]) for g in games], parse_month(t), RECENT_WINDOW, RECENT_WINDOW)
+              for tag, games in tag_lists.items() for t in RECENT_CUTOFFS] if args.cutoffs == CUTOFFS else []
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(render(rows, skipped), encoding="utf-8")
+    args.out.write_text(render(rows, skipped, recent), encoding="utf-8")
     print(f"wrote {args.out}")
 
 

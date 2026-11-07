@@ -5,7 +5,7 @@ import hashlib
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
 
@@ -98,6 +98,10 @@ class Job:
     step_start: float = 0.0  # when the current step began (monotonic), and its done count then
     step_done: int = 0
     step: int = 0  # counts the steps (listing, checking, analyzing...), so a bar that starts over isn't read as a restart
+    # Each game of a tag search as it goes (pipeline.run_tag's on_game), for the live list in the UI:
+    # appid -> {name, stage, done, total, score, rating, reviews, moved (when its progress last changed)}.
+    games: dict = field(default_factory=dict)
+    slow: bool = False  # a review page has taken SLOW_REVIEW_SECONDS: warned once in the status
     result: pipeline.TagResult | pipeline.MarketsResult | None = None
     error: dict | None = None  # a Notice dict
 
@@ -147,6 +151,9 @@ def game_json(a: Analysis) -> dict:
         recent_share=recent / total if total else None,
         recent_rating=risk.recent_rating(a.histogram, a.analyzed_at),
         score_explained=scoring.explain(a),
+        verdict=scoring.verdict(a.opportunity.score),
+        why=scoring.why(a),
+        checks=risk.checks(a),
     )
     return data
 
@@ -164,6 +171,19 @@ def _run(job_id: str) -> None:
                 job.step += 1
             job.message, job.done, job.total = message, done, total
 
+    def game(appid: int, name: str, stage: str, done: int, total: int, a: Analysis | None) -> None:
+        # Called from the pipeline's worker threads too.
+        with _lock:
+            if stage == "store":  # the game checked before this one either started or wasn't a game
+                for k in [k for k, v in job.games.items() if v["stage"] == "store"]:
+                    del job.games[k]
+            g = job.games.setdefault(appid, {"name": name, "score": None, "rating": None, "reviews": None})
+            if stage == "done" and a is not None:
+                g.update(score=a.opportunity.score, rating=a.game.rating, reviews=a.game.reviews)
+            elif stage == "done":
+                stage = "failed"
+            g.update(stage=stage, done=done, total=total, moved=_now())
+
     def finish(**fields) -> None:
         with _lock:
             if job.status != "cancelled":  # a cancelled run ends quietly, whatever it was doing
@@ -175,7 +195,7 @@ def _run(job_id: str) -> None:
         if job.kind == "market":
             result = pipeline.run_markets(http, r.min_reviews, r.lo, r.hi, step)
         else:
-            result = pipeline.run_tag(http, r.tags, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step)
+            result = pipeline.run_tag(http, r.tags, r.min_reviews, r.lo, r.hi, r.max_games, r.reviews, step, game)
         if job.status == "cancelled":
             return
         # Saved before it shows as done, so the first result the UI sees can already compare.
@@ -249,6 +269,7 @@ def _start(kind: str, req: TagRunRequest | MarketRunRequest) -> str:
 
 
 _now = time.monotonic  # the clock for time estimates (tests set it)
+SLOW_REVIEW_SECONDS = 30  # a game waiting this long for its next review page: Steam's review service is slow
 
 
 def eta(done: int, total: int, done0: int, since: float, now: float) -> float | None:
@@ -265,6 +286,14 @@ def _status(job_id: str, job: Job, result_json) -> dict:
         out = {"status": job.status, "message": job.message, "done": job.done, "total": job.total, "step": job.step,
                "eta": eta(job.done, job.total, job.step_done, job.step_start, _now()) if running else None,
                "error": job.error}
+        if job.kind == "tag" and running:
+            now = _now()
+            out["games"] = [{"appid": k, **{f: v[f] for f in ("name", "stage", "done", "total", "score", "rating", "reviews")}}
+                            for k, v in job.games.items()]
+            stuck = any(v["stage"] == "reviews" and now - v["moved"] >= SLOW_REVIEW_SECONDS for v in job.games.values())
+            if stuck and not job.slow:
+                job.slow = True
+                out["slow"] = notices.slow_reviews().model_dump()
         result = job.result
     if result is not None:
         out["result"] = result_json(job_id, job.request, result)
@@ -373,6 +402,10 @@ def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -
         "games": games,
         "summary": _summary_json(result.summaries.get(lang())),
         "llm_model": config.LLM_MODEL,
+        # The map's axes in the score's own units: demand is log10(reviews) from DEMAND_LOG_MIN (0) to
+        # DEMAND_LOG_MAX (1); dissatisfaction is MAX_RATING (0) down to MIN_RATING (1) % positive.
+        "axes": {"demand_log": [config.DEMAND_LOG_MIN, config.DEMAND_LOG_MAX],
+                 "rating": [config.MAX_RATING, config.MIN_RATING]},
         "compared": bool(changes),
         "notices": [n.model_dump() for n in post],
     }

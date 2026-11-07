@@ -6,7 +6,7 @@
   <title>Steam Researcher</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap">
   <link rel="stylesheet" href="/static/style.css">
   <script>
     // Theme before the first paint (no dark flash on the light theme): the saved choice, else the system's.
@@ -28,23 +28,50 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">&#9670;</span>
-      <div>
-        <h1>Steam Researcher</h1>
-        <p data-i18n>Proven demand + poor execution = high opportunity</p>
-      </div>
+      <svg class="logo" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" stroke="currentColor" stroke-width="1.5"/><circle cx="14" cy="14" r="6.5" stroke="currentColor" stroke-width="1.5"/><circle cx="14" cy="14" r="2" fill="currentColor"/></svg>
+      <span class="brand-name">Steam Researcher</span>
     </div>
-
-    <div class="top-tools">
-      <button type="button" id="help-toggle" class="help-toggle" data-i18n>How it works</button>
-      <div id="lang" class="seg" role="group" aria-label="Language" data-i18n-attr="aria-label">
-        <button type="button" data-lang="en" aria-pressed="true">EN</button>
-        <button type="button" data-lang="tr" aria-pressed="false">TR</button>
+    <nav id="table-view" class="nav" aria-label="Views" data-i18n-attr="aria-label">
+      <button type="button" data-view="games" aria-pressed="true"><span data-i18n>Games</span></button>
+      <button type="button" data-view="markets" aria-pressed="false"><span data-i18n>Markets</span></button>
+      <button type="button" data-view="shortlist" aria-pressed="false"><span data-i18n>Shortlist</span> <span id="shortlist-count" class="count"></span></button>
+    </nav>
+    <form id="tag-form" class="searchbox" autocomplete="off">
+      <div id="tag-combo" class="combo">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.6 10.6L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <div id="tag-chips" class="tag-chips"></div>
+        <input id="tag" placeholder="Add a tag, or paste an AppID" aria-label="Steam tags, or a game's AppID" data-i18n-attr="placeholder,aria-label"
+               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tag-list">
+        <div id="tag-pop" class="combo-pop" hidden>
+          <ul id="tag-list" class="combo-list" role="listbox" aria-label="Steam tags" data-i18n-attr="aria-label" aria-multiselectable="true"></ul>
+          <div class="combo-foot">
+            <span id="tag-count"></span>
+            <button type="button" id="tag-clear" data-i18n>Clear</button>
+          </div>
+          <div id="runs-section" class="runs-section">
+            <span class="label" data-i18n>Past searches</span>
+            <ul id="runs-list" class="combo-list runs-list" aria-label="Saved runs" data-i18n-attr="aria-label"></ul>
+          </div>
+        </div>
       </div>
-      <div id="theme" class="seg" role="group" aria-label="Theme" data-i18n-attr="aria-label">
-        <button type="button" data-theme="dark" aria-pressed="true" aria-label="Dark theme" title="Dark theme" data-i18n-attr="aria-label,title">&#9790;</button>
-        <button type="button" data-theme="light" aria-pressed="false" aria-label="Light theme" title="Light theme" data-i18n-attr="aria-label,title">&#9728;</button>
-      </div>
+      <button type="submit" id="run" class="primary">Search</button>
+    </form>
+    <span class="topbar-gap"></span>
+    <button type="button" id="help-toggle" class="help-btn" aria-label="How it works" title="How it works" data-i18n-attr="aria-label,title">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/><path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4M8 11.4v.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span data-i18n>How it works</span>
+    </button>
+    <div id="lang" class="seg topbar-seg" role="group" aria-label="Language" data-i18n-attr="aria-label">
+      <button type="button" data-lang="en" aria-pressed="true" aria-label="English" title="English">EN</button>
+      <button type="button" data-lang="tr" aria-pressed="false" aria-label="Türkçe" title="Türkçe">TR</button>
+    </div>
+    <div id="theme" class="seg topbar-seg" role="group" aria-label="Theme" data-i18n-attr="aria-label">
+      <button type="button" data-theme="dark" aria-pressed="true" aria-label="Dark" title="Dark" data-i18n-attr="aria-label,title">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" data-theme="light" aria-pressed="false" aria-label="Light" title="Light" data-i18n-attr="aria-label,title">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
     </div>
   </header>
   <dialog id="help" class="help" aria-labelledby="help-title">
@@ -58,8 +85,12 @@
         <p data-i18n>Look for games that many people bought (many reviews) but rate poorly. Their players want this kind of game, and the game lets them down. A better game for the same players is the opportunity.</p>
       </section>
       <section>
+        <h3 data-i18n>Searching</h3>
+        <p data-i18n>Click the search box at the top and tick one or more Steam tags (games must have all of them), then press Search. To look at a single game, paste its AppID or store link into the same box. Your past searches are listed when the box is empty.</p>
+      </section>
+      <section>
         <h3 data-i18n>Filters</h3>
-        <p data-i18n>Minimum reviews sets how proven the demand must be. The % positive range picks unhappy audiences (5-70% by default). Games to analyze and reviews read per game trade speed for detail. Presets fill in the fields.</p>
+        <p data-i18n>The filter button under the title shows the current filters; click it to change them. Minimum reviews sets how proven the demand must be. The % positive range picks unhappy audiences (5-70% by default). Games to analyze and reviews read per game trade speed for detail. Presets fill in the fields.</p>
       </section>
       <section>
         <h3 data-i18n>The score</h3>
@@ -71,7 +102,7 @@
       </section>
       <section>
         <h3 data-i18n>Markets and the unmet share</h3>
-        <p data-i18n>The Markets view and the strip above the ranking describe a whole tag. The unmet share shows that players keep buying though few games please them; it was not shown to predict success. In a backtest of 180 tags (2019-2022), new games in the fifth with the highest share reached 500 reviews more often than in the lowest (21% vs 14%), but not 500 reviews at 80%+ positive (11% vs 12%). Use it to pick markets to look into.</p>
+        <p data-i18n>The Markets view and the sentence under a search's title describe a whole tag. The unmet share shows that players keep buying though few games please them; it was not shown to predict success. In a backtest of 180 tags (2019-2022), new games in the fifth with the highest share reached 500 reviews more often than in the lowest (21% vs 14%), but not 500 reviews at 80%+ positive (11% vs 12%). Use it to pick markets to look into.</p>
       </section>
       <section>
         <h3 data-i18n>Complaints</h3>
@@ -79,7 +110,7 @@
       </section>
       <section>
         <h3 data-i18n>Local AI summaries</h3>
-        <p data-i18n>If Ollama runs on your computer, Write summary lets a local model read the results: what players love, the complaints the games share and what to build. Nothing leaves your computer. It takes from 20 seconds to about a minute and a half.</p>
+        <p data-i18n>If Ollama runs on your computer, the AI summary button under the title lets a local model read the results: what players love, the complaints the games share and what to build. A game's Summary tab does the same for one game. Nothing leaves your computer. It takes from 20 seconds to about a minute and a half.</p>
       </section>
       <section>
         <h3 data-i18n>Terms</h3>
@@ -88,206 +119,202 @@
       </section>
       <section>
         <h3 data-i18n>Risks</h3>
-        <p data-i18n>Each risk a game can get. Most take points off the score; the game's Risks tab says why it got one.</p>
+        <p data-i18n>Each risk a game can get. Most take points off the score; a game's History tab lists every check and how the game came out of it.</p>
         <dl id="help-risks" class="terms"></dl>
       </section>
       <section>
         <h3 data-i18n>Shortlist and past runs</h3>
-        <p data-i18n>Star a game to keep it on the Shortlist with a note, and download the list as CSV. Every finished search is saved under Past runs, and running the same search again shows how the scores changed.</p>
+        <p data-i18n>Star a game to keep it on the Shortlist with a note, and download the list as CSV. Every finished search is saved and listed under Past searches in the search box; running the same search again shows how the scores changed.</p>
       </section>
     </div>
   </dialog>
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
 
   <div class="shell">
-    <aside class="sidebar card">
-      <form id="tag-form" class="side-form" autocomplete="off">
-        <section class="side-section">
-          <span class="label" data-i18n>Tags</span>
-          <div id="tag-combo" class="combo">
-            <div id="tag-chips" class="tag-chips"></div>
-            <input id="tag" placeholder="Pick Steam tags..." aria-label="Steam tags" data-i18n-attr="aria-label"
-                   role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tag-list">
-            <button type="button" id="tag-toggle" class="combo-toggle" tabindex="-1" aria-label="Show all tags" data-i18n-attr="aria-label">&#9662;</button>
-            <div id="tag-pop" class="combo-pop" hidden>
-              <ul id="tag-list" class="combo-list" role="listbox" aria-label="Steam tags" data-i18n-attr="aria-label" aria-multiselectable="true"></ul>
-              <div class="combo-foot">
-                <span id="tag-count"></span>
-                <button type="button" id="tag-clear" data-i18n>Clear</button>
+    <main class="main">
+      <div id="games-view" class="view">
+        <div class="title-area">
+          <span id="games-kicker" class="kicker" hidden></span>
+          <h1 id="table-title">Find underserved audiences</h1>
+          <p id="market-line" class="lead"></p>
+          <div class="chip-row">
+            <div class="filters-wrap">
+              <button type="button" id="filters-toggle" class="filter-chip" aria-expanded="false" aria-controls="filters">
+                <span id="filters-summary"></span>
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3.5 5.5L7 9l3.5-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div id="filters" class="pop filters" hidden>
+                <label><span><span data-i18n>Minimum reviews</span><button type="button" class="info" data-term="min_reviews">i</button></span> <input id="min-reviews" form="tag-form" type="number" min="1" value="100"></label>
+                <label><span><span data-i18n>% positive from</span><button type="button" class="info" data-term="pct_range">i</button></span> <input id="lo" form="tag-form" type="number" min="0" max="100" value="5"></label>
+                <label><span data-i18n>% positive to</span> <input id="hi" form="tag-form" type="number" min="0" max="100" value="70"></label>
+                <label><span data-i18n>Games to analyze</span> <input id="max-games" form="tag-form" type="number" min="1" max="50" value="15"></label>
+                <label class="wide"><span><span data-i18n>Reviews read per game</span><button type="button" class="info" data-term="reviews_read">i</button></span> <input id="reviews" form="tag-form" type="number" min="10" max="1000" step="10" value="200"></label>
+                <div class="presets">
+                  <span data-i18n>Presets:</span>
+                  <button type="button" class="ghost" data-preset="default" data-i18n>Default</button>
+                  <button type="button" class="ghost" data-preset="proven" data-i18n>Proven demand</button>
+                  <button type="button" class="ghost" data-preset="quick" data-i18n>Quick look</button>
+                </div>
+                <p id="run-hint" class="muted wide" data-i18n>The first search of a tag can take a few minutes; later ones come from the cache.</p>
               </div>
             </div>
+            <button type="button" id="ai-chip" class="ai-chip" aria-expanded="false" aria-controls="opp-summary" hidden>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5l1.4 3.6 3.6 1.4-3.6 1.4L8 11.5 6.6 7.9 3 6.5l3.6-1.4L8 1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              <span id="ai-chip-text"></span>
+            </button>
           </div>
-        </section>
-        <section class="side-section">
-          <button type="button" id="filters-toggle" class="side-toggle label" aria-expanded="true" aria-controls="filters"><span data-i18n>Filters</span><span class="caret" aria-hidden="true">&#9662;</span></button>
-          <div id="filters" class="filters">
-            <label><span><span data-i18n>Minimum reviews</span><button type="button" class="info" data-term="min_reviews">i</button></span> <input id="min-reviews" type="number" min="1" value="100"></label>
-            <label><span><span data-i18n>% positive from</span><button type="button" class="info" data-term="pct_range">i</button></span> <input id="lo" type="number" min="0" max="100" value="5"></label>
-            <label><span data-i18n>% positive to</span> <input id="hi" type="number" min="0" max="100" value="70"></label>
-            <label><span data-i18n>Games to analyze</span> <input id="max-games" type="number" min="1" max="50" value="15"></label>
-            <label class="wide"><span><span data-i18n>Reviews read per game</span><button type="button" class="info" data-term="reviews_read">i</button></span> <input id="reviews" type="number" min="10" max="1000" step="10" value="200"></label>
-            <div class="presets">
-              <span data-i18n>Presets:</span>
-              <button type="button" class="ghost" data-preset="default" data-i18n>Default</button>
-              <button type="button" class="ghost" data-preset="proven" data-i18n>Proven demand</button>
-              <button type="button" class="ghost" data-preset="quick" data-i18n>Quick look</button>
-            </div>
-          </div>
-        </section>
-        <button type="submit" id="run" class="primary block">Find opportunities</button>
-        <p id="run-hint" class="muted" data-i18n>The first search of a tag can take a few minutes; later ones come from the cache.</p>
-      </form>
-      <section class="side-section">
-        <span class="label" data-i18n>One game</span>
-        <form id="game-form" class="search small" autocomplete="off">
-          <input id="appid" placeholder="AppID or Steam URL" aria-label="AppID or Steam store URL" data-i18n-attr="placeholder,aria-label">
-          <button type="submit" class="ghost">Analyze</button>
-        </form>
-      </section>
-      <nav class="side-section">
-        <span class="label" data-i18n>Views</span>
-        <div id="table-view" class="side-nav" role="group" aria-label="Table view" data-i18n-attr="aria-label">
-          <button type="button" data-view="games" aria-pressed="true" data-i18n>Games</button>
-          <button type="button" data-view="markets" aria-pressed="false" data-i18n>Markets</button>
-          <button type="button" data-view="shortlist" aria-pressed="false" data-i18n>Shortlist</button>
+          <section id="opp-summary" class="opp-summary" hidden>
+            <div class="opp-body"></div>
+          </section>
         </div>
-      </nav>
-    </aside>
 
-    <main class="card main">
-      <div class="card-head">
-        <h2 id="table-title">Ranking</h2>
-        <div class="map-head-right">
-          <div id="games-mode" class="seg" role="group" aria-label="Show games as" data-i18n-attr="aria-label">
-            <button type="button" data-mode="table" aria-pressed="true" data-i18n>Table</button>
-            <button type="button" data-mode="map" aria-pressed="false" data-i18n>Map</button>
-          </div>
-          <div id="map-tools" class="map-head-right" hidden>
-            <span id="map-legend" class="muted"></span>
-            <div id="map-view" class="seg" role="group" aria-label="Map view" data-i18n-attr="aria-label">
-              <button type="button" data-view="2d" aria-pressed="false">2D</button>
-              <button type="button" data-view="3d" aria-pressed="true">3D</button>
-            </div>
-          </div>
-          <div class="runs-wrap">
-            <button type="button" id="runs-toggle" class="ghost" aria-expanded="false" aria-controls="runs-pop" data-i18n>Past runs</button>
-            <div id="runs-pop" class="runs-pop" hidden>
-              <ul id="runs-list" class="combo-list" aria-label="Saved runs" data-i18n-attr="aria-label"></ul>
-            </div>
-          </div>
-          <a id="download" class="ghost button" hidden data-i18n>Report (.md)</a>
-          <a id="download-csv" class="ghost button" hidden>CSV</a>
-        </div>
-      </div>
-      <div id="games-view" class="view">
-      <p id="table-note" class="muted"></p>
-      <ul id="result-notices" class="result-notices" hidden></ul>
-      <div id="search-status" class="search-status" role="status" hidden>
-        <div class="search-status-head">
-          <b class="search-status-title"></b>
-          <span class="search-status-count"></span>
-          <button type="button" class="ghost cancel-run">Cancel</button>
-        </div>
-        <div class="progress-bar"><span class="search-status-fill"></span></div>
-        <span class="search-status-text muted"></span>
-      </div>
-      <div id="market-strip" class="market-strip" hidden></div>
-      <details id="opp-summary" class="opp-summary" hidden>
-        <summary><b data-i18n>Opportunity summary</b> <span class="opp-state muted"></span></summary>
-        <div class="opp-body"></div>
-      </details>
-      <div id="quick-filter" class="quick-filter" hidden>
-        <input id="name-filter" type="search" placeholder="Find a game..." aria-label="Find a game by name" data-i18n-attr="placeholder,aria-label">
-        <label><input id="hide-risky" type="checkbox"> <span data-i18n>Hide games with risk penalties</span></label><button type="button" class="info" data-term="risk_penalty">i</button>
-        <span id="filter-count" class="muted"></span>
-      </div>
-      <div class="table-wrap">
-        <table id="ranking">
-          <thead>
-            <tr>
-              <th class="star-col"></th>
-              <th data-key="rank" class="num">#</th>
-              <th data-key="name" data-i18n>Game</th>
-              <th data-key="score" class="num" data-i18n>Score</th>
-              <th data-key="reviews" class="num" data-i18n>Reviews</th>
-              <th data-key="rating" class="num" data-i18n>% Pos</th>
-              <th data-key="recent" class="num"><span data-i18n>Last 12 mo</span><button type="button" class="info" data-term="recent">i</button></th>
-              <th data-key="gross" class="num"><span data-i18n>Est. revenue</span><button type="button" class="info" data-term="revenue">i</button></th>
-              <th data-key="complaint" data-i18n>Top complaint</th>
-              <th data-key="risks"><span data-i18n>Risks</span><button type="button" class="info" data-term="risks">i</button></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <div id="table-empty" class="empty"><p><span data-i18n>Tick one or more tags and press Find opportunities.</span><br><span data-i18n>Each game gets a row; click one to inspect it.</span></p></div>
-      </div>
-      <div id="map" class="map" hidden>
-        <div id="map-empty" class="empty"><p><span data-i18n>Tick one or more tags and press Find opportunities.</span><br><span data-i18n>Each bubble is a game; click one to inspect it. In 3D, drag to orbit and scroll to zoom.</span></p></div>
-        <div id="tooltip" class="tooltip" hidden></div>
-      </div>
-      </div>
+        <ul id="result-notices" class="result-notices" hidden></ul>
 
-      <div id="markets-view" class="view" hidden>
-        <div class="markets-bar">
-          <p id="markets-note" class="muted"></p>
-          <button type="button" id="markets-run" class="primary">Build market ranking</button>
-        </div>
-        <div id="markets-status" class="search-status" role="status" hidden>
+        <section id="search-status" class="search-status" role="status" hidden>
           <div class="search-status-head">
+            <span class="step-badge"></span>
             <b class="search-status-title"></b>
+            <span class="grow"></span>
             <span class="search-status-count"></span>
+            <span class="search-status-eta"></span>
             <button type="button" class="ghost cancel-run">Cancel</button>
           </div>
           <div class="progress-bar"><span class="search-status-fill"></span></div>
-          <span class="search-status-text muted"></span>
+          <ol class="steps">
+            <li data-step="1"><span class="dot" aria-hidden="true"></span><span data-i18n>Tag lists</span></li>
+            <li data-step="2"><span class="dot" aria-hidden="true"></span><span data-i18n>Store check, risks, review mining</span></li>
+            <li data-step="3"><span class="dot" aria-hidden="true"></span><span data-i18n>Rank and compare with the last run</span></li>
+          </ol>
+          <p class="search-status-text"></p>
+          <p class="cache-note" data-i18n>Everything fetched stays cached, so cancelling never wastes it. The next search of these tags takes seconds.</p>
+        </section>
+        <div id="live" class="live" hidden>
+          <table id="live-table" class="list-table">
+            <thead><tr><th class="num">#</th><th data-i18n>Game</th><th data-i18n>Score</th><th data-i18n>Rating</th><th class="num" data-i18n>Reviews</th><th data-i18n>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p id="live-queued" class="muted"></p>
         </div>
-        <div class="table-wrap">
-          <table id="markets">
+
+        <div id="results" class="results">
+          <div class="list-top">
+            <span class="muted" data-i18n>Best opportunities first</span>
+            <span class="grow"></span>
+            <div id="downloads" class="downloads" hidden>
+              <a id="download" class="link" data-i18n>Report (.md)</a>
+              <a id="download-csv" class="link">CSV</a>
+            </div>
+            <div id="map-tools" class="map-tools" hidden>
+              <div id="map-view" class="seg" role="group" aria-label="Map view" data-i18n-attr="aria-label">
+                <button type="button" data-view="2d" aria-pressed="false">2D</button>
+                <button type="button" data-view="3d" aria-pressed="true">3D</button>
+              </div>
+            </div>
+            <div id="games-mode" class="seg" role="group" aria-label="Show games as" data-i18n-attr="aria-label">
+              <button type="button" data-mode="table" aria-pressed="true" data-i18n>List</button>
+              <button type="button" data-mode="map" aria-pressed="false" data-i18n>Map</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="ranking" class="rank-table">
+              <thead>
+                <tr>
+                  <th class="num">#</th>
+                  <th data-i18n>Game</th>
+                  <th data-i18n>Score</th>
+                  <th data-i18n>Biggest complaint</th>
+                  <th class="num"><span data-i18n>Revenue</span><button type="button" class="info" data-term="revenue">i</button></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <button type="button" id="show-more" class="link-btn" hidden></button>
+            <div id="table-empty" class="empty"><p><span data-i18n>Click the search box at the top, tick one or more tags and press Search.</span><br><span data-i18n>Each game gets a row; click one to inspect it.</span></p></div>
+            <p id="table-note" class="muted"></p>
+          </div>
+          <div id="map" class="map" hidden>
+            <div id="map-empty" class="empty"><p><span data-i18n>Click the search box at the top, tick one or more tags and press Search.</span><br><span data-i18n>Each bubble is a game; click one to inspect it. In 3D, drag to orbit and scroll to zoom.</span></p></div>
+            <div id="tooltip" class="tooltip" hidden></div>
+          </div>
+          <p id="map-legend" class="map-legend" hidden></p>
+        </div>
+      </div>
+
+      <div id="markets-view" class="view" hidden>
+        <div class="view-head">
+          <div class="title-area">
+            <span class="kicker" data-i18n>Markets · every searchable tag</span>
+            <h1 data-i18n>Which audiences are underserved?</h1>
+            <p id="markets-note" class="muted"></p>
+            <div class="chip-row" id="markets-filter-slot"></div>
+          </div>
+          <button type="button" id="markets-run" class="ghost">Build market ranking</button>
+        </div>
+        <section id="markets-status" class="search-status" role="status" hidden>
+          <div class="search-status-head">
+            <b class="search-status-title"></b>
+            <span class="grow"></span>
+            <span class="search-status-count"></span>
+            <span class="search-status-eta"></span>
+            <button type="button" class="ghost cancel-run">Cancel</button>
+          </div>
+          <div class="progress-bar"><span class="search-status-fill"></span></div>
+          <p class="search-status-text"></p>
+        </section>
+        <div id="market-cards" class="market-cards" hidden></div>
+        <div id="market-tools" class="market-tools" hidden>
+          <div class="find">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.6 10.6L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <input id="market-find" type="search" placeholder="Find a tag" aria-label="Find a tag" data-i18n-attr="placeholder,aria-label">
+          </div>
+          <label class="check-label"><input id="market-big" type="checkbox" checked> <span data-i18n>Only tags with 20+ games with demand</span></label>
+        </div>
+        <div class="table-wrap boxed" id="markets-wrap" hidden>
+          <table id="markets" class="list-table">
             <thead>
               <tr>
                 <th data-key="rank" class="num">#</th>
                 <th data-key="tag" data-i18n>Tag</th>
                 <th data-key="n_games" class="num" data-i18n>Games</th>
-                <th data-key="n_demand" class="num" title="Games with at least the minimum reviews" data-i18n data-i18n-attr="title">With demand</th>
-                <th data-key="n_underserved" class="num" title="Games with demand inside the % positive range" data-i18n data-i18n-attr="title">Underserved</th>
-                <th data-key="n_well_served" class="num" id="markets-well-head">Well served</th>
-                <th data-key="gap" class="num"><span data-i18n>Unmet share</span><button type="button" class="info" data-term="unmet_share">i</button></th>
-                <th data-key="underserved_gross" class="num"><span data-i18n>Underserved revenue</span><button type="button" class="info" data-term="revenue">i</button></th>
-                <th data-key="median_rating" class="num" title="% positive of the median game with demand" data-i18n data-i18n-attr="title">Median % pos</th>
+                <th data-key="n_demand" class="num"><span data-i18n>With demand</span><button type="button" class="info" data-term="with_demand">i</button></th>
+                <th data-key="n_underserved" class="num"><span data-i18n>Underserved</span><button type="button" class="info" data-term="underserved">i</button></th>
+                <th data-key="n_well_served" class="num"><span id="markets-well-head">Well served</span><button type="button" class="info" data-term="well_served">i</button></th>
+                <th data-key="gap"><span data-i18n>Unmet share</span><button type="button" class="info" data-term="unmet_share">i</button></th>
+                <th data-i18n>Verdict</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
+          <div class="table-foot">
+            <span class="key"><i class="sw under"></i><span id="markets-key-under"></span></span>
+            <span class="key"><i class="sw well"></i><span id="markets-key-well"></span></span>
+            <span class="grow"></span>
+            <span id="markets-shown"></span>
+          </div>
         </div>
       </div>
 
       <div id="shortlist-view" class="view" hidden>
-        <div class="markets-bar">
-          <p id="shortlist-note" class="muted"></p>
+        <div class="view-head">
+          <div class="title-area">
+            <span class="kicker" data-i18n>Shortlist · kept after restarts and cache clears</span>
+            <h1 id="shortlist-title" data-i18n>Shortlist</h1>
+          </div>
           <a id="shortlist-csv" class="ghost button" href="/api/shortlist.csv" data-i18n>Download CSV</a>
         </div>
-        <div class="table-wrap">
-          <table id="shortlist">
-            <thead>
-              <tr>
-                <th data-i18n>Game</th>
-                <th class="num" data-i18n>Score</th>
-                <th class="num" data-i18n>% Pos</th>
-                <th class="num" data-i18n>Reviews</th>
-                <th data-i18n>Top complaint</th>
-                <th data-i18n>From search</th>
-                <th data-i18n>Note</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <p id="shortlist-note" class="muted"></p>
+        <div id="shortlist" class="sl-grid"></div>
+        <p id="shortlist-foot" class="muted" data-i18n>Each card keeps the score from the day you starred it. Star it again from a newer run to refresh it; your note stays.</p>
       </div>
     </main>
 
-    <aside id="drawer" class="card drawer" aria-label="Game details" data-i18n-attr="aria-label" hidden>
-      <button type="button" id="drawer-close" class="ghost drawer-close" aria-label="Close" data-i18n-attr="aria-label">&times;</button>
+    <aside id="drawer" class="drawer" aria-label="Game details" data-i18n-attr="aria-label" hidden>
+      <div class="sheet-bar">
+        <button type="button" id="sheet-back" class="link-btn">← <span data-i18n>Ranking</span></button>
+        <span class="grow"></span>
+        <span id="sheet-pos" class="muted"></span>
+      </div>
+      <button type="button" id="drawer-close" class="icon-btn drawer-close" aria-label="Close" data-i18n-attr="aria-label">&times;</button>
       <div id="panel" class="panel"></div>
     </aside>
   </div>

@@ -5,8 +5,8 @@ import time
 from statistics import median
 
 from . import config
-from .i18n import N_
-from .models import AppDetails, Game, HistPoint, MiningResult, RiskFlag
+from .i18n import N_, _
+from .models import Analysis, AppDetails, Game, HistPoint, MiningResult, RiskFlag
 
 
 def _period(ts: int) -> str:
@@ -45,8 +45,8 @@ def check_spikes(hist: list[HistPoint]) -> list[RiskFlag]:
         else:
             flags.append(RiskFlag.make(
                 "streamer_spike", "warn",
-                N_("{period}: {n:,} reviews ({share:.0%} of all) in one period. "
-                   "Check whether a streamer/viral moment drove demand."),
+                N_("{period}: {n:,} reviews ({share:.0%} of all) in one period. A sale, an update, a streamer "
+                   "or a viral moment may have caused it; check before reading it as lasting demand."),
                 period=_period(p.date), n=p.total, share=share,
             ))
     if spikes:
@@ -199,3 +199,45 @@ def assess(game: Game, details: AppDetails | None, hist: list[HistPoint]) -> lis
         + check_complexity(details, game.tags)
         + check_niche(game.tags)
     )
+
+
+# Not shown in the list of checks: the first only adjusts the rating, the others drop or flag a game
+# that never reaches the ranking's normal view.
+_NOT_CHECKS = {"rating_without_spikes", "not_game", "unlisted"}
+
+
+def checks(a: Analysis) -> list[dict]:
+    """Every risk check and how this game came out of it (current language), for the web UI's History tab:
+    {code, label, flagged, severity, points, detail}. A flagged check's detail is its message; a passed
+    one says briefly why it passed."""
+    flags = {f.code: f for f in a.flags}
+    recent, total, _age = recent_activity(a.histogram, a.analyzed_at)
+    lately = recent_rating(a.histogram, a.analyzed_at)
+    discount = a.details.discount_percent if a.details else a.game.discount
+    final = (a.details.price_final_cents if a.details else a.game.price_cents) / 100
+    passed = {
+        "review_bomb": _("none"),
+        "streamer_spike": _("none"),
+        "deep_discount": _("full price") if not discount else _("{d}% off", d=discount),
+        "cheap_price": _("free to play") if final <= 0 else _("${price:.2f}", price=final),
+        "netcode": _("no online modes"),
+        "niche": _("no niche tags"),
+        "scope_unrealistic": _("few AAA comparisons") if a.mining else _("reviews not read"),
+        "hard_tech": _("no demanding tags"),
+        "fading_demand": (_("{share:.1%} of reviews in the last 12 months", share=recent / total) if total
+                          else _("no review history")),
+        "recovered": (_("too few recent reviews") if lately is None or recent < config.RECOVERED_MIN_RECENT
+                      else _("last 12 months: {lately:.0f}% positive", lately=lately)),
+    }
+    out = []
+    for code, label in config.RISK_LABELS.items():
+        if code in _NOT_CHECKS:
+            continue
+        f = flags.get(code)
+        out.append({
+            "code": code, "label": _(label), "flagged": f is not None,
+            "severity": f.severity if f else None,
+            "points": config.RISK_PENALTIES.get(code, 0) if f else 0,
+            "detail": f.text() if f else passed.get(code, ""),
+        })
+    return out

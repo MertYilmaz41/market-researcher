@@ -293,6 +293,14 @@ def friendly_error(exc: BaseException) -> Notice:
                   hint=_("Try again. If it keeps happening, run the CLI with SR_DEBUG=1 for details."))
 
 
+def slow_reviews() -> Notice:
+    """A search is waiting on Steam's review service (one page has taken SLOW_REVIEW_SECONDS or more)."""
+    return Notice(level="warning", title=_("Steam's review service is slow"),
+                  message=_("Some pages take 40 s or more. The search keeps going; a game whose reviews fail "
+                            "still gets ranked."),
+                  hint="")
+
+
 def llm_unavailable(missing_model: str | None) -> Notice:
     """The opportunity summary needs Ollama (a local LLM) running with the model downloaded."""
     if missing_model:

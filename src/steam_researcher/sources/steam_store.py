@@ -1,6 +1,7 @@
 """Steam store endpoints: appdetails, review histogram, review texts, tag catalog."""
 
 import json
+from collections.abc import Callable
 
 from .. import config
 from ..http import HttpClient
@@ -89,8 +90,10 @@ def reviews(
     limit: int = 300,
     language: str = "english",
     order: str = "all",  # "all" = most helpful first, "recent" = newest first
+    on_page: Callable[[int], None] | None = None,
 ) -> list[Review]:
-    """Page through review texts (all time) until `limit` is reached."""
+    """Page through review texts (all time) until `limit` is reached. on_page(n) gets the count so far
+    after each page (the web UI shows it; one of Steam's review pages can take a minute)."""
     out: list[Review] = []
     cursor = "*"
     while len(out) < limit:
@@ -110,6 +113,8 @@ def reviews(
         resp = (data or {}).get("response") or {}
         page = parse_reviews(resp)
         out.extend(page)
+        if on_page:
+            on_page(min(len(out), limit))
         next_cursor = resp.get("cursor")
         if not page or not next_cursor or next_cursor == cursor:
             break

@@ -169,6 +169,10 @@ TR: dict[str, str] = {
     "Likely a review bomb or controversy, not poor execution.":
         "{period}: {n:,} inceleme (tümünün {share:.0%} kadarı), {neg:.0%} olumsuz. "
         "Muhtemelen kötü yapımdan değil, bir inceleme bombardımanı ya da tartışmadan.",
+    "{period}: {n:,} reviews ({share:.0%} of all) in one period. A sale, an update, a streamer or a viral moment may have caused it; check before reading it as lasting demand.":
+        "{period}: tek dönemde {n:,} inceleme (tümünün {share:.0%} kadarı). Bir indirim, bir güncelleme, bir yayıncı "
+        "ya da viral bir an getirmiş olabilir; kalıcı talep saymadan önce bakın.",
+    # The old wording, still stored in runs saved before the flag was renamed (Nov 2026).
     "{period}: {n:,} reviews ({share:.0%} of all) in one period. Check whether a streamer/viral moment drove demand.":
         "{period}: tek dönemde {n:,} inceleme (tümünün {share:.0%} kadarı). "
         "Talebi bir yayıncının ya da viral bir anın getirip getirmediğine bakın.",
@@ -200,7 +204,43 @@ TR: dict[str, str] = {
     # ---- risk labels (config.RISK_LABELS)
     "Review bomb": "İnceleme bombardımanı",
     "Rating without spikes": "Sıçramasız puan",
-    "Streamer spike": "Yayıncı sıçraması",
+    "Review spike": "İnceleme sıçraması",
+    # scoring.verdict / scoring.why: the game panel's one-line reading of the score
+    "Strong opportunity": "Güçlü fırsat",
+    "Worth a closer look": "Yakından bakmaya değer",
+    "Weak opportunity": "Zayıf fırsat",
+    "Many buyers ({n:,} reviews)": "Çok alıcı ({n:,} inceleme)",
+    "Solid demand ({n:,} reviews)": "Sağlam talep ({n:,} inceleme)",
+    "Few buyers ({n:,} reviews)": "Az alıcı ({n:,} inceleme)",
+    "most of them unhappy ({rating:.0f}% positive)": "çoğu memnun değil (%{rating:.0f} olumlu)",
+    "many of them unhappy ({rating:.0f}% positive)": "birçoğu memnun değil (%{rating:.0f} olumlu)",
+    "only mildly unhappy ({rating:.0f}% positive)": "yalnızca biraz memnuniyetsiz (%{rating:.0f} olumlu)",
+    "and players mostly like it ({rating:.0f}% positive)": "oyuncular çoğunlukla seviyor (%{rating:.0f} olumlu)",
+    "its reviews couldn't be read for complaints": "şikayetler için incelemeleri okunamadı",
+    "nearly every complaint is something a developer can fix": "neredeyse her şikayet bir geliştiricinin düzeltebileceği türden",
+    "most complaints are things a developer can fix": "şikayetlerin çoğu bir geliştiricinin düzeltebileceği türden",
+    "many complaints are about scope or the genre, which a new game can't fix":
+        "şikayetlerin çoğu kapsam ya da türle ilgili; yeni bir oyun bunları düzeltemez",
+    "{buyers}, {unhappy}, and {fix}.": "{buyers}, {unhappy}; {fix}.",
+    # risk.checks: why a check passed
+    "none": "yok",
+    "full price": "tam fiyat",
+    "{d}% off": "%{d} indirimde",
+    "free to play": "ücretsiz",
+    "${price:.2f}": "${price:.2f}",
+    "no online modes": "çevrim içi mod yok",
+    "no niche tags": "niş etiket yok",
+    "few AAA comparisons": "AAA karşılaştırması az",
+    "reviews not read": "incelemeler okunmadı",
+    "no demanding tags": "zorlayıcı etiket yok",
+    "{share:.1%} of reviews in the last 12 months": "incelemelerin {share:.1%} kadarı son 12 ayda",
+    "no review history": "inceleme geçmişi yok",
+    "too few recent reviews": "son dönem incelemesi çok az",
+    "last 12 months: {lately:.0f}% positive": "son 12 ay: %{lately:.0f} olumlu",
+    # notices.slow_reviews
+    "Steam's review service is slow": "Steam'in inceleme servisi yavaş",
+    "Some pages take 40 s or more. The search keeps going; a game whose reviews fail still gets ranked.":
+        "Bazı sayfalar 40 sn ya da daha uzun sürüyor. Arama devam ediyor; incelemeleri alınamayan bir oyun da sıralamaya girer.",
     "Deep discount": "Büyük indirim",
     "Very cheap": "Çok ucuz",
     "Online multiplayer": "Çevrim içi çok oyunculu",

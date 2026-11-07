@@ -48,11 +48,15 @@ def verify_games(
     return hits, not_games, unlisted
 
 
-def review_sample(http: HttpClient, appid: int, kind: str, limit: int) -> list[Review]:
+def review_sample(http: HttpClient, appid: int, kind: str, limit: int,
+                  on_page: Callable[[int], None] | None = None) -> list[Review]:
     """Half the most helpful reviews of all time, half the newest: helpful reviews are often
-    years old, so they alone miss what players say about the game as it is now."""
-    helpful = steam_store.reviews(http, appid, kind, limit=limit - limit // 2)
-    newest = steam_store.reviews(http, appid, kind, limit=limit // 2, order="recent")
+    years old, so they alone miss what players say about the game as it is now.
+    on_page(n): reviews fetched so far (of about `limit`)."""
+    helpful = steam_store.reviews(http, appid, kind, limit=limit - limit // 2, on_page=on_page)
+    first = len(helpful)
+    newest = steam_store.reviews(http, appid, kind, limit=limit // 2, order="recent",
+                                 on_page=on_page and (lambda n: on_page(first + n)))
     seen = {r.recommendation_id for r in helpful}
     return helpful + [r for r in newest if r.recommendation_id not in seen]
 
@@ -78,8 +82,16 @@ def official_reviews(http: HttpClient, game: Game, hist: list[HistPoint]) -> Gam
     })
 
 
-def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analysis | None:
+# progress(stage, done, total) while one game is analyzed: "details" (store data, histogram, review
+# numbers), then "reviews" with the review texts fetched so far out of about 2 x review_limit.
+Progress = Callable[[str, int, int], None]
+
+
+def analyze_game(http: HttpClient, appid: int, review_limit: int = 300,
+                 progress: Progress | None = None) -> Analysis | None:
     """Everything known about one game: data, risks, mined reviews, opportunity score."""
+    say = progress or (lambda stage, done, total: None)
+    say("details", 0, 0)
     game = steamspy.game_details(http, appid)
     if game is None:
         return None
@@ -89,14 +101,17 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300) -> Analy
 
     mining, review_error = None, None
     fetch_errors = (RuntimeError, httpx.HTTPError, RetryableStatus)
+    total = 2 * review_limit
+    say("reviews", 0, total)
     try:
-        negative = review_sample(http, appid, "negative", review_limit)
+        negative = review_sample(http, appid, "negative", review_limit, lambda n: say("reviews", n, total))
     except fetch_errors as e:
         # Steam's review API is sometimes very slow; still rank the game on its other data.
         review_error = friendly_error(e).message
     else:
         try:
-            positive = review_sample(http, appid, "positive", review_limit)
+            positive = review_sample(http, appid, "positive", review_limit,
+                                     lambda n: say("reviews", len(negative) + n, total))
         except fetch_errors:  # complaints and fixability come from the negatives; only "what players love" is lost
             positive = []
         mining = mine(negative, positive)
@@ -188,12 +203,16 @@ def run_tag(
     max_games: int,
     review_limit: int,
     on_step: Callable[[str, int, int], None] | None = None,
+    on_game: Callable[[int, str, str, int, int, Analysis | None], None] | None = None,
 ) -> TagResult:
     """Steps 1-4 for the games that have all `tags`. Raises UnknownTag if SteamSpy doesn't know a tag.
 
     Games are analyzed in parallel (config.ANALYZE_WORKERS), starting as soon as each one passes
     the store-type check; the shared HttpClient keeps every host within its rate limit.
     on_step(message, done, total) is always called from the calling thread.
+    on_game(appid, name, stage, done, total, analysis) follows each game: "store" (its store-type check),
+    the stages of analyze_game ("details", "reviews"), then "done" with its Analysis (None if it failed).
+    It is called from the worker threads too, so it must be thread-safe.
     """
     games = tag_games(http, tags, on_step)
     candidates = filter_candidates(games, min_reviews, lo, hi)
@@ -217,9 +236,12 @@ def run_tag(
         def checking(g: Game) -> None:
             if on_step:
                 on_step(_("Checking store type: {name}", name=g.name), done(), n_check)
+            if on_game:
+                on_game(g.appid, g.name, "store", 0, 0, None)
 
         def start(g: Game) -> None:
-            futures[pool.submit(analyze_game, http, g.appid, review_limit)] = g
+            progress = on_game and (lambda stage, d, n, g=g: on_game(g.appid, g.name, stage, d, n, None))
+            futures[pool.submit(analyze_game, http, g.appid, review_limit, progress)] = g
 
         hits, result.not_games, unlisted = verify_games(http, by_demand, max_games, checking, start)
         result.unlisted = [g.name for g in hits if g.appid in unlisted]
@@ -230,6 +252,10 @@ def run_tag(
             finished, pending = wait(pending, timeout=1, return_when=FIRST_COMPLETED)
             if finished:
                 message = _("Analyzed {name}", name=futures[next(iter(finished))].name)
+            if on_game:
+                for f in finished:
+                    g = futures[f]
+                    on_game(g.appid, g.name, "done", 0, 0, None if f.exception() else f.result())
             if on_step:
                 on_step(message, len(futures) - len(pending), len(hits))
     except BaseException:

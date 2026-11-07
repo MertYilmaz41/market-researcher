@@ -61,7 +61,7 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
 
     def fake_run_tag(http, tag, *args):
         calls.append((tag, args))
-        args[-1]("Analyzing Best Sim", 1, 2)  # progress callback works
+        args[-2]("Analyzing Best Sim", 1, 2)  # progress callback works
         return fake_result()
 
     monkeypatch.setattr(pipeline, "run_tag", fake_run_tag)
@@ -295,7 +295,7 @@ def test_cancel_stops_a_running_search(client, monkeypatch, run_store):
     stopped = threading.Event()
 
     def slow_run_tag(http, tags, *args):
-        step = args[-1]
+        step = args[-2]
         try:
             for i in range(500):
                 step("Analyzing", i, 500)
@@ -391,7 +391,7 @@ def test_running_job_reports_eta(client, monkeypatch):
     release = threading.Event()
 
     def run_tag(http, tags, *args):
-        on_step = args[-1]
+        on_step = args[-2]
         on_step("Analyzing games", 0, 5)  # the step starts at t=0
         clock[0] = 20.0
         on_step("Analyzing games", 1, 5)
@@ -465,7 +465,7 @@ def test_job_status_counts_steps(client, monkeypatch):
     release = threading.Event()
 
     def run_tag(http, tags, *args):
-        on_step = args[-1]
+        on_step = args[-2]
         for done in range(3):
             on_step("Listing", done, 3)  # step 1
         on_step("Analyzing games", 0, 5)  # step 2: the bar starts over
@@ -483,3 +483,46 @@ def test_job_status_counts_steps(client, monkeypatch):
     release.set()
     assert job["step"] == 2
     wait(client, run_id)
+
+
+# --- live per-game list and the slow-review warning --------------------------------------------------
+
+def test_running_search_lists_its_games_and_warns_once_when_reviews_stall(client, monkeypatch):
+    import threading
+    clock = [100.0]
+    monkeypatch.setattr(server, "_now", lambda: clock[0])
+    go, at_reviews = threading.Event(), threading.Event()
+    best = fake_result().analyses[1]
+
+    def run_tag(http, tags, *args):
+        on_game = args[-1]
+        on_game(9, "Not A Game", "store", 0, 0, None)
+        on_game(1, "Best Sim", "store", 0, 0, None)  # the previous store check ended: 9 is dropped
+        on_game(1, "Best Sim", "reviews", 100, 400, None)
+        on_game(2, "Other", "done", 0, 0, None)  # failed
+        at_reviews.set()
+        go.wait(2)
+        on_game(1, "Best Sim", "done", 0, 0, best)
+        return fake_result()
+
+    monkeypatch.setattr(pipeline, "run_tag", run_tag)
+    run_id = client.post("/api/tag-runs", json={"tags": ["X"]}).json()["id"]
+    assert at_reviews.wait(2)
+    job = client.get(f"/api/tag-runs/{run_id}").json()
+    games = {g["appid"]: g for g in job["games"]}
+    assert set(games) == {1, 2} and "slow" not in job
+    assert (games[1]["stage"], games[1]["done"], games[1]["total"]) == ("reviews", 100, 400)
+    assert games[2]["stage"] == "failed"
+    clock[0] += server.SLOW_REVIEW_SECONDS
+    job = client.get(f"/api/tag-runs/{run_id}").json()
+    assert job["slow"]["title"] == "Steam's review service is slow"
+    assert "slow" not in client.get(f"/api/tag-runs/{run_id}").json()  # once only
+    go.set()
+    done = wait(client, run_id)
+    assert "games" not in done
+
+
+def test_game_json_has_verdict_why_and_checks():
+    data = server.game_json(fake_result().analyses[1])
+    assert data["verdict"] == "Worth a closer look" and data["why"].endswith(".")
+    assert any(c["code"] == "netcode" for c in data["checks"])

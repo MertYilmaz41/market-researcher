@@ -155,7 +155,7 @@ def test_run_tag_survives_one_broken_game(monkeypatch):
     monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: games)
     monkeypatch.setattr(pipeline, "verify_games", fake_verify)
 
-    def analyze(http, appid, n):
+    def analyze(http, appid, n, progress=None):
         if appid == 2:
             raise httpx.ConnectError("x", request=REQ)
         return analysis(40, "Good", appid=1)
@@ -218,7 +218,7 @@ def test_cli_option_bounds():
 
 
 def test_cli_game_not_found_is_not_unexpected(monkeypatch):
-    monkeypatch.setattr("steam_researcher.pipeline.analyze_game", lambda http, appid, n: None)
+    monkeypatch.setattr("steam_researcher.pipeline.analyze_game", lambda http, appid, n, progress=None: None)
     res = CliRunner().invoke(app, ["analyze", "999999999"])
     assert res.exit_code == 1 and "Game not found" in res.output and "Unexpected error" not in res.output
 
@@ -366,7 +366,7 @@ def test_run_tag_analyzes_in_parallel_and_keeps_order(monkeypatch):
     monkeypatch.setattr(pipeline, "verify_games", fake_verify)
     seen, steps = set(), []
 
-    def slow_analyze(http, appid, n):
+    def slow_analyze(http, appid, n, progress=None):
         seen.add(threading.get_ident())
         time.sleep(0.3 if appid == 1 else 0.1)  # the first game finishes last
         return analysis(40, f"G{appid}", appid=appid)
@@ -409,7 +409,7 @@ def test_run_tag_stops_when_on_step_cancels(monkeypatch):
     monkeypatch.setattr(pipeline, "verify_games",
                         lambda http, c, n, p, on_hit: ([on_hit(g) or g for g in c[:n]], [], set()))
 
-    def analyze(http, appid, n):
+    def analyze(http, appid, n, progress=None):
         started.append(appid)
         release.wait(5)
         return None

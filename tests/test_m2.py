@@ -122,7 +122,9 @@ def test_reviews_paging_stops_at_limit(tmp_path, monkeypatch):
         return httpx.Response(200, json={"response": {"cursor": pages[cur], "reviews": revs}})
 
     http = HttpClient(cache=Cache(tmp_path / "c.sqlite"), transport=httpx.MockTransport(handler))
-    got = steam_store.reviews(http, 1, limit=250)
+    counts = []
+    got = steam_store.reviews(http, 1, limit=250, on_page=counts.append)
+    assert counts == [100, 200, 250]  # after each page, capped at the limit
     assert len(got) == 250 and len({r.recommendation_id for r in got}) == 250
     # numeric review_type and all-time range are what the new endpoint needs
     assert all(q["review_type"] == 2 and q["day_range"] == 0 and q["filter"] == 0 for q in seen)
@@ -191,7 +193,7 @@ def test_review_sample_mixes_helpful_and_newest(monkeypatch):
 
     calls = []
 
-    def reviews(http, appid, kind, limit, order="all"):
+    def reviews(http, appid, kind, limit, order="all", on_page=None):
         calls.append((order, limit))
         ids = ["a", "b", "c"] if order == "all" else ["c", "d"]  # "c" is in both
         return [Review(recommendation_id=i, text=i, voted_up=False) for i in ids][:limit]

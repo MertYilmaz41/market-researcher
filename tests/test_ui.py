@@ -24,9 +24,10 @@ from steam_researcher.web import server  # noqa: E402
 from test_m4 import analysis, game  # noqa: E402
 from test_web import fake_result  # noqa: E402
 
-TAGS = ["Crafting", "Job Simulator", "Survival", "Colony Sim"]
+TAGS = ["Crafting", "Job Simulator", "Survival", "Colony Sim", "Building"]
 # Nothing is pre-picked on a first visit: most tests start as a returning user with one tag remembered.
 PICKED = "localStorage.getItem('filters') || localStorage.setItem('filters', JSON.stringify({tags: ['Job Simulator']}))"
+ENGLISH = "localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')"
 
 
 def _free_port() -> int:
@@ -46,11 +47,18 @@ def base_url(tmp_path_factory):
             time.sleep(2)  # slow enough to analyze a game while it runs
         if tags == ["Colony Sim"]:  # runs until cancelled
             for i in range(3000):
-                args[-1]("Analyzing games", i, 3000)
+                args[-2]("Analyzing games", i, 3000)
                 time.sleep(0.01)
         r = fake_result()
-        r.analyses[0].opportunity.penalty = 20  # "Other" is a risky game (for the quick filter)
-        r.analyses[1].game.tags = {"Crafting": 90, "Building": 40}  # Best Sim's tag chips
+        if tags == ["Building"]:  # games show one by one; one waits on its reviews; ten games in the end
+            on_game = args[-1]
+            on_game(1, "Best Sim", "done", 0, 0, analysis(60, "Best Sim", appid=1))
+            on_game(5, "Stuck Game", "reviews", 100, 400, None)
+            time.sleep(3)
+            r.analyses = [analysis(50 - i, f"Game {i}", appid=10 + i) for i in range(10)]
+        else:
+            r.analyses[0].opportunity.penalty = 20  # "Other" is a risky game
+            r.analyses[1].game.tags = {"Crafting": 90, "Building": 40}  # Best Sim's tag chips
         r.market = market_stats([a.game for a in r.analyses], 100, 5, 70)
         return r
 
@@ -104,29 +112,55 @@ def browser():
         b.close()
 
 
-def test_ui_smoke(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d')")  # no CDN/WebGL needed
-    page.add_init_script(PICKED)
+def _open(browser, base_url, width=1400, height=900, picked=True, english=True):
+    page = browser.new_page(viewport={"width": width, "height": height})
+    page.errors = []
+    page.on("pageerror", lambda e: page.errors.append(str(e)))
+    page.add_init_script(ENGLISH if english else "localStorage.setItem('mapView', '2d')")  # 2D: no CDN/WebGL needed
+    if picked:
+        page.add_init_script(PICKED)
     page.goto(base_url)
+    if picked:
+        page.wait_for_selector(".tag-chip")  # app.js is running
+    return page
 
-    # Tick two tags in the checklist (Job Simulator is remembered: untick it).
-    page.wait_for_selector(".tag-chip")
-    page.click("#tag-toggle")
-    opt = lambda t: page.locator(f'#tag-list li[role=option][data-tag="{t}"]')  # noqa: E731
-    for t in ["Job Simulator", "Crafting", "Colony Sim"]:
-        opt(t).click()
-    page.keyboard.press("Escape")
-    assert page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)") == ["Crafting", "Colony Sim"]
 
+def _search(page):
     page.click("#run")
     page.wait_for_selector("#ranking tbody tr")
+
+
+def _tick(page, *tags):
+    """Open the search box's list, click each tag (ticks or unticks it), close the list."""
+    page.click("#tag")
+    for t in tags:
+        page.locator(f'#tag-list li[role=option][data-tag="{t}"]').click()
+    page.keyboard.press("Escape")
+
+
+def _chips(page):
+    return page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)")
+
+
+def _setting(page, button):
+    """Language and theme are two separate switches in the top bar."""
+    page.click(button)
+
+
+def test_ui_smoke(base_url, browser):
+    page = _open(browser, base_url, english=False)
+
+    # Tick two tags in the search box (Job Simulator is remembered: untick it).
+    _tick(page, "Job Simulator", "Crafting", "Colony Sim")
+    assert _chips(page) == ["Crafting", "Colony Sim"]
+
+    _search(page)
     assert page.locator("#ranking tbody tr").count() == 2
-    assert "Crafting + Colony Sim" in page.text_content("#table-title")
-    assert page.is_visible("#market-strip") and "UNDERSERVED" in page.inner_text("#market-strip").upper()
+    assert page.text_content("#table-title") == "Crafting + Colony Sim"
+    assert page.is_visible("#market-line") and "games with demand" in page.inner_text("#market-line")
     assert page.is_visible("#download") and page.is_visible("#download-csv")
+    # The risky game shows its penalty in the list.
+    assert "−20" in page.inner_text('#ranking tr[data-appid="2"] .risk-badge')
 
     # Hovering a score explains it; moving away hides it.
     page.hover("#ranking tbody tr:first-child .score-pill")
@@ -140,29 +174,27 @@ def test_ui_smoke(base_url, browser):
     assert page.is_visible("#drawer") and page.text_content("#panel h3") == "Best Sim"
     page.click("#drawer-close")
     assert page.is_hidden("#drawer") and page.locator("#ranking tbody tr.selected").count() == 0
-    page.click("#ranking tbody tr:first-child td:nth-child(3)")
+    page.click("#ranking tbody tr:first-child td:nth-child(2)")
     assert page.is_visible("#drawer")
     page.keyboard.press("Escape")
     assert page.is_hidden("#drawer")
 
     # 2D map (Map mode): a bubble per game; clicking one shows it in the drawer.
     page.click('#games-mode button[data-mode="map"]')
-    assert page.is_hidden("#ranking") and page.is_visible("#map-view")
+    assert page.is_hidden("#ranking") and page.is_visible("#map")
     assert page.locator(".map2d .bubble").count() == 2
     page.locator(".map2d .bubble").last.click()
     assert page.text_content("#panel h3") in ("Best Sim", "Other")
     page.click('#games-mode button[data-mode="table"]')
 
-    # Analyze a game while a (slow) search runs.
+    # Open a game by AppID (pasted into the search box) while a (slow) search runs.
     page.evaluate("document.querySelector('#toasts').replaceChildren()")
-    page.click("#tag-toggle")
-    for t in ["Crafting", "Colony Sim", "Survival"]:
-        opt(t).click()
-    page.keyboard.press("Escape")
+    _tick(page, "Crafting", "Colony Sim", "Survival")
     page.click("#run")
     page.wait_for_selector("body.searching")
-    page.fill("#appid", "777")
-    page.press("#appid", "Enter")
+    page.fill("#tag", "777")
+    assert page.is_visible("#tag-list li.open-game")
+    page.press("#tag", "Enter")
     page.wait_for_function("document.querySelector('#panel h3')?.textContent === 'Lone Game'")
     assert "searching" in page.get_attribute("body", "class")
     page.wait_for_function("!document.body.classList.contains('searching')", timeout=10_000)
@@ -171,71 +203,85 @@ def test_ui_smoke(base_url, browser):
     # Markets view: build, then click a tag to search it.
     page.click('#table-view button[data-view="markets"]')
     page.click("#markets-run")
-    page.wait_for_selector("#markets tbody tr")
-    assert page.locator("#markets tbody tr").count() == 2
+    page.wait_for_selector("#market-tools")
+    assert page.locator("#markets tbody tr").count() == 0 and page.is_hidden("#market-cards")  # 20+ only
+    page.uncheck("#market-big")  # the fake markets are small
+    assert page.locator("#markets tbody tr").count() == 2 and page.locator("#market-cards .market-card").count() == 2
     assert "Incremental" not in page.text_content("#markets tbody")
     page.click("#markets tbody tr:first-child")
     page.wait_for_function("!document.body.classList.contains('searching') && "
-                           "document.querySelector('#table-title').textContent.startsWith('Survival:')",
+                           "document.querySelector('#table-title').textContent === 'Survival'",
                            timeout=10_000)
     assert page.is_visible("#games-view")
 
-    # Past runs: all four runs are listed; reopening the first search brings its tags back.
-    page.click("#runs-toggle")
+    # Past searches, listed in the empty search box: reopening the first brings its tags back.
+    page.click("#tag")
     page.wait_for_selector("#runs-list li .run-main")
     labels = page.eval_on_selector_all("#runs-list .run-main b", "bs => bs.map(b => b.textContent)")
     assert labels == ["Survival", "Markets: all tags", "Survival", "Crafting + Colony Sim"]
     page.click("#runs-list li:last-child .run-main")
-    page.wait_for_function("document.querySelector('#table-title').textContent.startsWith('Crafting + Colony Sim')")
-    assert sorted(page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)")) == ["Colony Sim", "Crafting"]
+    page.wait_for_function("document.querySelector('#table-title').textContent === 'Crafting + Colony Sim'")
+    assert sorted(_chips(page)) == ["Colony Sim", "Crafting"]
 
     # Cancel a search: the button frees at once and the previous results come back.
-    page.keyboard.press("Escape")
-    page.click("#tag-toggle")
-    opt("Crafting").click()  # untick it: only Colony Sim, whose fake search runs until cancelled
-    page.keyboard.press("Escape")
+    _tick(page, "Crafting")  # untick it: only Colony Sim, whose fake search runs until cancelled
     page.click("#run")
     page.wait_for_selector("#search-status .cancel-run")
     page.click("#search-status .cancel-run")
     page.wait_for_function("!document.body.classList.contains('searching')", timeout=3000)
-    assert page.is_hidden("#search-status") and page.text_content("#run") == "Find opportunities"
+    assert page.is_hidden("#search-status") and page.text_content("#run") == "Search"
     assert "Search cancelled" in page.inner_text("#toasts")
-    assert page.text_content("#table-title").startswith("Crafting + Colony Sim")  # previous results stay
+    assert page.text_content("#table-title") == "Crafting + Colony Sim"  # previous results stay
 
-    assert errors == []
+    assert page.errors == []
+
+
+def test_ui_live_list_and_slow_reviews(base_url, browser, monkeypatch):
+    monkeypatch.setattr(server, "SLOW_REVIEW_SECONDS", 1)
+    page = _open(browser, base_url)
+    _tick(page, "Job Simulator", "Building")
+    page.click("#run")
+
+    # While it runs: the step card and each game as it goes, finished ones with their score.
+    page.wait_for_selector("#live-table tbody tr >> nth=1")
+    assert page.is_visible("#search-status") and "Step 2 of 3" in page.text_content("#search-status .step-badge")
+    live = page.inner_text("#live-table")
+    assert "Best Sim" in live and "Stuck Game" in live and "Reading reviews · 100 / 400" in live
+    assert page.is_hidden("#results")
+    # A game stuck on its review pages: warned once.
+    page.wait_for_function("document.querySelector('#toasts').innerText.includes(\"Steam's review service is slow\")")
+
+    # Done: the first 8 games, the rest behind "Show 2 more".
+    page.wait_for_selector("#ranking tbody tr")
+    assert page.is_hidden("#live") and page.locator("#ranking tbody tr").count() == 8
+    assert page.text_content("#show-more") == "Show 2 more"
+    page.click("#show-more")
+    assert page.locator("#ranking tbody tr").count() == 10 and page.is_hidden("#show-more")
+    assert page.text_content("#toasts").count("Steam's review service is slow") == 1
+    assert page.errors == []
 
 
 def test_ui_turkish(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")  # Job Simulator is remembered
-    page.click("#run")
-    page.wait_for_selector("#ranking tbody tr")
+    page = _open(browser, base_url, english=False)
+    _search(page)
     page.click("#ranking tbody tr:first-child")
 
     # Switch to Turkish with results on screen: everything is redrawn, nothing is lost.
-    page.click('#lang button[data-lang="tr"]')
-    page.wait_for_function("document.querySelector('#table-title').textContent.includes('fırsat sıralaması')")
+    _setting(page, '#lang button[data-lang="tr"]')
+    page.wait_for_function("document.querySelector('#run').textContent === 'Ara'")
     assert page.get_attribute("html", "lang") == "tr"
-    assert page.text_content("#run") == "Fırsatları bul"
-    assert page.text_content('#ranking th[data-key="score"]') == "Puan"
+    assert page.get_attribute('#lang button[data-lang="tr"]', "aria-pressed") == "true"
+    assert page.inner_text("#help-toggle").strip() == "Nasıl çalışır?"
+    assert page.text_content("#ranking thead th:nth-child(3)") == "Puan"
     assert page.locator("#ranking tbody tr").count() == 2
-    assert "Şikayetler" in page.inner_text("#panel .tabs")
-    assert "olumlu" in page.text_content("#map-legend") or "talep" in page.text_content("#map-legend")
+    assert "Şikayetler" in page.inner_text("#panel .tabs") and "Genel bakış" in page.inner_text("#panel .tabs")
     page.hover("#ranking tbody tr:first-child .score-pill")
     tip = page.inner_text("#score-tip")
     assert "Fırsat puanı" in tip and "Talep" in tip and "Düzeltilebilirlik" in tip  # server text too
     page.mouse.move(5, 5)
 
-    # Toasts: the page's own and the server's.
+    # The server's toasts and the report link follow the language.
     page.evaluate("document.querySelector('#toasts').replaceChildren()")
-    page.fill("#appid", "abc")
-    page.press("#appid", "Enter")
-    assert "AppID ya da Steam mağaza linki değil" in page.inner_text("#toasts")
     page.click("#run")
     page.wait_for_function("document.querySelector('#toasts').innerText.includes('Analiz tamamlandı')")
     assert page.get_attribute("#download", "href").endswith("lang=tr")
@@ -243,26 +289,20 @@ def test_ui_turkish(base_url, browser):
     # Remembered after a reload; back to English with one click.
     page.reload()
     page.wait_for_selector(".tag-chip")
-    assert page.text_content("#run") == "Fırsatları bul"
-    page.click('#lang button[data-lang="en"]')
-    assert page.text_content("#run") == "Find opportunities"
-    assert page.text_content('#ranking th[data-key="score"]') == "Score"
-    assert errors == []
+    assert page.text_content("#run") == "Ara"
+    _setting(page, '#lang button[data-lang="en"]')
+    assert page.text_content("#run") == "Search"
+    assert page.text_content("#ranking thead th:nth-child(3)") == "Score"
+    assert page.errors == []
 
 
 def test_ui_opportunity_summary(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")
-    page.click("#run")
-    page.wait_for_selector("#ranking tbody tr")
-    assert page.is_visible("#opp-summary") and "not written yet" in page.text_content("#opp-summary summary")
+    page = _open(browser, base_url)
+    _search(page)
+    assert page.is_visible("#ai-chip") and page.text_content("#ai-chip-text") == "Write an AI summary"
+    assert page.is_hidden("#opp-summary")
 
-    page.click("#opp-summary summary")
+    page.click("#ai-chip")
     # The market's price range is there before the summary is written (worked out from the data).
     assert "Price range in this market: median $9.99" in page.inner_text("#opp-summary .opp-price")
     page.click("#opp-summary .opp-empty button")
@@ -270,181 +310,152 @@ def test_ui_opportunity_summary(base_url, browser):
     body = page.inner_text("#opp-summary .opp-body")
     assert "A bus sim that works." in body and "WHAT PLAYERS LOVE" in body.upper()
     assert "Driving the <b>bus</b>." in body  # model text is shown as text, never as HTML
+    assert page.text_content("#ai-chip-text").startswith("AI summary: A bus sim that works.")
 
     page.click("#opp-summary .opp-games button")  # a game chip opens that game
     assert page.text_content("#panel h3") == "Other"
-    assert errors == []
+    assert page.errors == []
 
 
 def test_ui_game_summary_tab(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")
-    page.click("#run")
-    page.wait_for_selector("#ranking tbody tr")
+    page = _open(browser, base_url)
+    _search(page)
     page.click("#panel .tabs button:has-text('Summary')")
     page.click("#panel .opp-empty button")
     page.wait_for_selector("#panel .game-summary")
     text = page.inner_text("#panel .game-summary")
     assert "Players hate the <i>cheaters</i>." in text  # model text is shown as text, never as HTML
-    assert '"cheaters everywhere"' in text and "Anti-cheat" in text
+    assert "cheaters everywhere" in text and "Anti-cheat" in text
     assert page.get_attribute("#panel .tabs button.active", "role") == "tab"
     assert "Summary" in page.text_content("#panel .tabs button.active")  # stays on the tab
-    assert errors == []
+    assert page.errors == []
+
+
+def test_ui_overview_and_history_tabs(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
+    # Overview: the score ring with its verdict and why, the four facts, links to the other tabs.
+    assert page.get_attribute("#panel-tab-0", "aria-selected") == "true"
+    assert page.is_visible("#panel .score-ring") and page.text_content("#panel .why .verdict")
+    assert page.locator("#panel .facts .stat").count() == 4
+    assert "[object" not in page.inner_text("#panel")  # nested nodes are appended, never stringified
+    page.click("#panel .links button:has-text('Review history')")
+    assert page.get_attribute("#panel-tab-3", "aria-selected") == "true"
+    # History: every risk check, passed or flagged.
+    page.wait_for_selector("#panel .checks .check-row")
+    assert page.locator("#panel .checks .check-row").count() >= 5
+    assert page.errors == []
 
 
 def test_ui_remembers_filters_and_tags(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")
-
-    page.click("#filters [data-preset=quick]")  # the Filters section is open on wide screens  # a preset only fills the fields
+    page = _open(browser, base_url)
+    page.click("#filters-toggle")  # the filters sit behind the summary button under the title
+    assert page.is_visible("#filters")
+    page.click("#filters [data-preset=quick]")  # a preset only fills the fields
     assert page.input_value("#max-games") == "8" and page.input_value("#reviews") == "100"
     page.fill("#min-reviews", "250")
     page.press("#min-reviews", "Tab")  # change event
-    page.click("#tag-toggle")
-    page.locator('#tag-list li[role=option][data-tag="Survival"]').click()
+    assert page.text_content("#filters-summary").startswith("250+ reviews")
     page.keyboard.press("Escape")
+    assert page.is_hidden("#filters")
+    _tick(page, "Survival")
 
     page.reload()
     page.wait_for_selector(".tag-chip")
     assert page.input_value("#min-reviews") == "250" and page.input_value("#max-games") == "8"
-    chips = page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)")
-    assert chips == ["Job Simulator", "Survival"]
-    assert errors == []
+    assert _chips(page) == ["Job Simulator", "Survival"]
+    assert page.errors == []
+
+
+def test_ui_top_bar_switches(base_url, browser):
+    page = _open(browser, base_url)
+    # How it works has a visible label; language and theme are separate switches, both always shown
+    assert page.inner_text("#help-toggle").strip() == "How it works"
+    assert page.is_visible("#lang") and page.is_visible("#theme")
+    assert page.query_selector("#lang #theme, #theme #lang") is None
+    page.click('#theme button[data-theme="light"]')
+    assert page.get_attribute("html", "data-theme") == "light"
+    assert page.get_attribute('#lang button[data-lang="en"]', "aria-pressed") == "true"  # the language didn't change
+    assert page.errors == []
 
 
 def test_ui_shortlist(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")
-    page.click("#run")
-    page.wait_for_selector("#ranking tbody tr")
+    page = _open(browser, base_url)
+    _search(page)
 
-    page.click("#ranking tbody tr:first-child .star")
-    page.wait_for_selector("#ranking tbody tr:first-child .star.on")
-    assert page.text_content("#panel h3") == "Best Sim"  # the star doesn't select the row's game twice
+    page.click("#panel .star")
+    page.wait_for_selector("#panel .star.on")
+    assert page.text_content("#shortlist-count") == "1"
     page.click('#table-view button[data-view="shortlist"]')
-    page.wait_for_selector("#shortlist tbody tr")
-    assert "Best Sim" in page.inner_text("#shortlist tbody tr") and page.is_visible("#shortlist-csv")
-    page.fill("#shortlist input.note", "Better bus <b>physics</b>")
-    page.press("#shortlist input.note", "Tab")
+    page.wait_for_selector("#shortlist .sl-card")
+    assert "Best Sim" in page.inner_text("#shortlist .sl-card") and page.is_visible("#shortlist-csv")
+    page.fill("#shortlist textarea.note", "Better bus <b>physics</b>")
+    page.press("#shortlist textarea.note", "Tab")
     page.wait_for_selector("text=Note saved")
 
     page.reload()
     page.wait_for_selector(".tag-chip")
     page.click('#table-view button[data-view="shortlist"]')
-    page.wait_for_selector("#shortlist tbody tr")
-    assert page.input_value("#shortlist input.note") == "Better bus <b>physics</b>"
-    page.click("#shortlist tbody tr .remove")
-    page.wait_for_function("!document.querySelector('#shortlist tbody tr')")
+    page.wait_for_selector("#shortlist .sl-card")
+    assert page.input_value("#shortlist textarea.note") == "Better bus <b>physics</b>"
+    page.click("#shortlist .sl-card .remove")
+    page.wait_for_function("!document.querySelector('#shortlist .sl-card')")
     assert "No games yet" in page.text_content("#shortlist-note") and page.is_hidden("#shortlist-csv")
-    assert errors == []
+    assert page.errors == []
 
 
-def test_ui_quick_filter_and_tag_chips(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")
-    page.click("#run")
-    page.wait_for_selector("#ranking tbody tr")
-    assert page.locator("#ranking tbody tr").count() == 2 and page.text_content("#filter-count") == ""
-
-    page.fill("#name-filter", "best")
-    assert page.locator("#ranking tbody tr").count() == 1
-    page.click('#games-mode button[data-mode="map"]')  # the map is drawn only while shown
-    assert page.locator(".map2d .bubble").count() == 1
-    page.click('#games-mode button[data-mode="table"]')
-    assert page.text_content("#ranking tbody tr td.num") == "1"  # keeps its rank
-    assert page.text_content("#filter-count") == "1 of 2 games shown"
-    page.fill("#name-filter", "")
-    # The Risks column shows the points, and the checkbox hides exactly those games.
-    risks = page.eval_on_selector_all("#ranking tbody tr", "rs => rs.map(r => r.children[2].textContent + ':' + r.lastChild.textContent)")
-    assert "Other:-20" in risks and "Best Sim:-" in risks
-    page.check("#hide-risky")  # "Other" has a risk penalty in the fake result
-    names = page.eval_on_selector_all("#ranking tbody tr", "rs => rs.map(r => r.children[2].textContent)")
-    assert names == ["Best Sim"]
-    page.uncheck("#hide-risky")
-
+def test_ui_tag_chips_search_one_tag(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
     # A tag chip in the panel searches that one tag.
     page.locator("#panel .chips button.chip").first.click()
     page.wait_for_selector("text=Only this tag")
-    page.wait_for_function("document.querySelector('#table-title').textContent.includes('Crafting')")
-    assert page.eval_on_selector_all(".tag-chip", "cs => cs.map(c => c.firstChild.textContent)") == ["Crafting"]
-    assert errors == []
+    page.wait_for_function("document.querySelector('#table-title').textContent === 'Crafting' && "
+                           "!document.body.classList.contains('searching')")
+    assert _chips(page) == ["Crafting"]
+    assert page.errors == []
 
 
 def test_ui_help_dialog(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")  # app.js is running
+    page = _open(browser, base_url)
     page.click("#help-toggle")
-    assert page.is_visible("#help") and page.locator("#help section").count() == 10
+    assert page.is_visible("#help") and page.locator("#help section").count() == 11
     assert "80%" in page.inner_text("#help") and "not shown to predict success" in page.inner_text("#help")
     glossary = page.inner_text("#help-terms")
     assert "Fixability" in glossary and "Unmet share" in glossary and "Fading demand" in page.inner_text("#help-risks")
     page.keyboard.press("Escape")
     assert page.is_hidden("#help")
 
-    # An info button explains its term on hover; clicking it doesn't sort the column.
-    page.hover('#ranking th[data-key="gross"] .info')
+    # An info button explains its term on hover.
+    page.hover('#ranking th .info[data-term="revenue"]')
     assert page.is_visible("#term-tip") and "Box Method" in page.inner_text("#term-tip")
-    page.click('#ranking th[data-key="gross"] .info')
-    assert "sorted" not in (page.get_attribute('#ranking th[data-key="gross"]', "class") or "")
     page.mouse.move(5, 5)
     assert page.is_hidden("#term-tip")
 
     # Dark | light: the switch sets the theme on <html> and remembers it across a reload.
     assert page.get_attribute("html", "data-theme") in ("dark", "light")
-    page.click('#theme button[data-theme="light"]')
+    _setting(page, '#theme button[data-theme="light"]')
     assert page.get_attribute("html", "data-theme") == "light"
     bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
     page.reload()
     page.wait_for_selector(".tag-chip")
     assert page.get_attribute("html", "data-theme") == "light"
     assert page.get_attribute('#theme button[data-theme="light"]', "aria-pressed") == "true"
-    page.click('#theme button[data-theme="dark"]')
+    _setting(page, '#theme button[data-theme="dark"]')
     assert page.evaluate("getComputedStyle(document.body).backgroundColor") != bg
 
-    page.click('#lang button[data-lang="tr"]')
+    _setting(page, '#lang button[data-lang="tr"]')
     page.click("#help-toggle")
     assert page.text_content("#help-title") == "Nasıl çalışır?" and "Skor" in page.inner_text("#help")
     assert "Karşılanmama oranı" in page.inner_text("#help-terms")
     page.click("#help .help-head button")
     assert page.is_hidden("#help")
-    assert errors == []
+    assert page.errors == []
 
 
 def test_ui_keyboard(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")
-    page.click("#run")
-    page.wait_for_selector("#ranking tbody tr")
+    page = _open(browser, base_url)
+    _search(page)
     active = lambda: page.evaluate("document.activeElement.id || document.activeElement.dataset.appid || ''")  # noqa: E731
     # The page opens the top game by itself, without pulling the focus into the drawer.
     assert page.is_visible("#drawer") and active() != "drawer-close"
@@ -463,29 +474,21 @@ def test_ui_keyboard(base_url, browser):
     assert active() == "panel-tab-1"
     page.keyboard.press("Escape")
     assert page.is_hidden("#drawer") and active() == appid
-
-    # Sort headers work with the keyboard and tell how they're sorted.
-    page.focus('#ranking th[data-key="name"]')
-    page.keyboard.press("Enter")
-    assert page.get_attribute('#ranking th[data-key="name"]', "aria-sort") == "ascending"
-    assert page.get_attribute('#ranking th[data-key="score"]', "aria-sort") == "none"
-    assert errors == []
+    assert page.errors == []
 
 
 def test_ui_first_visit_and_narrow_screen(base_url, browser):
-    page = browser.new_page(viewport={"width": 800, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.goto(base_url)
+    page = _open(browser, base_url, width=800, picked=False)
     page.focus("#tag")  # opens the list (once the tags are in)
     page.wait_for_selector("#tag-list li[role=option]")
-    # A first visit picks no tag and says the first search is slow.
-    assert page.locator(".tag-chip").count() == 0 and page.is_visible("#run-hint")
+    # A first visit picks no tag; the filters say the first search is slow.
+    assert page.locator(".tag-chip").count() == 0
     page.locator('#tag-list li[data-tag="Crafting"]').click()
     page.keyboard.press("Escape")
-    page.click("#run")
-    page.wait_for_selector("#ranking tbody tr")
+    page.click("#filters-toggle")
+    assert page.is_visible("#run-hint")
+    page.keyboard.press("Escape")
+    _search(page)
     # On a narrow screen the ranking stays in view: no game opens by itself.
     assert page.is_hidden("#drawer")
     # The run's warnings stay listed above the ranking and can be dismissed.
@@ -494,25 +497,35 @@ def test_ui_first_visit_and_narrow_screen(base_url, browser):
         n = items.count()
         page.click("#result-notices li .close")
         assert items.count() == n - 1
-    assert errors == []
+    assert page.errors == []
+
+
+def test_ui_phone_sheet(base_url, browser):
+    page = _open(browser, base_url, width=390, height=800)
+    _search(page)
+    assert page.is_hidden("#drawer")
+    page.click("#ranking tbody tr:first-child")
+    # The game is a full-screen sheet: back to the ranking at the top, the actions stuck to the bottom.
+    assert page.is_visible("#drawer") and page.is_visible("#sheet-back") and page.is_hidden("#drawer-close")
+    assert page.text_content("#sheet-pos") == "1 of 2"
+    assert page.evaluate("getComputedStyle(document.querySelector('#panel .actions')).position") == "sticky"
+    assert page.evaluate("document.querySelector('#drawer').getBoundingClientRect().width") >= 380
+    assert page.evaluate("document.documentElement.scrollWidth") <= 390  # no sideways scrolling
+    page.click("#sheet-back")
+    assert page.is_hidden("#drawer")
+    assert page.errors == []
 
 
 def test_ui_star_a_game_analyzed_by_appid(base_url, browser):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.add_init_script("localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')")
-    page.add_init_script(PICKED)
-    page.goto(base_url)
-    page.wait_for_selector(".tag-chip")
-    page.fill("#appid", "4242")
-    page.press("#appid", "Enter")
+    page = _open(browser, base_url)
+    page.fill("#tag", "https://store.steampowered.com/app/4242/Lone_Game/")
+    page.click("#tag-list li.open-game")
     page.wait_for_function("document.querySelector('#panel h3')?.textContent === 'Lone Game'")
     page.click("#panel .star")
     page.wait_for_selector('#panel .star.on[data-appid="4242"]')
     page.click('#table-view button[data-view="shortlist"]')
-    row = page.locator('#shortlist tr[data-appid="4242"]')
-    assert "Lone Game" in row.inner_text() and "AppID" in row.inner_text()
+    card = page.locator('#shortlist .sl-card[data-appid="4242"]')
+    assert "Lone Game" in card.inner_text() and "AppID" in card.inner_text()
     page.click("#panel .star")  # unstar
     page.wait_for_selector('#panel .star:not(.on)[data-appid="4242"]')
-    assert errors == []
+    assert page.errors == []

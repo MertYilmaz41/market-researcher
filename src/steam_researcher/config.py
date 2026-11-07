@@ -125,7 +125,7 @@ RISK_LABELS = {  # how flags are named in the UI (English; i18n_tr has the Turki
     "rating_without_spikes": "Rating without spikes",
     "unlisted": "No store page",
     "not_game": "Not a game",
-    "streamer_spike": "Streamer spike",
+    "streamer_spike": "Review spike",
     "deep_discount": "Deep discount",
     "cheap_price": "Very cheap",
     "netcode": "Online multiplayer",

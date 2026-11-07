@@ -87,3 +87,40 @@ def explain(a: Analysis) -> dict:
                        "reason": reasons.get(c, "")} for c in o.penalized],
         "zero_part": next((p["label"] for p in parts if p["value"] == 0), None),
     }
+
+
+def verdict(score: float) -> str:
+    """A word for the score, beside the ring in the web UI's game panel."""
+    if score >= 65:
+        return _("Strong opportunity")
+    if score >= 45:
+        return _("Worth a closer look")
+    return _("Weak opportunity")
+
+
+def why(a: Analysis) -> str:
+    """The score in one plain sentence, from its three parts (current language)."""
+    o, g = a.opportunity, a.game
+    if o.demand >= 0.7:
+        buyers = _("Many buyers ({n:,} reviews)", n=g.reviews)
+    elif o.demand >= 0.4:
+        buyers = _("Solid demand ({n:,} reviews)", n=g.reviews)
+    else:
+        buyers = _("Few buyers ({n:,} reviews)", n=g.reviews)
+    if o.dissatisfaction >= 0.6:
+        unhappy = _("most of them unhappy ({rating:.0f}% positive)", rating=o.effective_rating)
+    elif o.dissatisfaction >= 0.3:
+        unhappy = _("many of them unhappy ({rating:.0f}% positive)", rating=o.effective_rating)
+    elif o.dissatisfaction > 0:
+        unhappy = _("only mildly unhappy ({rating:.0f}% positive)", rating=o.effective_rating)
+    else:
+        unhappy = _("and players mostly like it ({rating:.0f}% positive)", rating=o.effective_rating)
+    if a.mining is None or not a.mining.categories:
+        fix = _("its reviews couldn't be read for complaints")
+    elif o.fixability >= 0.9:
+        fix = _("nearly every complaint is something a developer can fix")
+    elif o.fixability >= 0.6:
+        fix = _("most complaints are things a developer can fix")
+    else:
+        fix = _("many complaints are about scope or the genre, which a new game can't fix")
+    return _("{buyers}, {unhappy}, and {fix}.", buyers=buyers, unhappy=unhappy, fix=fix)

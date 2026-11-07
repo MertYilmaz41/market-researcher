@@ -1,4 +1,4 @@
-import { cssVar, scoreColor, scoreInk } from "/static/palette.js";
+import { cssVar, scoreColor, scoreLevel } from "/static/palette.js";
 import { createMap2d } from "/static/map2d.js";
 import { applyStatic, dateTime, decimal, fmt, getLang, pct, percent, setLang, t } from "/static/i18n.js";
 
@@ -14,7 +14,7 @@ function el(tag, attrs = {}, ...children) {
     else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v);
   }
-  for (const c of children.flat()) {
+  for (const c of children.flat(Infinity)) {
     if (c == null || c === false) continue;
     node.append(c instanceof Node ? c : document.createTextNode(String(c)));
   }
@@ -43,18 +43,25 @@ function markSorted(ths, key, asc) {
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const money = (x) => (x >= 1e9 ? `$${decimal(x / 1e9, 1)}B` : x >= 1e6 ? `$${decimal(x / 1e6, 1)}M` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Math.round(x)}`);
+const range = (lo, hi) => (getLang() === "tr" ? `%${lo}-${hi}` : `${lo}-${hi}%`);
 
 // Every request says which language the server's text (notices, score card, risks) should be in.
 const api = (url, opts = {}) => fetch(url, { ...opts, headers: { ...opts.headers, "X-Lang": getLang() } });
 
+// ---------- state ----------
+// A search and a single-game analysis can run at the same time. keepPanel: the user analyzed a game
+// during the current search, so its results must not replace that game in the panel.
+const state = { games: [], selected: null, runId: null, result: null, shortlist: [], showAll: false,
+  searching: false, analyzing: false, keepPanel: false, searchMax: 0 };
+const SHOWN = 8; // rows of the ranking before "Show N more"
+
 // ---------- toasts: every message the user should see goes through here ----------
-const ICONS = { success: "✓", info: "i", warning: "!", error: "×" };
 const LIFETIME = { success: 6000, info: 7000, warning: 12000, error: 0 }; // 0 = stays until closed
 
 function toast(level, title, message = "", hint = "") {
   const close = el("button", { class: "close", type: "button", "aria-label": t("Dismiss") }, "×");
   const node = el("div", { class: `toast ${level}`, role: level === "error" ? "alert" : "status" },
-    el("span", { class: "icon" }, ICONS[level] || "i"),
+    el("span", { class: "icon", "aria-hidden": "true" }),
     el("div", {},
       el("b", {}, title),
       message ? el("p", {}, message) : null,
@@ -88,7 +95,7 @@ class ApiError extends Error {
 // Thrown when the user presses Cancel on a running search or market ranking.
 class CancelledRun extends Error {}
 
-// The run each banner's Cancel button stops: id once the server has started it.
+// The run each status card's Cancel button stops: id once the server has started it.
 const runCtl = { games: { id: null, cancelled: false }, markets: { id: null, cancelled: false } };
 
 function cancelRun(kind) {
@@ -138,11 +145,11 @@ async function apiError(res) {
 
 // ---------- opportunity map: 2D (always works) and 3D (needs three.js from the CDN + WebGL) ----------
 const onMapSelect = (appid) => selectGame(appid);
-const map2d = createMap2d($("#map"), { onSelect: onMapSelect, describe: mapLine });
+const map2d = createMap2d($("#map"), { onSelect: onMapSelect, describe: mapCard, axes: () => state.result?.axes });
 let map3d = null;
 try {
   const { createMap } = await import("/static/map3d.js");
-  const m = createMap($("#map"), { onSelect: onMapSelect, describe: mapLine });
+  const m = createMap($("#map"), { onSelect: onMapSelect, describe: mapCard });
   if (!m.available) throw new Error("WebGL is disabled in this browser");
   map3d = m;
 } catch (err) {
@@ -159,8 +166,8 @@ const map = {
 };
 
 const MAP_LEGEND = {
-  "2d": () => t("x: demand · y: dissatisfaction · size: revenue · color: score · hover for fixability"),
-  "3d": () => t("x: demand · y: dissatisfaction · z: fixability · size: revenue · color: score"),
+  "2d": () => t("Bubble size = est. revenue · free-to-play games get the smallest bubble · color = score · ratings exclude review-bomb periods"),
+  "3d": () => t("x: demand · y: dissatisfaction · z: fixability · size: revenue · color: score · drag to orbit, scroll to zoom"),
 };
 let mapView = "3d";
 function setMapView(view) {
@@ -180,17 +187,18 @@ document.querySelectorAll("#map-view button").forEach((b) => b.addEventListener(
 if (!map3d) {
   $('#map-view button[data-view="3d"]').disabled = true;
 }
-let savedView = "3d";
-try { savedView = localStorage.getItem("mapView") || "3d"; } catch { /* storage blocked */ }
+let savedView = "2d";
+try { savedView = localStorage.getItem("mapView") || "2d"; } catch { /* storage blocked */ }
 setMapView(savedView);
 
-// The Games view shows the ranking as a table or as the map, never both: each gets the whole card.
+// The Games view shows the ranking as a list or as the map, never both.
 let gamesMode = "table";
 function setGamesMode(mode) {
   gamesMode = mode === "map" ? "map" : "table";
   $("#games-view .table-wrap").hidden = gamesMode !== "table";
   $("#map").hidden = gamesMode !== "map";
-  $("#map-tools").hidden = gamesMode !== "map" || tableView !== "games";
+  $("#map-legend").hidden = gamesMode !== "map" || !state.games.length;
+  $("#map-tools").hidden = gamesMode !== "map";
   for (const b of document.querySelectorAll("#games-mode button")) b.setAttribute("aria-pressed", String(b.dataset.mode === gamesMode));
   if (gamesMode === "map") setMapView(mapView); // resizes the shown map to its new box
   try { localStorage.setItem("gamesMode", gamesMode); } catch { /* storage blocked */ }
@@ -200,7 +208,7 @@ $("#games-mode").addEventListener("click", (e) => {
   if (b) setGamesMode(b.dataset.mode);
 });
 
-// ---------- details drawer: opens with a game, closes with × or Esc ----------
+// ---------- details drawer: opens with a game, closes with × (or ← on a phone) or Esc ----------
 // Opening moves the focus into the drawer (unless the page opened it by itself, after a search);
 // closing gives it back to what opened it, or to the game's row.
 let drawerReturn = null;
@@ -209,7 +217,7 @@ function openDrawer(focus = true) {
   drawerReturn = document.activeElement;
   $("#drawer").hidden = false;
   document.body.classList.add("drawer-open");
-  if (focus) $("#drawer-close").focus({ preventScroll: true });
+  if (focus) (matchMedia("(max-width: 1000px)").matches ? $("#sheet-back") : $("#drawer-close")).focus({ preventScroll: true });
 }
 function closeDrawer() {
   const appid = state.selected;
@@ -228,18 +236,14 @@ function closeDrawer() {
   highlightRow();
 }
 $("#drawer-close").addEventListener("click", closeDrawer);
+$("#sheet-back").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => {
-  // Esc first closes whatever is open on top (tag list, past runs, score card, help)
+  // Esc first closes whatever is open on top (tag list, filters, score card, help)
   if (e.key !== "Escape" || $("#drawer").hidden || e.defaultPrevented) return;
-  if (e.target.closest?.("#tag-combo") || !tagPop.hidden || !runsPop.hidden || document.querySelector("dialog[open]") || !scoreTip.hidden) return;
+  if (e.target.closest?.("#tag-combo") || !tagPop.hidden || !$("#filters").hidden
+    || document.querySelector("dialog[open]") || !scoreTip.hidden) return;
   closeDrawer();
 });
-
-// ---------- state ----------
-// A search and a single-game analysis can run at the same time. keepPanel: the user analyzed a game
-// during the current search, so its results must not replace that game in the panel.
-const state = { games: [], selected: null, sort: { key: "rank", asc: true }, runId: null, shortlist: [],
-  searching: false, analyzing: false, keepPanel: false };
 
 // Buttons are never disabled while busy: a disabled button ignores clicks and Enter silently.
 // They show what's running instead, and a second press explains why nothing new starts.
@@ -252,31 +256,31 @@ function setButtonBusy(button, busy, label) {
 function setSearching(on) {
   state.searching = on;
   document.body.classList.toggle("searching", on);
-  setButtonBusy($("#run"), on, on ? t("Searching...") : t("Find opportunities"));
+  setButtonBusy($("#run"), on, on ? t("Searching...") : t("Search"));
+  renderSummary(); // the AI chip hides while a search runs; the result is drawn before this flag clears
 }
 
 function setAnalyzing(on) {
   state.analyzing = on;
-  setButtonBusy($("#game-form button"), on, on ? t("Analyzing...") : t("Analyze"));
 }
 
 function stillRunning(what) {
   toast("info", t("Please wait"), what, t("Wait for it to finish, then try again."));
 }
 
-// ---------- sidebar ----------
+// ---------- the filters popover (under the title) ----------
 function openFilters(open = true) {
   $("#filters").hidden = !open;
   $("#filters-toggle").setAttribute("aria-expanded", String(open));
 }
-$("#filters-toggle").addEventListener("click", () => {
-  openFilters($("#filters").hidden);
-  try { localStorage.setItem("filtersOpen", String(!$("#filters").hidden)); } catch { /* storage blocked */ }
+$("#filters-toggle").addEventListener("click", () => openFilters($("#filters").hidden));
+document.addEventListener("click", (e) => {
+  if (!$("#filters").hidden && !e.target.closest(".filters-wrap, #toasts, #term-tip")) openFilters(false);
 });
-try {
-  const open = localStorage.getItem("filtersOpen");
-  openFilters(open ? open === "true" : !matchMedia("(max-width: 1000px)").matches);
-} catch { /* storage blocked: stays open */ }
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("#filters").hidden) { openFilters(false); $("#filters-toggle").focus(); e.preventDefault(); }
+});
 document.querySelectorAll("input").forEach((i) => i.addEventListener("input", () => i.classList.remove("invalid")));
 
 // ---------- filters and tags are remembered in this browser; presets fill the filter fields ----------
@@ -297,6 +301,14 @@ function saveFilters() {
   // The free-text fallback has no picks: keep the tags remembered from before.
   const tags = tagPicker.freeText ? saved.tags : tagPicker.picked;
   try { localStorage.setItem("filters", JSON.stringify({ values, tags })); } catch { /* storage blocked */ }
+  filtersSummary();
+}
+
+// The filter button says what the filters are: "100+ reviews · 5-70% positive · top 15".
+function filtersSummary() {
+  const v = (id) => $(`#${id}`).value;
+  $("#filters-summary").textContent = t("{min}+ reviews · {range} positive · top {n}",
+    { min: fmt(+v("min-reviews") || 0), range: range(v("lo"), v("hi")), n: v("max-games") });
 }
 
 for (const id of FILTER_IDS) $(`#${id}`).addEventListener("change", saveFilters);
@@ -318,7 +330,7 @@ function fieldError(input, message, hint = "") {
   toast("error", t("Check \"{field}\"", { field: labelOf(input) }), message, hint);
 }
 
-// ---------- tag picker: tick any number of Steam tags (games must have all of them) ----------
+// ---------- the search box: tick Steam tags (games must have all of them), or paste a game's AppID ----------
 const MAX_TAGS = 5; // config.MAX_TAGS on the server
 const tagInput = $("#tag");
 const tagPop = $("#tag-pop");
@@ -333,10 +345,16 @@ const tagPicker = { tags: [], picked: [], shown: [], active: -1, freeText: false
     for (const id of FILTER_IDS) if (saved.values[id] != null && saved.values[id] !== "") $(`#${id}`).value = saved.values[id];
   }
   if (Array.isArray(saved?.tags)) tagPicker.picked = saved.tags.filter((x) => typeof x === "string").slice(0, MAX_TAGS);
+  filtersSummary();
 }
 
 const isPicked = (t) => tagPicker.picked.includes(t);
 const tagsLabel = (tags) => tags.join(" + ");
+// "1330660" or a store link -> "1330660"; anything else -> null
+const parseAppid = (text) => {
+  const id = (text.trim().match(/\/app\/(\d+)/) || text.trim().match(/^(\d+)$/) || [])[1];
+  return id && +id > 0 ? id : null;
+};
 
 // Case-insensitive substring match, prefix matches first. Empty query = every tag.
 function matchTags(query) {
@@ -360,7 +378,7 @@ function renderChips() {
         onclick: (e) => { e.stopPropagation(); togglePick(tag); } }, "×"))));
   if (tagPicker.freeText) return;
   const open = !tagPop.hidden;
-  tagInput.placeholder = open ? t("Filter tags...") : tagPicker.picked.length ? "" : t("Pick Steam tags...");
+  tagInput.placeholder = open ? t("Filter tags, or paste an AppID...") : tagPicker.picked.length ? "" : t("Add a tag, or paste an AppID");
 }
 
 // Update checkboxes, limits and the footer in place: rows never move while you tick.
@@ -398,43 +416,61 @@ function setActive(i) {
   tagInput.setAttribute("aria-activedescendant", li.id);
 }
 
-// Ticked tags first (as of opening), then the rest. Typing in the box only narrows the list.
+// Ticked tags first (as of opening), then the rest. Typing in the box only narrows the list; an AppID
+// or a store link offers that game instead. With nothing typed, the past searches are listed below.
 function openTagList(query = tagInput.value) {
-  if (!tagPicker.tags.length) return;
-  const matches = matchTags(query);
-  const picked = matches.filter(isPicked), rest = matches.filter((tag) => !isPicked(tag));
-  tagPicker.shown = picked.concat(rest);
-  tagPicker.active = -1;
-  let i = 0;
-  const option = (tag) => el("li", { role: "option", id: `tag-opt-${i++}`, "data-tag": tag, onclick: () => togglePick(tag) },
-    el("span", { class: "check", "aria-hidden": "true" }, "✓"), tag);
-  const group = (title) => el("li", { class: "group", role: "presentation" }, title);
+  const appid = parseAppid(query);
   const rows = [];
-  if (picked.length) rows.push(group(t("Selected")), ...picked.map(option));
-  if (rest.length) rows.push(...(picked.length ? [group(t("All tags"))] : []), ...rest.map(option));
-  if (!matches.length) rows.push(el("li", { class: "none" }, t("No Steam tag contains \"{query}\"", { query: query.trim() })));
+  tagPicker.shown = [];
+  tagPicker.active = -1;
+  if (appid) {
+    rows.push(el("li", { class: "open-game", onclick: () => analyzeGame(appid) }, t("Open game {appid}", { appid })));
+  } else if (tagPicker.tags.length) {
+    const matches = matchTags(query);
+    const picked = matches.filter(isPicked), rest = matches.filter((tag) => !isPicked(tag));
+    tagPicker.shown = picked.concat(rest);
+    let i = 0;
+    const option = (tag) => el("li", { role: "option", id: `tag-opt-${i++}`, "data-tag": tag, onclick: () => togglePick(tag) },
+      el("span", { class: "check", "aria-hidden": "true" }, "✓"), tag);
+    const group = (title) => el("li", { class: "group label", role: "presentation" }, title);
+    if (picked.length) rows.push(group(t("Selected")), ...picked.map(option));
+    if (rest.length) rows.push(...(picked.length ? [group(t("All tags"))] : []), ...rest.map(option));
+    if (!matches.length) rows.push(el("li", { class: "none" }, t("No Steam tag contains \"{query}\"", { query: query.trim() })));
+  } else if (tagPicker.freeText && !query.trim()) {
+    rows.push(el("li", { class: "none" }, t("Steam tags, comma-separated, e.g. Crafting, Survival")));
+  }
   tagList.replaceChildren(...rows);
+  tagList.hidden = !rows.length;
+  $(".combo-foot").hidden = !!appid || tagPicker.freeText;
+  const showRuns = !query.trim();
+  $("#runs-section").hidden = !showRuns;
+  const wasHidden = tagPop.hidden;
   tagPop.hidden = false;
   tagInput.setAttribute("aria-expanded", "true");
   if (query.trim() && tagPicker.shown.length) setActive(0);
+  if (showRuns && (wasHidden || !runsLoaded)) loadRuns();
   renderChips();
   refreshList();
 }
 
 function closeTagList() {
   tagPop.hidden = true;
-  if (!tagPicker.freeText) tagInput.value = ""; // the filter is temporary; picks live in the chips
+  // The filter is temporary (picks live in the chips); an AppID stays until it's opened.
+  if (!tagPicker.freeText && !parseAppid(tagInput.value)) tagInput.value = "";
   tagInput.setAttribute("aria-expanded", "false");
   tagInput.removeAttribute("aria-activedescendant");
+  runsLoaded = false;
   renderChips();
 }
 
 tagInput.addEventListener("focus", () => openTagList());
 tagInput.addEventListener("input", () => openTagList());
-tagInput.addEventListener("blur", closeTagList);
+// Focus moving into the list (a past search, with Tab) keeps it open; anywhere else closes it.
+tagInput.addEventListener("blur", (e) => { if (!tagPop.contains(e.relatedTarget)) closeTagList(); });
+tagPop.addEventListener("focusout", (e) => { if (!$("#tag-combo").contains(e.relatedTarget)) closeTagList(); });
 // A click anywhere on the field (chips, empty space) opens the list.
 $("#tag-combo").addEventListener("click", (e) => {
-  if (tagPop.contains(e.target) || e.target.closest("#tag-toggle")) return;
+  if (tagPop.contains(e.target)) return;
   if (document.activeElement !== tagInput) tagInput.focus();
   else if (tagPop.hidden) openTagList();
 });
@@ -444,26 +480,21 @@ $("#tag-clear").addEventListener("click", () => {
   renderChips();
   refreshList();
 });
-$("#tag-toggle").addEventListener("mousedown", (e) => {
-  e.preventDefault();
-  if (!tagPop.hidden) return closeTagList();
-  if (document.activeElement !== tagInput) tagInput.focus();
-  else openTagList();
-});
 tagInput.addEventListener("keydown", (e) => {
   if (e.key === "Backspace" && !tagInput.value && tagPicker.picked.length && tagPicker.tags.length) {
     e.preventDefault();
     return togglePick(tagPicker.picked[tagPicker.picked.length - 1]);
   }
   if (tagPop.hidden) {
-    if (e.key === "ArrowDown" && tagPicker.tags.length) { e.preventDefault(); openTagList(); }
+    if (e.key === "ArrowDown") { e.preventDefault(); openTagList(); }
     return; // Enter with the list closed submits the search as usual
   }
   const last = tagPicker.shown.length - 1;
   if (e.key === "ArrowDown") { e.preventDefault(); setActive(Math.min(last, tagPicker.active + 1)); }
   else if (e.key === "ArrowUp") { e.preventDefault(); setActive(Math.max(0, tagPicker.active - 1)); }
   else if (e.key === "Enter") {
-    e.preventDefault(); // Enter ticks; it never submits while the list is open
+    if (parseAppid(tagInput.value) || tagPicker.freeText) return; // submits: opens the game / searches
+    e.preventDefault(); // Enter ticks; it never submits while the tag list is open
     if (tagPicker.active >= 0) togglePick(tagPicker.shown[tagPicker.active]);
     else closeTagList();
   } else if (e.key === "Escape") closeTagList();
@@ -481,7 +512,6 @@ renderChips();
     if (document.activeElement === tagInput) openTagList();
   } catch (err) {
     // Fallback: type tags by hand, comma-separated.
-    $("#tag-toggle").hidden = true;
     tagInput.value = tagPicker.picked.join(", ");
     tagPicker.picked = [];
     renderChips();
@@ -508,21 +538,23 @@ function validityText(input) {
 }
 
 // The browser's own validation cancels submit before our handler runs. The invalid field is often
-// inside the Filters popover, which the outside-click handler has just hidden, so its bubble can't
-// appear. Re-open the popover and show a toast so this is never silent.
+// inside the closed Filters popover, so its bubble can't appear. Re-open the popover and show a toast,
+// so this is never silent.
 $("#tag-form").addEventListener("invalid", (e) => {
   e.preventDefault(); // our toast replaces the browser bubble
   const input = e.target;
-  if ($("#tag-form").querySelector(".invalid")) return; // one toast per submit
+  if (document.querySelector("#filters .invalid")) return; // one toast per submit
   fieldError(input, validityText(input));
 }, true);
 
 $("#run").addEventListener("click", () => {
-  document.querySelectorAll("#tag-form .invalid").forEach((i) => i.classList.remove("invalid"));
+  document.querySelectorAll("#filters .invalid, #tag.invalid").forEach((i) => i.classList.remove("invalid"));
 });
 
 $("#tag-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const appid = !tagPicker.freeText && parseAppid(tagInput.value);
+  if (appid) return analyzeGame(appid);
   if (state.searching) return stillRunning(t("A search is still running."));
   const body = {
     // picks come only from ticks; in the free-text fallback, from the comma-separated box
@@ -535,21 +567,26 @@ $("#tag-form").addEventListener("submit", async (e) => {
     reviews: +$("#reviews").value,
   };
   if (!body.tags.length) {
-    return fieldError(tagInput, t("Pick at least one tag."),
-      !tagPicker.freeText ? t("Tick one or more tags in the list.") : t("Type tags separated by commas, e.g. Crafting, Survival."));
+    return fieldError(tagInput, t("Pick at least one tag, or paste a game's AppID."),
+      !tagPicker.freeText ? t("Click the search box and tick one or more tags in the list.") : t("Type tags separated by commas, e.g. Crafting, Survival."));
   }
   if (body.tags.length > MAX_TAGS) {
     return fieldError(tagInput, t("Use at most {n} tags.", { n: MAX_TAGS }), t("Games must have every tag, so a few tags is usually enough."));
   }
   const label = tagsLabel(body.tags);
   if (body.lo > body.hi) return rangeError(body);
+  tagInput.blur();
+  setTableView("games");
   state.keepPanel = false;
+  state.searchMax = body.max_games;
   setSearching(true);
   startRun("games");
+  renderTitle(label);
   try {
-    // Inside the try: if anything here fails, the button and banner reset and the error is shown,
+    // Inside the try: if anything here fails, the button and card reset and the error is shown,
     // instead of a "Searching..." that never ends.
-    searchStatus(label, 0, "", t("Fetching games tagged {tag}...", { tag: label }));
+    searchStatus({ status: "running", done: 0, total: 0, step: 0, message: t("Fetching games tagged {tag}...", { tag: label }) });
+    renderLive(null);
     const res = await api("/api/tag-runs", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
@@ -557,16 +594,18 @@ $("#tag-form").addEventListener("submit", async (e) => {
     const { id, notices } = await res.json();
     runStarted("games", id);
     notifyAll(notices);
-    await poll(id, label);
+    await poll(id);
   } catch (err) {
     if (err instanceof CancelledRun) {
       toast("info", t("Search cancelled"), state.games.length ? t("The previous results are still shown.") : "", "");
     } else {
       notifyError(err, t("Search failed"));
     }
+    renderTitle();
   } finally {
     setSearching(false);
     searchStatus(null);
+    renderLive(null);
   }
 });
 
@@ -576,17 +615,37 @@ function rangeError(body) {
     t("Swap the two values, e.g. 5 to 70."));
 }
 
-// A progress banner (over the faded previous results while a search runs); title null hides it.
-function statusBox(box, title, frac, count, message) {
-  box.hidden = title == null;
-  if (title == null) return;
+// "~3 min left": the server estimates the time left from the pace so far (null: no estimate yet).
+const etaText = (eta) => (eta == null ? "" : eta < 60 ? t("under a minute left") : t("~{n} min left", { n: Math.round(eta / 60) }));
+
+// A progress card; job null hides it.
+function statusBox(box, title, job, count) {
+  box.hidden = job == null;
+  if (job == null) return;
   box.querySelector(".search-status-title").textContent = title;
   box.querySelector(".search-status-count").textContent = count;
-  box.querySelector(".search-status-fill").style.width = `${Math.round(frac * 100)}%`;
-  box.querySelector(".search-status-text").textContent = message || "";
+  box.querySelector(".search-status-eta").textContent = etaText(job.eta);
+  box.querySelector(".search-status-fill").style.width = `${Math.round((job.total ? job.done / job.total : 0) * 100)}%`;
+  if (!runCtl[box.id === "search-status" ? "games" : "markets"].cancelled) {
+    box.querySelector(".search-status-text").textContent = job.message || "";
+  }
 }
 
-// "12 / 15 · ~3 min left": the server estimates the time left from the pace so far (null: no estimate yet).
+// The search's card: step 1 lists the tags' games, step 2 checks and analyzes them (the games appear
+// one by one), step 3 ranks them, which is too quick to show.
+function searchStatus(job) {
+  const box = $("#search-status");
+  if (job == null) return statusBox(box, "", null);
+  const step = job.games?.length ? 2 : 1;
+  box.querySelector(".step-badge").textContent = t("Step {n} of 3", { n: step });
+  for (const li of box.querySelectorAll(".steps li")) {
+    li.classList.toggle("done", +li.dataset.step < step);
+    li.classList.toggle("now", +li.dataset.step === step);
+  }
+  statusBox(box, step === 1 ? t("Listing the games with these tags") : t("Reading reviews and scoring games"), job,
+    job.total ? `${job.done} / ${job.total}` : "");
+}
+
 // The run's warnings stay above the ranking after their toasts fade (each can be dismissed).
 function renderResultNotices(list) {
   const items = (list || []).filter((n) => n.level === "warning" || n.level === "info").map((n) => {
@@ -602,31 +661,53 @@ function renderResultNotices(list) {
   $("#result-notices").hidden = !items.length;
 }
 
-function progressCount(count, eta) {
-  if (eta == null || !count) return count;
-  const left = eta < 60 ? t("under a minute left") : t("~{n} min left", { n: Math.round(eta / 60) });
-  return `${count} · ${left}`;
+// While a search runs: each game as it goes, finished ones ranked by score.
+const STAGES = {
+  store: () => t("Store check"),
+  details: () => t("Store data and risks"),
+  reviews: (g) => (g.total ? t("Reading reviews · {done} / {total}", { done: g.done, total: g.total }) : t("Reading reviews")),
+  done: () => t("Done"),
+  failed: () => t("Failed"),
+};
+function renderLive(job) {
+  const games = job?.games || [];
+  $("#live").hidden = !games.length;
+  if (!games.length) return;
+  const done = games.filter((g) => g.stage === "done").sort((a, b) => b.score - a.score);
+  const rest = games.filter((g) => g.stage !== "done");
+  const row = (g, i) => {
+    const finished = g.stage === "done";
+    const skel = () => el("span", { class: "skel" });
+    return el("tr", { class: finished ? "" : "busy" },
+      el("td", { class: "num muted" }, finished ? i + 1 : "–"),
+      el("td", {}, g.name),
+      el("td", {}, finished ? pill(g.score, "small") : skel()),
+      el("td", {}, finished && g.rating != null ? percent(g.rating) : skel()),
+      el("td", { class: "num" }, finished && g.reviews != null ? fmt(g.reviews) : skel()),
+      el("td", {}, el("span", { class: `stage ${g.stage}` }, (STAGES[g.stage] || (() => g.stage))(g))));
+  };
+  $("#live-table tbody").replaceChildren(...done.map(row), ...rest.map((g) => row(g)));
+  const started = games.filter((g) => g.stage !== "store").length;
+  const queued = Math.max(0, state.searchMax - started);
+  $("#live-queued").textContent = queued
+    ? t("Up to {n} more queued · each game starts as soon as it passes the store check", { n: queued }) : "";
 }
 
-function searchStatus(tag, frac, count, message) {
-  statusBox($("#search-status"), tag == null ? null : t("Searching \"{tag}\"...", { tag }), frac, count, message);
-}
-
-async function poll(id, tag) {
+async function poll(id) {
   for (;;) {
     const res = await api(`/api/tag-runs/${id}`);
     if (res.status === 404) {
       throw new ApiError({ level: "error", title: t("The search was interrupted"),
-        message: t("The server was restarted, so this run was lost."), hint: t("Press Find opportunities again.") });
+        message: t("The server was restarted, so this run was lost."), hint: t("Press Search again.") });
     }
     if (!res.ok) throw await apiError(res);
     const job = await res.json();
     if (job.status === "cancelled" || runCtl.games.cancelled) throw new CancelledRun();
     if (job.status === "error") throw new ApiError(job.error);
     if (job.status === "done") return showResult(job.result, id);
-    const count = job.total ? `${job.done} / ${job.total}` : "";
-    searchStatus(tag, job.total ? job.done / job.total : 0,
-      progressCount(count && job.step ? t("Step {n} · {count}", { n: job.step, count }) : count, job.eta), job.message);
+    searchStatus(job);
+    renderLive(job);
+    if (job.slow) notify(job.slow);
     await new Promise((r) => setTimeout(r, 1000));
     if (runCtl.games.cancelled) throw new CancelledRun();
   }
@@ -635,21 +716,12 @@ async function poll(id, tag) {
 $("#search-status .cancel-run").addEventListener("click", () => cancelRun("games"));
 $("#markets-status .cancel-run").addEventListener("click", () => cancelRun("markets"));
 
-$("#game-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
+// One game by AppID (pasted into the search box), shown in the drawer.
+async function analyzeGame(appid) {
   if (state.analyzing) return stillRunning(t("The analysis of the previous game is still running."));
-  const input = $("#appid");
-  input.classList.remove("invalid");
-  const raw = input.value.trim();
-  if (!raw) {
-    return fieldError(input, t("Enter a Steam AppID or store link."),
-      t("For example 1330660 or https://store.steampowered.com/app/1330660/"));
-  }
-  const appid = (raw.match(/\/app\/(\d+)/) || raw.match(/^(\d+)$/) || [])[1];
-  if (!appid || +appid <= 0) {
-    return fieldError(input, t("\"{text}\" isn't an AppID or a Steam store link.", { text: raw.slice(0, 60) }),
-      t("Use the number from the store URL, e.g. 1330660 from store.steampowered.com/app/1330660/"));
-  }
+  tagInput.value = "";
+  tagInput.blur();
+  closeTagList();
   if (state.games.some((g) => g.game.appid === +appid)) return selectGame(+appid);
 
   if (state.searching) state.keepPanel = true; // the finishing search must not replace this game
@@ -681,7 +753,7 @@ $("#game-form").addEventListener("submit", async (e) => {
   } finally {
     setAnalyzing(false);
   }
-});
+}
 
 async function fetchGame(appid) {
   const res = await api(`/api/games/${appid}?reviews=${+$("#reviews").value || 300}`);
@@ -690,35 +762,46 @@ async function fetchGame(appid) {
 }
 
 // ---------- results ----------
-// quiet: the same result again in another language, so no toasts and the sort and selection stay.
+// The title area of the Games view: the search's tags, or (while one runs) the tags being searched.
+function renderTitle(searching = null) {
+  const r = state.result;
+  $("#games-kicker").hidden = !searching;
+  $("#games-kicker").textContent = searching ? t("Games · searching") : "";
+  $("#table-title").textContent = searching || r?.tag || t("Find underserved audiences");
+  renderMarketLine(searching ? null : r);
+  if (!searching && !r) $("#market-line").textContent = t("Steam games that many people bought but rate poorly, ranked as chances for a better game.");
+  renderSummary();
+}
+
+// quiet: the same result again in another language, so no toasts and the selection stays.
 function showResult(result, id, quiet = false) {
   state.games = result.games.map((g, i) => ({ ...g, rank: i + 1 }));
-  if (!quiet) state.sort = { key: "rank", asc: true };
   state.result = result;
+  state.runId = id;
+  if (!quiet) state.showAll = false;
   const notes = [
     t("{candidates} of {total} games have ≥ {min} reviews and {range} positive; analyzed the {n} with most reviews.", {
       candidates: fmt(result.n_candidates), total: fmt(result.n_tag_games), min: fmt(result.min_reviews),
-      range: getLang() === "tr" ? `%${result.lo}-${result.hi}` : `${result.lo}-${result.hi}%`, n: state.games.length }),
+      range: range(result.lo, result.hi), n: state.games.length }),
   ];
   if (result.not_games.length) notes.push(t("Excluded non-games: {names}.", { names: result.not_games.join(", ") }));
   if (result.compared) notes.push(t("▲/▼ = score change since your previous run with these tags and filters."));
   $("#table-note").textContent = notes.join(" ");
   renderResultNotices(result.notices);
-  renderMarketStrip(result.market, result.well_served);
-  state.runId = id;
-  renderSummary();
+  if (!quiet) $("#opp-summary").hidden = true;
+  renderTitle();
   $("#download").href = `/api/tag-runs/${id}/report.md?lang=${getLang()}`;
   $("#download-csv").href = `/api/tag-runs/${id}/ranking.csv?lang=${getLang()}`;
+  $("#downloads").hidden = !state.games.length;
   if (!quiet) setTableView("games");
-  else $("#table-title").textContent = tableTitles[tableView]();
 
-  $("#quick-filter").hidden = !state.games.length;
   $("#table-empty").hidden = state.games.length > 0;
-  map.setGames(visibleGames());
+  $("#map-legend").hidden = gamesMode !== "map" || !state.games.length;
+  map.setGames(state.games);
   renderTable();
   if (quiet) {
     const g = state.games.find((x) => x.game.appid === state.selected);
-    if (g) renderPanel(g);
+    if (g) renderPanel(g, panelTab(), false);
     return;
   }
   notifyAll(result.notices);
@@ -736,38 +819,37 @@ function showResult(result, id, quiet = false) {
   }
 }
 
-// The whole tag, not just the analyzed games: is this audience underserved or already well served?
-function renderMarketStrip(m, wellServed) {
-  const strip = $("#market-strip");
-  strip.hidden = !m;
-  if (!m) return;
-  const stat = (value, label, cls = "", term = null) => el("div", { class: cls }, el("b", {}, value), el("span", {}, label, term ? info(term) : null));
+// The whole tag in one sentence under the title: how many of its games with demand let players down,
+// how many please them, and the unmet share (described, not a forecast: see the backtest).
+function renderMarketLine(r) {
+  const line = $("#market-line");
+  const m = r?.market;
+  if (!m) return line.replaceChildren();
   const rated = m.n_underserved + m.n_well_served;
-  const verdict = rated < 5 ? t("Too few games with demand to judge this market.")
-    : m.gap >= 0.5 ? t("Many disappointed players and few good games: an underserved audience.")
-    : m.gap >= 0.3 ? t("A mixed market: some good games already serve these players.")
-    : t("Mostly well served: players here already have good games.");
-  strip.replaceChildren(
-    stat(fmt(m.n_games), t("Games in tag")),
-    stat(fmt(m.n_demand), t("With demand"), "", "with_demand"),
-    stat(fmt(m.n_underserved), t("Underserved"), "good", "underserved"),
-    stat(fmt(m.n_well_served), t("Well served ({pct}+)", { pct: percent(wellServed) }), "", "well_served"),
-    stat(pct(m.gap), t("Unmet share"), m.gap >= 0.5 ? "good" : "", "unmet_share"),
-    stat(money(m.underserved_gross), t("Underserved revenue"), "", "revenue"),
-    el("div", { class: "verdict" }, verdict),
-  );
+  if (rated < 5) {
+    return line.replaceChildren(t("{n} games with demand; too few rated clearly to describe this market.", { n: fmt(m.n_demand) }),
+      info("with_demand"));
+  }
+  line.replaceChildren(
+    t("{under} of {demand} games with demand leave players disappointed ({range} positive); {well} please them ({pct}+).", {
+      under: fmt(m.n_underserved), demand: fmt(m.n_demand), range: range(r.lo, r.hi), well: fmt(m.n_well_served),
+      pct: percent(r.well_served) }),
+    " ", el("b", {}, t("Unmet share {pct}", { pct: pct(m.gap) })), info("unmet_share"));
 }
 
 // ---------- opportunity summary: written on request by a local LLM (Ollama), saved with the run ----------
+// The AI button under the title opens it; it says whether a summary is written yet.
 function renderSummary() {
-  const box = $("#opp-summary");
+  const chip = $("#ai-chip"), box = $("#opp-summary");
   const r = state.result;
-  box.hidden = !r || !state.games.length;
-  if (box.hidden) return;
+  chip.hidden = !r || !state.games.length || state.searching;
+  if (chip.hidden) { box.hidden = true; return; }
   const s = r.summary;
-  const price = priceLine(r.market);
-  box.querySelector(".opp-state").textContent = s ? "" : state.summarizing ? t("Writing... (about a minute)") : t("not written yet");
+  $("#ai-chip-text").textContent = state.summarizing ? t("Writing the AI summary... (about a minute)")
+    : s ? t("AI summary: {pitch} · Read", { pitch: clip(s.pitch || "", 70) }) : t("Write an AI summary");
+  chip.setAttribute("aria-expanded", String(!box.hidden));
   const body = box.querySelector(".opp-body");
+  const price = priceLine(r.market);
   if (!s) {
     const button = el("button", { type: "button", class: "ghost", onclick: writeSummary });
     setButtonBusy(button, !!state.summarizing, state.summarizing ? t("Writing...") : t("Write summary"));
@@ -787,7 +869,7 @@ function renderSummary() {
   body.replaceChildren(
     s.pitch ? el("p", { class: "opp-pitch" }, s.pitch) : null,
     price,
-    el("p", { class: "opp-note muted" }, t("Written by the local model {model}. It can be wrong: check each point against the games it names.", { model: s.model })),
+    el("p", { class: "opp-note" }, t("Written by the local model {model}. It can be wrong: check each point against the games it names.", { model: s.model })),
     el("div", { class: "opp-sections" },
       section(t("What players love"), s.loved),
       section(t("Shared complaints"), s.complaints),
@@ -795,6 +877,11 @@ function renderSummary() {
       section(t("Caveats"), s.caveats)),
   );
 }
+const clip = (text, n) => (text.length > n ? `${text.slice(0, n - 1).trimEnd()}…` : text);
+$("#ai-chip").addEventListener("click", () => {
+  $("#opp-summary").hidden = !$("#opp-summary").hidden;
+  renderSummary();
+});
 
 // The price range of the market, worked out from the data (never by the model): shown with the summary.
 function priceLine(m) {
@@ -817,7 +904,7 @@ async function writeSummary() {
     const data = await res.json();
     if (state.runId === id && state.result) {
       state.result.summary = data.summary;
-      $("#opp-summary").open = true;
+      $("#opp-summary").hidden = false;
     }
   } catch (err) {
     notifyError(err);
@@ -827,12 +914,7 @@ async function writeSummary() {
   }
 }
 
-// ---------- Games | Markets ----------
-const tableTitles = {
-  games: () => (state.result ? t("{tag}: opportunity ranking", { tag: state.result.tag }) : t("Ranking")),
-  markets: () => t("Markets: which audiences are underserved?"),
-  shortlist: () => t("Shortlist"),
-};
+// ---------- Games | Markets | Shortlist ----------
 let tableView = "games";
 
 function setTableView(view) {
@@ -841,11 +923,11 @@ function setTableView(view) {
   $("#games-view").hidden = view !== "games";
   $("#markets-view").hidden = view !== "markets";
   $("#shortlist-view").hidden = view !== "shortlist";
+  // The Filters button sits under the title of the view that uses it (Markets uses the first three).
+  const filters = document.querySelector(".filters-wrap");
+  if (view === "markets") $("#markets-filter-slot").append(filters);
+  else if (view === "games") $("#games-view .chip-row").prepend(filters);
   if (view === "shortlist") renderShortlist();
-  $("#table-title").textContent = tableTitles[view]();
-  for (const a of [$("#download"), $("#download-csv")]) a.hidden = view !== "games" || !state.games.length;
-  $("#games-mode").hidden = view !== "games";
-  $("#map-tools").hidden = view !== "games" || gamesMode !== "map";
 }
 $("#table-view").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-view]");
@@ -853,10 +935,11 @@ $("#table-view").addEventListener("click", (e) => {
 });
 
 const markets = { rows: [], sort: { key: "rank", asc: true }, running: false, result: null };
+const BIG_MARKET = 20; // "Only tags with 20+ games with demand"
 
 function marketsButton() {
   setButtonBusy($("#markets-run"), markets.running,
-    markets.running ? t("Building...") : markets.result ? t("Rebuild market ranking") : t("Build market ranking"));
+    markets.running ? t("Building...") : markets.result ? t("Rebuild · about 7 min") : t("Build market ranking"));
 }
 
 $("#markets-run").addEventListener("click", async () => {
@@ -868,7 +951,7 @@ $("#markets-run").addEventListener("click", async () => {
   marketsButton();
   startRun("markets");
   try {
-    statusBox(box, t("Building the market ranking..."), 0, "", t("Reading the Steam tag list"));
+    statusBox(box, t("Building the market ranking..."), { done: 0, total: 0, message: t("Reading the Steam tag list") }, "");
     const res = await api("/api/market-runs", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
@@ -887,8 +970,8 @@ $("#markets-run").addEventListener("click", async () => {
       if (job.status === "cancelled" || runCtl.markets.cancelled) throw new CancelledRun();
       if (job.status === "error") throw new ApiError(job.error);
       if (job.status === "done") { showMarkets(job.result); break; }
-      statusBox(box, t("Building the market ranking..."), job.total ? job.done / job.total : 0,
-        progressCount(job.total ? t("{done} / {total} tags", { done: job.done, total: job.total }) : "", job.eta), job.message);
+      statusBox(box, t("Building the market ranking..."), job,
+        job.total ? t("{done} / {total} tags", { done: job.done, total: job.total }) : "");
       await new Promise((r2) => setTimeout(r2, 1000));
       if (runCtl.markets.cancelled) throw new CancelledRun();
     }
@@ -898,21 +981,23 @@ $("#markets-run").addEventListener("click", async () => {
   } finally {
     markets.running = false;
     marketsButton();
-    statusBox(box, null);
+    statusBox(box, "", null);
   }
 });
 
 // The intro until a ranking is built; then what the ranking holds.
 function marketsText() {
   const result = markets.result;
-  $("#markets-well-head").textContent = t("Well served ({pct}+)", { pct: percent(result?.well_served ?? 85) });
+  const well = percent(result?.well_served ?? 85);
+  $("#markets-well-head").textContent = t("Well served ({pct}+)", { pct: well });
+  $("#markets-key-under").textContent = t("Underserved ({range})", { range: range(result?.lo ?? 5, result?.hi ?? 70) });
+  $("#markets-key-well").textContent = t("Well served ({pct}+)", { pct: well });
   if (!result) {
-    $("#markets-note").textContent = t("Which audiences are underserved? Rank every Steam tag by its games with demand that players rate poorly. Uses the Filters; the first build takes ~7 minutes, then ~1 day from the cache.");
+    $("#markets-note").textContent = t("Rank every Steam tag by its games with demand that players rate poorly. Uses the Filters; the first build takes ~7 minutes, then ~1 day from the cache.");
     return;
   }
-  const notes = [t("{n} tags, games with ≥ {min} reviews; underserved = {range} positive. Ranked by gap; broad tags (1,000+ games) and tags with under 3 underserved games come last. Click a tag to search it.", {
-    n: markets.rows.length, min: fmt(result.min_reviews),
-    range: getLang() === "tr" ? `%${result.lo}-${result.hi}` : `${result.lo}-${result.hi}%` })];
+  const notes = [t("{n} tags ranked by unmet share, games with ≥ {min} reviews; underserved = {range} positive. Broad tags (1,000+ games) and tags with under 3 underserved games come last.", {
+    n: markets.rows.length, min: fmt(result.min_reviews), range: range(result.lo, result.hi) })];
   if (result.skipped.length) notes.push(t("{n} tags SteamSpy can't search are left out (search them one by one).", { n: result.skipped.length }));
   $("#markets-note").textContent = notes.join(" ");
 }
@@ -930,25 +1015,52 @@ function showMarkets(result, quiet = false) {
   renderMarkets();
 }
 
+// The same three words as the sentence under a search's title.
+function marketVerdict(r) {
+  if (r.n_underserved + r.n_well_served < 5) return [t("Too few to tell"), ""];
+  return r.gap >= 0.5 ? [t("Underserved"), "under"] : r.gap >= 0.3 ? [t("Mixed"), "mixed"] : [t("Well served"), "well"];
+}
+
 function renderMarkets() {
+  const has = !!markets.result;
+  for (const id of ["#market-cards", "#market-tools", "#markets-wrap"]) $(id).hidden = !has;
+  if (!has) return;
+  const q = $("#market-find").value.trim().toLocaleLowerCase();
+  const big = $("#market-big").checked;
   const { key, asc } = markets.sort;
   const val = (r) => (key === "tag" ? r.tag.toLowerCase() : r[key]);
-  const rows = [...markets.rows].sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * (asc ? 1 : -1));
+  const shown = markets.rows.filter((r) => (!q || r.tag.toLocaleLowerCase().includes(q)) && (!big || r.n_demand >= BIG_MARKET));
+  const rows = shown.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * (asc ? 1 : -1));
   markSorted(document.querySelectorAll("#markets th"), key, asc);
   const n = fmt;
-  $("#markets tbody").replaceChildren(...rows.map((r) =>
-    clickable(el("tr", { title: t("Search {tag}", { tag: r.tag }) },
-      el("td", { class: "num" }, r.rank),
-      el("td", {}, r.tag),
-      el("td", { class: "num" }, n(r.n_games)),
+  $("#markets tbody").replaceChildren(...rows.map((r) => {
+    const [verdict, cls] = marketVerdict(r);
+    return clickable(el("tr", { title: t("Search {tag}", { tag: r.tag }) },
+      el("td", { class: "rank" }, r.rank),
+      el("td", { class: "tag" }, r.tag),
+      el("td", { class: "num dim" }, n(r.n_games)),
       el("td", { class: "num" }, n(r.n_demand)),
-      el("td", { class: "num" }, el("b", {}, n(r.n_underserved))),
-      el("td", { class: "num" }, n(r.n_well_served)),
-      el("td", { class: "num" }, pct(r.gap)),
-      el("td", { class: "num" }, money(r.underserved_gross)),
-      el("td", { class: "num" }, r.n_demand ? percent(r.median_rating) : "-"),
-    ), () => searchTag(r.tag))));
+      el("td", { class: "num under" }, n(r.n_underserved)),
+      el("td", { class: "num dim" }, n(r.n_well_served)),
+      el("td", {}, el("div", { class: "share-cell" },
+        el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(r.gap * 100)}%` })),
+        el("span", {}, pct(r.gap)))),
+      el("td", {}, el("span", { class: `verdict-tag ${cls}` }, verdict)),
+    ), () => searchTag(r.tag));
+  }));
+  $("#markets-shown").textContent = t("{n} of {total} tags shown · click a tag to search it", { n: rows.length, total: markets.rows.length });
+  // The top three by the server's order (unmet share, broad and thin tags last), among the shown ones.
+  const top = [...shown].sort((a, b) => a.rank - b.rank).slice(0, 3);
+  $("#market-cards").hidden = !top.length;
+  $("#market-cards").replaceChildren(...top.map((r) => el("button", { type: "button", class: "market-card", onclick: () => searchTag(r.tag) },
+    el("span", { class: "top" }, `#${r.rank}`, el("b", {}, marketVerdict(r)[0])),
+    el("span", { class: "tag" }, r.tag),
+    el("span", { class: "share" }, el("b", {}, pct(r.gap)),
+      el("span", {}, t("unmet · {under} underserved vs {well} well served", { under: n(r.n_underserved), well: n(r.n_well_served) }))),
+    el("span", { class: "go" }, t("Search this tag →")))));
 }
+$("#market-find").addEventListener("input", renderMarkets);
+$("#market-big").addEventListener("change", renderMarkets);
 
 document.querySelectorAll("#markets th[data-key]").forEach((th) => clickable(th, () => {
   const key = th.dataset.key, s = markets.sort;
@@ -956,7 +1068,7 @@ document.querySelectorAll("#markets th[data-key]").forEach((th) => clickable(th,
   renderMarkets();
 }));
 
-// From the Markets table: search that one tag as a normal games search.
+// From the Markets view: search that one tag as a normal games search.
 function searchTag(tag) {
   if (state.searching) return stillRunning(t("A search is still running."));
   if (tagPicker.freeText) tagInput.value = tag;
@@ -976,17 +1088,11 @@ function searchOneTag(tag) {
   searchTag(tag);
 }
 
-// ---------- Past runs: every finished search and market ranking is saved on the server ----------
-const runsPop = $("#runs-pop");
-
-function closeRuns() {
-  runsPop.hidden = true;
-  $("#runs-toggle").setAttribute("aria-expanded", "false");
-}
-
-async function openRuns() {
-  runsPop.hidden = false;
-  $("#runs-toggle").setAttribute("aria-expanded", "true");
+// ---------- Past searches: every finished search and market ranking is saved on the server ----------
+// Listed in the search box's dropdown while nothing is typed.
+let runsLoaded = false;
+async function loadRuns() {
+  runsLoaded = true;
   const list = $("#runs-list");
   list.replaceChildren(el("li", { class: "run-empty" }, t("Loading...")));
   try {
@@ -1004,12 +1110,12 @@ async function openRuns() {
         el("div", { class: "run-main" },
           el("b", {}, r.kind === "market" ? t("Markets: all tags") : r.label),
           el("span", {}, `${dateTime(r.created)} · ${count(r)}`)),
-        el("button", { type: "button", class: "run-del", title: t("Delete this run"), "aria-label": t("Delete run {label}", { label: r.label }),
+        el("button", { type: "button", class: "run-del", tabindex: "-1", title: t("Delete this run"), "aria-label": t("Delete run {label}", { label: r.label }),
           onclick: (e) => { e.stopPropagation(); deleteRun(r, item); } }, "×")), () => openRun(r));
       return item;
     }));
   } catch (err) {
-    closeRuns();
+    list.replaceChildren();
     notifyError(err, t("Couldn't load past runs"));
   }
 }
@@ -1029,7 +1135,8 @@ async function deleteRun(r, item) {
 
 async function openRun(r) {
   if (r.kind === "tag" && state.searching) return stillRunning(t("A search is still running."));
-  closeRuns();
+  tagInput.blur();
+  closeTagList();
   try {
     const res = await api(`/api/${r.kind === "market" ? "market" : "tag"}-runs/${r.id}`);
     if (!res.ok) throw await apiError(res);
@@ -1041,7 +1148,7 @@ async function openRun(r) {
       return;
     }
     const res2 = job.result;
-    // Put its tags and filters back, so "Find opportunities" reruns exactly this search.
+    // Put its tags and filters back, so Search reruns exactly this search.
     if (tagPicker.freeText) tagInput.value = res2.tags.join(", ");
     else { tagPicker.picked = [...res2.tags]; renderChips(); }
     $("#min-reviews").value = res2.min_reviews;
@@ -1055,36 +1162,19 @@ async function openRun(r) {
   }
 }
 
-$("#runs-toggle").addEventListener("click", () => (runsPop.hidden ? openRuns() : closeRuns()));
-document.addEventListener("click", (e) => {
-  if (!runsPop.hidden && !e.target.closest(".runs-wrap, #toasts")) closeRuns();
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !runsPop.hidden) closeRuns();
-});
-
-const sortValue = {
-  rank: (g) => g.rank,
-  name: (g) => g.game.name.toLowerCase(),
-  score: (g) => g.opportunity.score,
-  reviews: (g) => g.reviews,
-  rating: (g) => g.rating,
-  recent: (g) => g.recent_share ?? -1,
-  gross: (g) => g.box.gross_mid,
-  complaint: (g) => g.mining?.categories[0]?.share ?? -1,
-  risks: (g) => g.opportunity.penalty,
-};
-
-const recentText = (g) => g.recent_share == null ? "-"
-  : `${fmt(g.recent_reviews)} (${pct(g.recent_share)})` + (g.recent_rating == null ? "" : t(", {pct} pos", { pct: percent(g.recent_rating) }));
-const adjText = (g) => t(" ({pct} without review bombs)", { pct: percent(g.opportunity.effective_rating) });
-// The map tooltip's summary line: the same rating text as the table and the drawer, plus the revenue the
-// bubble size stands for. A declaration, so the maps (made near the top) can use it.
-function mapLine(g) {
-  const o = g.opportunity;
-  const adj = Math.round(o.effective_rating) !== Math.round(g.rating) ? adjText(g) : "";
-  return t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(o.score), n: fmt(g.reviews), pct: percent(g.rating) })
-    + adj + " · " + (g.price ? t("Est. revenue {money}", { money: money(g.box.gross_mid) }) : "F2P");
+// The hover card of a map bubble: the same numbers as the list and the drawer.
+function mapCard(g) {
+  const o = g.opportunity, top = g.mining?.categories[0];
+  const adjusted = Math.round(o.effective_rating) !== Math.round(g.rating);
+  const cell = (label, ...value) => el("div", {}, el("span", {}, label), ...value);
+  return el("div", { class: "tt" },
+    el("div", { class: "tt-head" }, el("b", {}, g.game.name), pill(o.score, "small")),
+    el("div", { class: "tt-grid" },
+      cell(t("Rating"), percent(adjusted ? o.effective_rating : g.rating), adjusted ? el("em", {}, " ", t("w/o bombs")) : null),
+      cell(t("Reviews"), fmt(g.reviews)),
+      cell(t("Est. revenue"), g.price ? money(g.box.gross_mid) : "F2P"),
+      cell(t("Top complaint"), top ? `${top.label} ${pct(top.share)}` : "-")),
+    el("span", { class: "tt-foot" }, t("Click to open details")));
 }
 
 // Score change since the previous run with the same tags and filters (only present when one exists).
@@ -1096,83 +1186,61 @@ function delta(g) {
     d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "=");
 }
 
-// The risks that cost points, as in the score card: the same games the risk-penalty filter hides.
-function penaltyText(g) {
-  const list = g.score_explained?.penalties || [];
-  if (list.length) return list.map((p) => `${p.label} -${p.points}`).join(", ");
-  return g.opportunity.penalty > 0 ? `-${Math.round(g.opportunity.penalty)}` : "-";
+// The score as a tinted pill (violet 65+, near-white 45+, gray under).
+function pill(score, size = "") {
+  return el("span", { class: `pill ${scoreLevel(score)} ${size}` }, Math.round(score));
 }
 
-// Quick filter above the ranking: by name, and without games that have a risk penalty.
-// Ranks stay those of the full ranking.
-function visibleGames() {
-  const q = $("#name-filter").value.trim().toLocaleLowerCase();
-  const hideRisky = $("#hide-risky").checked;
-  return state.games.filter((g) => (!q || g.game.name.toLocaleLowerCase().includes(q))
-    && !(hideRisky && g.opportunity.penalty > 0));
-}
-
-function applyQuickFilter() {
-  map.setGames(visibleGames());
-  renderTable();
-}
-$("#name-filter").addEventListener("input", applyQuickFilter);
-$("#hide-risky").addEventListener("change", applyQuickFilter);
+// The risks that cost points, as in the score card.
+const penalties = (g) => g.score_explained?.penalties || [];
 
 function renderTable() {
-  const { key, asc } = state.sort;
-  const shown = visibleGames();
-  $("#filter-count").textContent = shown.length < state.games.length
-    ? t("{n} of {total} games shown", { n: shown.length, total: state.games.length }) : "";
-  const rows = shown.sort((a, b) => {
-    const va = sortValue[key](a), vb = sortValue[key](b);
-    return (va < vb ? -1 : va > vb ? 1 : 0) * (asc ? 1 : -1);
-  });
-  markSorted(document.querySelectorAll("#ranking th"), key, asc);
-  $("#ranking tbody").replaceChildren(
-    ...rows.map((g) => {
-      const o = g.opportunity;
-      const adj = Math.round(o.effective_rating) !== Math.round(g.rating) ? adjText(g) : "";
-      const top = g.mining?.categories[0];
-      return clickable(el("tr", { "data-appid": g.game.appid },
-        el("td", {}, starButton(g.game.appid)),
-        el("td", { class: "num" }, g.rank),
-        el("td", {}, g.game.name),
-        el("td", { class: "num" }, scoreAnchor(el("span", { class: "score-pill", style: `background:${scoreColor(o.score)};color:${scoreInk(o.score)}`,
-          "aria-label": t("Score {score}. How it is calculated", { score: Math.round(o.score) }) }, Math.round(o.score)), g), delta(g)),
-        el("td", { class: "num" }, fmt(g.reviews)),
-        el("td", { class: "num" }, `${percent(g.rating)}${adj}`),
-        el("td", { class: "num" }, recentText(g)),
-        el("td", { class: "num" }, g.price ? money(g.box.gross_mid) : "F2P"),
-        el("td", { class: "complaint-cell" }, top ? `${top.label} (${pct(top.share)})` : "-"),
-        el("td", { class: "risks-cell" }, penaltyText(g)),
-      ), () => selectGame(g.game.appid));
-    }),
-  );
+  const games = state.games;
+  const shown = state.showAll ? games : games.slice(0, SHOWN);
+  const maxShare = Math.max(0.01, ...games.map((g) => g.mining?.categories[0]?.share ?? 0));
+  $("#ranking tbody").replaceChildren(...shown.map((g) => {
+    const o = g.opportunity;
+    const top = g.mining?.categories[0];
+    const risks = penalties(g);
+    const badge = o.penalty > 0 ? el("span", { class: "risk-badge", title: risks.map((p) => `${p.label} -${p.points}`).join(", "),
+      "aria-label": t("Risk penalty -{points}", { points: Math.round(o.penalty) }) }, `⚠ −${Math.round(o.penalty)}`) : null;
+    return clickable(el("tr", { "data-appid": g.game.appid },
+      el("td", {}, g.rank),
+      el("td", {}, el("div", { class: "game-cell" }, el("span", { class: "game-name" }, g.game.name), badge)),
+      el("td", {}, scoreAnchor(el("span", { class: `pill ${scoreLevel(o.score)} score-pill`,
+        "aria-label": t("Score {score}. How it is calculated", { score: Math.round(o.score) }) }, Math.round(o.score)), g), delta(g)),
+      el("td", {}, top ? el("div", { class: "complaint-cell" },
+        el("span", { class: "name", title: top.label }, top.label),
+        el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round((top.share / maxShare) * 100)}%` })),
+        el("span", { class: "pct" }, pct(top.share))) : el("span", { class: "muted" }, "-")),
+      el("td", { class: "num" }, g.price ? money(g.box.gross_mid) : "F2P"),
+    ), () => selectGame(g.game.appid));
+  }));
+  const more = games.length - shown.length;
+  $("#show-more").hidden = more <= 0;
+  $("#show-more").textContent = t("Show {n} more", { n: more });
   highlightRow();
 }
-
-document.querySelectorAll("#ranking th[data-key]").forEach((th) =>
-  clickable(th, () => {
-    const key = th.dataset.key;
-    state.sort = { key, asc: state.sort.key === key ? !state.sort.asc : ["rank", "name"].includes(key) };
-    renderTable();
-  }),
-);
+$("#show-more").addEventListener("click", () => {
+  state.showAll = true;
+  renderTable();
+});
 
 // ---------- shortlist: starred games with a note, kept on the server across runs ----------
 const isStarred = (appid) => state.shortlist.some((s) => s.appid === appid);
 
-// A star for a game of the current ranking (the server keeps a snapshot of it from this run).
+// The drawer's Shortlist button (the server keeps a snapshot of the game from this run).
 function starButton(appid) {
   const on = isStarred(appid);
   const label = on ? t("Remove from shortlist") : t("Add to shortlist");
   return el("button", { type: "button", class: on ? "star on" : "star", "data-appid": appid, "aria-pressed": String(on),
-    "aria-label": label, title: label, onclick: (e) => { e.stopPropagation(); toggleStar(appid); } }, on ? "★" : "☆");
+    "aria-label": label, title: label, onclick: (e) => { e.stopPropagation(); toggleStar(appid); } },
+  el("span", { class: "icon", "aria-hidden": "true" }, on ? "★" : "☆"), on ? t("Starred") : t("Shortlist"));
 }
 
 function refreshStars() {
   for (const b of document.querySelectorAll(".star[data-appid]")) b.replaceWith(starButton(+b.dataset.appid));
+  $("#shortlist-count").textContent = state.shortlist.length || "";
   if (tableView === "shortlist") renderShortlist();
 }
 
@@ -1202,14 +1270,21 @@ async function loadShortlist() {
   refreshStars();
 }
 
+// "today", "3 days ago": when a game was starred
+function ago(seconds) {
+  const days = Math.floor((Date.now() / 1000 - seconds) / 86400);
+  return days <= 0 ? t("today") : days === 1 ? t("yesterday") : t("{n} days ago", { n: days });
+}
+
 function renderShortlist() {
   const list = state.shortlist;
-  $("#shortlist-note").textContent = list.length
-    ? t("{n} starred games. Score, rating and complaint are from the search you starred them in.", { n: list.length })
-    : t("No games yet. Star a game in the ranking (☆) to keep it here.");
+  $("#shortlist-title").textContent = list.length ? t("{n} games worth a second look", { n: list.length }) : t("Shortlist");
+  $("#shortlist-note").textContent = list.length ? "" : t("No games yet. Open a game and press Shortlist to keep it here.");
+  $("#shortlist-note").hidden = !!list.length;
   $("#shortlist-csv").hidden = !list.length;
-  $("#shortlist tbody").replaceChildren(...list.map((s) => {
-    const note = el("input", { class: "note", type: "text", maxlength: "2000", placeholder: t("Add a note..."),
+  $("#shortlist-foot").hidden = !list.length;
+  $("#shortlist").replaceChildren(...list.map((s) => {
+    const note = el("textarea", { class: "note", rows: "3", maxlength: "2000", placeholder: t("Why it is interesting, what to check next..."),
       "aria-label": t("Note for {name}", { name: s.name }) });
     note.value = s.note;
     note.addEventListener("change", async () => {
@@ -1219,25 +1294,30 @@ function renderShortlist() {
         toast("success", t("Note saved"), s.name);
       } catch (err) { notifyError(err); }
     });
-    return el("tr", { "data-appid": s.appid },
-      clickable(el("td", { class: "name" }, s.name), () => openGame(s.appid)),
-      el("td", { class: "num" }, Math.round(s.score)),
-      el("td", { class: "num" }, percent(s.rating)),
-      el("td", { class: "num" }, fmt(s.reviews)),
-      el("td", { class: "complaint-cell" }, s.complaint ? `${s.complaint} (${pct(s.complaint_share)})` : "-"),
-      el("td", {}, s.source),
-      el("td", {}, note),
-      el("td", {}, el("button", { type: "button", class: "ghost remove", "aria-label": t("Remove {name} from the shortlist", { name: s.name }),
-        onclick: () => toggleStar(s.appid) }, "×")),
-    );
+    const stat = (label, value) => el("div", { class: "stat" }, el("span", {}, label), el("b", { title: value }, value));
+    return el("article", { class: "sl-card", "data-appid": s.appid },
+      el("div", { class: "sl-head" },
+        pill(s.score, "big"),
+        el("div", { class: "who" },
+          el("button", { type: "button", class: "name", onclick: () => openGame(s.appid) }, s.name),
+          el("span", { class: "from" }, t("From"), " ", el("b", {}, s.source), s.added ? ` · ${t("starred {when}", { when: ago(s.added) })}` : "")),
+        el("button", { type: "button", class: "remove", title: t("Remove from shortlist"),
+          "aria-label": t("Remove {name} from the shortlist", { name: s.name }), onclick: () => toggleStar(s.appid) }, "★")),
+      el("div", { class: "stats3" },
+        stat(t("Rating"), percent(s.rating)),
+        stat(t("Reviews"), fmt(s.reviews)),
+        stat(t("Top complaint"), s.complaint ? `${s.complaint} ${pct(s.complaint_share)}` : "-")),
+      el("label", {}, t("Note"), note));
   }));
 }
 
 // A shortlisted game: selected if it is in the current ranking, else analyzed into the panel.
 function openGame(appid) {
-  if (state.games.some((g) => g.game.appid === appid)) return selectGame(appid);
-  $("#appid").value = String(appid);
-  $("#game-form").requestSubmit();
+  if (state.games.some((g) => g.game.appid === appid)) {
+    setTableView("games");
+    return selectGame(appid);
+  }
+  analyzeGame(String(appid));
 }
 
 function highlightRow() {
@@ -1250,6 +1330,7 @@ function selectGame(appid, focus = true) {
   const g = state.games.find((x) => x.game.appid === appid);
   if (!g) return;
   state.selected = appid;
+  if (!state.showAll && g.rank > SHOWN) { state.showAll = true; renderTable(); }
   map.select(appid); // both views, so the hidden one is in sync when you switch
   highlightRow();
   renderPanel(g, 0, focus);
@@ -1326,8 +1407,7 @@ function terms() {
     demand: [t("Demand"), t("How many people bought games like this, judged by the number of reviews. Each extra review counts a little less (log scale), so one hit doesn't drown out the rest.")],
     dissatisfaction: [t("Dissatisfaction"), t("How unhappy the players are: how far the game's % positive is below 70%. A 40% game scores higher than a 65% one.")],
     fixability: [t("Fixability"), t("How many of the complaints a new game could avoid: bugs, controls, missing content, performance and the like. Complaints about price or the genre itself don't count.")],
-    risk_penalty: [t("Risk penalty"), t("Points taken off the score for something that makes a game a weaker opportunity than it looks, e.g. online multiplayer, fading interest, or recent reviews showing it's already fixed. The Risks column lists them with their points.")],
-    risks: [t("Risks"), t("The risks that cost this game points, with how many. Other notes, such as review bombs, are in the game's Risks tab.")],
+    risk_penalty: [t("Risk penalty"), t("Points taken off the score for something that makes a game a weaker opportunity than it looks, e.g. online multiplayer, fading interest, or recent reviews showing it's already fixed. The ⚠ badge in the list shows them; a game's History tab lists every check.")],
     revenue: [t("Estimated revenue"), t("Box Method: each review stands for about 30 to 100 copies sold (45 in the middle), times the full price. A rough figure before Steam's cut, discounts, refunds and taxes. Checked against games that published their sales, x45 was right on average, but for a single game it was off by up to about 3 times either way. What the developer keeps is often half of this or less.")],
     price_range: [t("Price range"), t("The undiscounted prices of the paid games with demand in this market: the median, and the range the middle half sits in. Well-served games are the ones at 85%+ positive. Worked out from the data, not by the model. These are today's list prices: older games are often cheaper now than at launch, so a new game can usually ask a little more.")],
     recent: [t("Last 12 months"), t("Reviews written in the last 12 months, their share of all reviews, and how positive they are. Few recent reviews mean fading interest; much better recent reviews mean the problems may already be fixed.")],
@@ -1343,11 +1423,11 @@ function terms() {
   };
 }
 
-// Every risk, with what it means (the glossary lists them; a game's Risks tab says why it got one).
+// Every risk, with what it means (the glossary lists them; a game's History tab says how it came out).
 function riskTerms() {
   return [
     [t("Review bomb"), t("A burst of negative reviews about something other than the game itself. The rating is shown without it; no points are taken off.")],
-    [t("Streamer spike"), t("A burst of reviews after a streamer played it. Interest like that often doesn't last.")],
+    [t("Review spike"), t("A burst of reviews in one month after launch that isn't mostly negative (that would be a review bomb): a sale, a big update, a streamer or a viral moment. Interest like that often doesn't last.")],
     [t("Deep discount"), t("On a big sale right now, so the review count may be inflated by cheap copies.")],
     [t("Very cheap"), t("A very low price inflates the number of buyers and reviews.")],
     [t("Online multiplayer"), t("Needs netcode and servers: hard for a small team to do well.")],
@@ -1387,7 +1467,7 @@ function hideTerm() {
   termTip.hidden = true;
   termAnchor = null;
 }
-// Delegated, so ⓘ buttons made later (panel, market strip) work too. A click or tap only toggles the
+// Delegated, so ⓘ buttons made later (panel, market line) work too. A click or tap only toggles the
 // explanation: caught here first, so it never sorts a column, selects a row or ticks a checkbox.
 document.addEventListener("click", (e) => {
   const b = e.target.closest?.(".info[data-term]");
@@ -1416,65 +1496,59 @@ function renderGlossary() {
   $("#help-risks").replaceChildren(...riskTerms().flatMap(entry));
 }
 
-// ---------- detail panel ----------
-function bar(labelText, value, text) {
-  return el("div", { class: "bar" },
-    el("span", {}, labelText),
-    el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(Math.max(0, Math.min(1, value)) * 100)}%` })),
-    el("span", { class: "val" }, text ?? pct(value)),
-  );
+// ---------- the game drawer: Overview | Complaints | Summary | History ----------
+const TABS = { overview: 0, complaints: 1, summary: 2, history: 3 };
+const panelTab = () => {
+  const active = document.querySelector("#panel .tabs button.active");
+  return active ? [...active.parentNode.children].indexOf(active) : 0;
+};
+
+// A complaint as a bar, scaled to the biggest one shown with it.
+function cbar(label, share, max) {
+  return el("div", { class: "cbar" },
+    el("span", { title: label }, label),
+    el("div", { class: "track thick" }, el("div", { class: "fill", style: `width:${Math.round((share / Math.max(share, max, 0.01)) * 100)}%` })),
+    el("span", { class: "val" }, pct(share)));
+}
+
+const stat = (label, value, small = "") => el("div", { class: "stat" }, el("span", {}, label), el("b", {}, value), small ? el("small", {}, small) : null);
+
+// The score as a ring, colored like the pills.
+function ring(score, size = 84) {
+  const NS = "http://www.w3.org/2000/svg", C = 2 * Math.PI * 40;
+  const node = (tag, attrs, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  const svg = node("svg", { class: "score-ring", width: size, height: size, viewBox: "0 0 96 96", role: "img",
+    "aria-label": t("Opportunity score {score}. How it is calculated", { score: Math.round(score) }) });
+  svg.append(
+    node("circle", { class: "bg", cx: 48, cy: 48, r: 40, fill: "none", "stroke-width": 8 }),
+    node("circle", { cx: 48, cy: 48, r: 40, fill: "none", stroke: scoreColor(score), "stroke-width": 8, "stroke-linecap": "round",
+      "stroke-dasharray": `${(Math.max(0, Math.min(100, score)) / 100) * C} ${C}`, transform: "rotate(-90 48 48)" }),
+    node("text", { x: 48, y: 57, "text-anchor": "middle", "font-size": 27 }, Math.round(score)));
+  return svg;
 }
 
 function renderPanel(g, tab = 0, focus = true) {
   state.panelGame = g;
-  const o = g.opportunity;
   const game = g.game;
-  const adjusted = Math.round(o.effective_rating) !== Math.round(g.rating);
-
-  const head = [
-    el("div", { class: "title-row" }, el("h3", {}, game.name),
-      starButton(game.appid)),
-    el("div", { class: "sub" },
-      el("a", { href: g.store_url, target: "_blank", rel: "noopener" }, t("Steam store")),
-      ` · AppID ${game.appid}`,
-      g.details ? t(" · Released {date}", { date: g.details.release_date }) : "",
-      game.developer ? ` · ${game.developer}` : "",
-    ),
-    el("div", { class: "score-row" },
-      scoreAnchor(el("div", { class: "score-ring", style: `--p:${o.score};--ring:${scoreColor(o.score)}`,
-        "aria-label": t("Opportunity score {score}. How it is calculated", { score: Math.round(o.score) }) }, el("span", {}, Math.round(o.score))), g),
-      el("div", { class: "facts" },
-        el("div", {}, el("span", {}, t("Reviews")), el("b", {}, fmt(g.reviews))),
-        el("div", {}, el("span", {}, t("% positive")), el("b", {}, percent(g.rating), adjusted ? adjText(g) : "")),
-        el("div", {}, el("span", {}, t("Last 12 months"), info("recent")), el("b", {}, recentText(g))),
-        el("div", {}, el("span", {}, t("Est. revenue (x45)"), info("revenue")), el("b", {}, g.price ? money(g.box.gross_mid) : "F2P")),
-        el("div", {}, el("span", {}, t("Range (x30-x100)")), el("b", {}, g.price ? `${money(g.box.gross_low)} - ${money(g.box.gross_high)}` : "-")),
-      ),
-    ),
-    g.rating_source_text ? el("p", { class: "muted rating-src" }, t("Review numbers: {source}", { source: g.rating_source_text })) : null,
-    el("div", { class: "bars" },
-      bar([t("Demand"), info("demand")], o.demand),
-      bar([t("Dissatisfaction"), info("dissatisfaction")], o.dissatisfaction),
-      bar([t("Fixability"), info("fixability")], o.fixability),
-    ),
-    o.penalty ? el("div", { class: "penalty" }, t("Risk penalty -{points} ({names})", { points: Math.round(o.penalty),
-      names: (g.score_explained?.penalties || []).map((p) => p.label).join(", ") || o.penalized.join(", ") }), info("risk_penalty")) : null,
-    g.score_explained ? scoreAnchor(el("button", { type: "button", class: "how-scored" }, t("How is this score calculated?")), g) : null,
-    Object.keys(game.tags || {}).length
-      ? el("div", { class: "chips" }, Object.keys(game.tags).slice(0, 10).map((tag) => el("button", {
-        type: "button", class: "chip", title: t("Search {tag}", { tag }), onclick: () => searchOneTag(tag) }, tag)))
-      : null,
-  ];
+  const year = (g.details?.release_date || "").match(/\d{4}/)?.[0];
+  const sub = [g.price ? `$${decimal(g.price, 2)}` : t("Free to play"), year, `AppID ${game.appid}`].filter(Boolean).join(" · ");
+  const head = el("div", { class: "panel-head" },
+    el("h3", { class: "game-title" }, game.name),
+    el("span", { class: "sub" }, sub, " · ", el("a", { href: g.store_url, target: "_blank", rel: "noopener" }, "Steam ↗")));
 
   const tabs = [
+    [t("Overview"), () => overviewTab(g)],
     [t("Complaints"), () => complaintsTab(g)],
-    [t("What players love"), () => fantasyTab(g)],
-    [t("Risks") + (g.flags.length ? ` (${g.flags.length})` : ""), () => risksTab(g)],
-    [t("History"), () => historyTab(g)],
     [t("Summary"), () => gameSummaryTab(g)],
+    [t("History"), () => historyTab(g)],
   ];
   // ARIA tabs: one Tab stop (the active tab); arrow keys and Home/End move between them.
-  const body = el("div", { role: "tabpanel", id: "panel-tabpanel", tabindex: "0" });
+  const body = el("div", { class: "tab-body", role: "tabpanel", id: "panel-tabpanel", tabindex: "0" });
   const tabBar = el("div", { class: "tabs", role: "tablist" });
   const buttons = tabs.map(([name, render]) => {
     const b = el("button", { type: "button", role: "tab", "aria-controls": "panel-tabpanel" }, name);
@@ -1485,7 +1559,7 @@ function renderPanel(g, tab = 0, focus = true) {
         x.tabIndex = x === b ? 0 : -1;
       }
       body.setAttribute("aria-labelledby", b.id);
-      body.replaceChildren(render());
+      body.replaceChildren(...[render()].flat(2).filter(Boolean));
     });
     return b;
   });
@@ -1501,59 +1575,117 @@ function renderPanel(g, tab = 0, focus = true) {
   });
   buttons[Math.min(tab, buttons.length - 1)].click();
 
-  $("#panel").replaceChildren(...head.filter(Boolean), tabBar, body);
+  const actions = el("div", { class: "actions" }, starButton(game.appid),
+    el("a", { class: "steam", href: g.store_url, target: "_blank", rel: "noopener" }, t("Open on Steam")));
+  $("#panel").replaceChildren(head, tabBar, body, actions);
   $("#panel").scrollTop = 0;
+  const i = state.games.findIndex((x) => x.game.appid === game.appid);
+  $("#sheet-pos").textContent = i >= 0 ? t("{i} of {n}", { i: i + 1, n: state.games.length }) : "";
   openDrawer(focus);
+}
+
+const goTab = (i) => document.querySelectorAll("#panel .tabs button")[i]?.click();
+
+function overviewTab(g) {
+  const o = g.opportunity, m = g.mining;
+  const adjusted = Math.round(o.effective_rating) !== Math.round(g.rating);
+  const cats = m?.categories || [];
+  const top = cats.slice(0, 3);
+  const quote = top.find((c) => c.quotes.length)?.quotes[0];
+  const risks = penalties(g);
+  const loved = (m?.core_phrases || []).slice(0, 5).map(([p]) => p);
+  const tags = Object.keys(g.game.tags || {}).slice(0, 10);
+  return [
+    el("div", { class: "score-row" },
+      scoreAnchor(ring(o.score), g),
+      el("p", { class: "why" }, el("span", { class: "verdict", style: `--c:${scoreColor(o.score)}` }, g.verdict), g.why)),
+    el("div", { class: "facts" },
+      stat(t("Rating"), percent(adjusted ? o.effective_rating : g.rating),
+        adjusted ? t("without review bombs ({pct} with)", { pct: percent(g.rating) }) : ""),
+      stat(t("Reviews"), fmt(g.reviews)),
+      stat([t("Last 12 mo"), info("recent")], g.recent_share == null ? "-" : fmt(g.recent_reviews),
+        g.recent_rating == null ? "" : t("{pct} positive", { pct: percent(g.recent_rating) })),
+      stat([t("Est. revenue"), info("revenue")], g.price ? money(g.box.gross_mid) : "F2P",
+        g.price ? `${money(g.box.gross_low)} – ${money(g.box.gross_high)}` : "")),
+    g.rating_source_text ? el("p", { class: "muted rating-src" }, t("Review numbers: {source}", { source: g.rating_source_text })) : null,
+    top.length ? el("section", {},
+      el("h4", {}, t("What players complain about")),
+      top.map((c) => cbar(c.label, c.share, top[0].share)),
+      quote ? el("blockquote", { class: "quote" }, `“${quote}”`) : null)
+      : el("div", { class: "callout" }, g.review_error ? t("Review texts unavailable: {error}", { error: g.review_error }) : t("No English negative reviews to mine.")),
+    risks.length ? el("div", { class: "risk-box" },
+      el("span", { "aria-hidden": "true" }, "⚠"),
+      el("div", {}, risks.map((p) => [el("b", {}, t("{label} · −{points} points", { label: p.label, points: p.points })), el("p", {}, p.reason)])))
+      : null,
+    loved.length ? el("section", {}, el("h4", {}, t("What players love"), info("loved")), el("p", { class: "loved" }, loved.join(", ") + ".")) : null,
+    tags.length ? el("div", { class: "chips" }, tags.map((tag) => el("button", {
+      type: "button", class: "chip", title: t("Search {tag}", { tag }), onclick: () => searchOneTag(tag) }, tag))) : null,
+    el("div", { class: "links" },
+      el("button", { type: "button", class: "link-btn go", onclick: () => goTab(TABS.complaints) }, t("All complaints and quotes →")),
+      el("button", { type: "button", class: "link-btn go", onclick: () => goTab(TABS.history) }, t("Review history →")),
+      g.score_explained ? scoreAnchor(el("button", { type: "button", class: "link-btn how-scored" }, t("How the score works")), g) : null),
+  ];
 }
 
 function complaintsTab(g) {
   const m = g.mining;
   if (g.review_error) return el("div", { class: "callout" }, t("Review texts unavailable: {error}", { error: g.review_error }));
   if (!m || !m.n_negative) return el("div", { class: "callout" }, t("No English negative reviews to mine."));
-  return el("div", {},
-    el("div", { class: "callout" },
-      el("b", {}, t("Great idea, bad execution?")), info("idea_praise"), " ",
-      t("{pct} of {n} negative reviews still praise the idea or its potential.", { pct: pct(m.idea_praise_share), n: m.n_negative }) + " ",
-      t("{pct} of complaint mentions are fixable.", { pct: pct(m.fixability) })),
+  const big = m.categories.filter((c, i) => i < 3 || c.share >= 0.1);
+  const small = m.categories.slice(big.length);
+  const max = m.categories[0]?.share || 0;
+  return [
+    el("div", { class: "stats3" },
+      stat(t("Reviews read"), fmt(m.n_negative + m.n_positive)),
+      stat([t("Fixability"), info("fixability")], pct(m.fixability)),
+      stat([t("Idea praised"), info("idea_praise")], pct(m.idea_praise_share))),
     el("p", { class: "muted" },
-      t("Half most helpful, half newest reviews ({n} negative from the last 12 months); reviews written under 2 h of play count half.",
-        { n: m.n_recent_negative ?? 0 })),
-    m.categories.map((c) =>
-      el("details", { class: "complaint" },
-        el("summary", {},
-          bar(c.label, c.share),
-          c.trend ? el("div", { class: `trend ${c.trend_kind || "fading"}` }, c.trend) : null,
-          el("div", { class: c.fixable ? "pillar" : "pillar unfixable" }, (c.fixable ? t("A new game should: ") : "") + c.pillar)),
-        c.quotes.map((q) => el("blockquote", {}, `"${q}"`)),
-      ),
-    ),
-  );
+      t("{neg} negative, {pos} positive · half most helpful, half newest ({recent} negative from the last 12 months) · reviews written under 2 h of play count half",
+        { neg: fmt(m.n_negative), pos: fmt(m.n_positive), recent: m.n_recent_negative ?? 0 })),
+    big.map((c) => el("article", { class: "complaint" },
+      el("div", { class: "c-head" }, el("b", {}, c.label),
+        c.trend ? el("span", { class: `trend ${c.trend_kind || "fading"}` }, c.trend) : null,
+        el("span", { class: "val" }, pct(c.share))),
+      el("div", { class: "track thick" }, el("div", { class: "fill", style: `width:${Math.round((c.share / Math.max(max, 0.01)) * 100)}%` })),
+      el("span", { class: c.fixable ? "pillar" : "pillar unfixable" }, c.fixable ? t("A new game should: ") : "", el("b", {}, c.pillar)),
+      c.quotes[0] ? el("blockquote", {}, `“${c.quotes[0]}”`) : null,
+      c.quotes.length > 1 ? el("details", {}, el("summary", {}, t("{n} more quotes", { n: c.quotes.length - 1 })),
+        c.quotes.slice(1).map((q) => el("blockquote", {}, `“${q}”`))) : null)),
+    small.length ? el("div", { class: "minor" }, small.map((c) => el("div", {}, el("span", {}, c.label), el("span", {}, pct(c.share))))) : null,
+    el("div", { class: "idea-box" },
+      el("b", {}, t("Great idea, bad execution?"), info("idea_praise")),
+      el("span", {}, t("{pct} of {n} negative reviews still praise the idea or its potential.", { pct: pct(m.idea_praise_share), n: m.n_negative }))),
+  ];
 }
 
 // ---------- one game read by the local LLM: written on request, saved with the run ----------
-const SUMMARY_TAB = 4;
-
 function gameSummaryTab(g) {
   const s = g.summary;
+  const inRun = state.games.some((x) => x.game.appid === g.game.appid);
+  const busy = state.gameSummarizing === g.game.appid;
+  const writeButton = (label) => {
+    const b = el("button", { type: "button", class: "ghost", onclick: () => writeGameSummary(g) });
+    setButtonBusy(b, busy, busy ? t("Writing...") : label);
+    return b;
+  };
   if (!s) {
-    const inRun = state.games.some((x) => x.game.appid === g.game.appid);
     if (!inRun) return el("div", { class: "callout" }, t("A summary can be written for the games in the current ranking."));
-    const busy = state.gameSummarizing === g.game.appid;
-    const button = el("button", { type: "button", class: "ghost", onclick: () => writeGameSummary(g) });
-    setButtonBusy(button, busy, busy ? t("Writing...") : t("Write summary"));
     return el("div", { class: "opp-empty" },
       el("p", {}, t("Why players are unhappy, what a better game would do, and complaints no category covers. Written by the local model {model} (Ollama) in under a minute.",
         { model: state.result?.llm_model || "" })),
-      button);
+      writeButton(t("Write summary")));
   }
-  return el("div", { class: "game-summary" },
+  return el("div", { class: "tab-body game-summary" },
+    el("div", { class: "ai-bar" },
+      el("span", {}, t("{model} on your computer · saved with the run", { model: s.model })),
+      inRun ? writeButton(t("Rewrite")) : null),
+    s.why ? el("section", {}, el("h5", {}, t("Why players are unhappy")), el("p", { class: "why-text" }, s.why)) : null,
+    s.fix.length ? el("section", {}, el("h5", {}, t("What a better game would do")), el("ol", { class: "numbered" }, s.fix.map((f) => el("li", {}, f)))) : null,
+    el("section", {}, el("h5", {}, t("Other complaints · outside the categories")),
+      s.other.length
+        ? s.other.map((o) => el("div", { class: "other-card" }, el("b", {}, o.text), el("span", {}, `“${o.quote}”`)))
+        : el("p", { class: "muted" }, t("None found in the {n} negative reviews no category matched.", { n: s.n_uncovered }))),
     el("p", { class: "muted" }, t("Written by the local model {model}. It can be wrong: check it against the reviews.", { model: s.model })),
-    s.why ? el("p", { class: "opp-pitch" }, s.why) : null,
-    s.fix.length ? el("div", {}, el("h4", {}, t("A better game would")), el("ul", {}, s.fix.map((f) => el("li", {}, f)))) : null,
-    el("h4", {}, t("Complaints no category covers")),
-    s.other.length
-      ? s.other.map((o) => el("div", { class: "other-complaint" }, el("p", {}, o.text), el("blockquote", {}, `"${o.quote}"`)))
-      : el("p", { class: "muted" }, t("None found in the {n} negative reviews no category matched.", { n: s.n_uncovered })),
   );
 }
 
@@ -1561,7 +1693,7 @@ async function writeGameSummary(g) {
   if (state.gameSummarizing || state.summarizing) return stillRunning(t("A summary is being written."));
   const id = state.runId, appid = g.game.appid;
   state.gameSummarizing = appid;
-  if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, SUMMARY_TAB);
+  if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, TABS.summary, false);
   try {
     const res = await api(`/api/tag-runs/${id}/games/${appid}/summary`, { method: "POST" });
     if (!res.ok) throw await apiError(res);
@@ -1572,78 +1704,86 @@ async function writeGameSummary(g) {
     notifyError(err);
   } finally {
     state.gameSummarizing = null;
-    if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, SUMMARY_TAB);
+    if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, TABS.summary, false);
   }
-}
-
-function fantasyTab(g) {
-  const m = g.mining;
-  if (!m || !(m.core_phrases.length || m.liked.length)) return el("div", { class: "callout" }, t("No positive-review phrases found."));
-  const max = Math.max(1, ...m.core_phrases.map(([, n]) => n));
-  return el("div", {},
-    m.core_phrases.length ? el("p", { class: "muted" }, t("Common phrases in {n} positive reviews", { n: m.n_positive }), info("loved")) : null,
-    el("div", { class: "bars" }, m.core_phrases.map(([p, n]) => bar(p, n / max, String(n)))),
-    m.liked.length ? el("div", {}, el("p", { class: "muted" }, t("Players liked")),
-      el("div", { class: "chips" }, m.liked.map(([p]) => el("span", { class: "chip" }, p)))) : null,
-  );
 }
 
 const severity = (s) => ({ high: t("Serious"), warn: t("Caution"), info: t("Note") })[s] || s;
 
-function risksTab(g) {
-  if (!g.flags.length) return el("div", { class: "callout" }, t("No risk flags."));
-  return el("div", {}, g.flags.map((f) =>
-    el("div", { class: "risk" },
-      el("span", { class: `sev ${f.severity}` }, severity(f.severity)),
-      el("div", {}, el("b", { title: f.code }, f.label || f.code), el("div", {}, f.message)),
-    ),
-  ));
-}
-
-
 function historyTab(g) {
-  const POSITIVE = cssVar("--accent-2"), NEGATIVE = cssVar("--bad"); // read now: the theme may have changed
+  const POSITIVE = cssVar("--good"), NEGATIVE = cssVar("--bad-soft"); // read now: the theme may have changed
   const h = g.histogram || [];
-  if (!h.length) return el("div", { class: "callout" }, t("No review histogram available."));
-  const W = 600, H = 170, pad = 18;
-  const max = Math.max(1, ...h.map((p) => p.up + p.down));
-  const bw = (W - pad) / h.length;
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.setAttribute("preserveAspectRatio", "none");
-  const rect = (x, y, w, hgt, fill, title) => {
-    const r = document.createElementNS(NS, "rect");
-    Object.entries({ x, y, width: Math.max(0.5, w), height: Math.max(0, hgt), fill, rx: 1.5 }).forEach(([k, v]) => r.setAttribute(k, v));
-    const t = document.createElementNS(NS, "title");
-    t.textContent = title;
-    r.append(t);
-    svg.append(r);
-  };
-  h.forEach((p, i) => {
-    const month = new Date(p.date * 1000).toISOString().slice(0, 7);
-    const upH = ((H - pad) * p.up) / max, downH = ((H - pad) * p.down) / max;
-    const x = pad / 2 + i * bw + bw * 0.12, w = bw * 0.76;
-    const tip = t("{month}: {up} positive, {down} negative", { month, up: p.up, down: p.down });
-    rect(x, H - pad - upH, w, upH, POSITIVE, tip);
-    rect(x, H - pad - upH - downH, w, downH, NEGATIVE, tip);
-  });
-  const first = new Date(h[0].date * 1000).toISOString().slice(0, 7);
-  const last = new Date(h[h.length - 1].date * 1000).toISOString().slice(0, 7);
-  return el("div", { class: "hist" },
-    svg,
-    el("div", { class: "legend" },
-      el("span", {}, el("i", { style: `background:${POSITIVE}` }), t("Positive")),
-      el("span", {}, el("i", { style: `background:${NEGATIVE}` }), t("Negative")),
-      el("span", { style: "margin-left:auto" }, `${first} → ${last}`),
-    ),
-    el("p", { class: "muted" }, t("Monthly reviews. A tall spike after launch can mean a streamer effect (mostly blue) or a review bomb (mostly red).")),
-  );
+  const o = g.opportunity;
+  const out = [];
+  if (h.length) {
+    // positive reviews up from the middle line, negative ones down
+    const W = 400, H = 190, mid = 92, room = 84;
+    const max = Math.max(1, ...h.map((p) => Math.max(p.up, p.down)));
+    const bw = W / h.length;
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", t("Monthly positive and negative reviews"));
+    const add = (tag, attrs, text) => {
+      const n = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      if (text != null) n.textContent = text;
+      svg.append(n);
+      return n;
+    };
+    h.forEach((p, i) => {
+      const month = new Date(p.date * 1000).toISOString().slice(0, 7);
+      const tip = t("{month}: {up} positive, {down} negative", { month, up: p.up, down: p.down });
+      const x = i * bw + bw * 0.12, w = Math.max(0.5, bw * 0.76);
+      const up = (room * p.up) / max, down = (room * p.down) / max;
+      add("rect", { x, y: mid - up, width: w, height: up, fill: POSITIVE, rx: 1 }).append(Object.assign(document.createElementNS(NS, "title"), { textContent: tip }));
+      add("rect", { x, y: mid + 1, width: w, height: down, fill: NEGATIVE, rx: 1 }).append(Object.assign(document.createElementNS(NS, "title"), { textContent: tip }));
+    });
+    add("line", { class: "axis", x1: 0, x2: W, y1: mid + 0.5, y2: mid + 0.5, "stroke-width": 1 });
+    const first = new Date(h[0].date * 1000).toISOString().slice(0, 7);
+    const last = new Date(h[h.length - 1].date * 1000).toISOString().slice(0, 7);
+    out.push(el("section", { class: "hist" },
+      el("div", { class: "hist-head" }, el("h5", {}, t("Reviews per month")), el("span", {}, `${first} → ${last}`)),
+      svg,
+      el("div", { class: "legend" },
+        el("span", {}, el("i", { style: `background:${POSITIVE}` }), t("Positive")),
+        el("span", {}, el("i", { style: `background:${NEGATIVE}` }), t("Negative"))),
+      el("p", { class: "muted" }, t("A tall spike after launch can be a sale, an update or a streamer (mostly positive) or a review bomb (mostly negative)."))));
+  } else {
+    out.push(el("div", { class: "callout" }, t("No review histogram available.")));
+  }
+  if (g.recent_share != null) {
+    const diff = g.recent_rating == null ? null : Math.round(g.recent_rating - o.effective_rating);
+    out.push(el("div", { class: "facts" },
+      stat([t("Last 12 months"), info("recent")], t("{n} reviews", { n: fmt(g.recent_reviews) }), t("{pct} of all time", { pct: pct(g.recent_share) })),
+      stat(t("Recent rating"), g.recent_rating == null ? "-" : [percent(g.recent_rating), diff ? el("span", { class: `delta ${diff > 0 ? "up" : "down"}` },
+        diff > 0 ? t("▲ {n} pts", { n: diff }) : t("▼ {n} pts", { n: -diff })) : null],
+      t("vs {pct} all time", { pct: percent(o.effective_rating) }))));
+  }
+  // Every check, passed or not; flags that aren't checks (e.g. the rating without spikes) come first.
+  const codes = new Set((g.checks || []).map((c) => c.code));
+  const notes = g.flags.filter((f) => !codes.has(f.code));
+  out.push(el("section", {},
+    el("h5", {}, t("All risk checks"), info("risk_penalty")),
+    el("div", { class: "checks" },
+      notes.map((f) => el("div", { class: `check-row flagged ${f.severity}` },
+        el("span", { class: "mark", "aria-hidden": "true" }), el("span", { class: "name" }, f.label || f.code),
+        el("span", { class: "sev" }, severity(f.severity)), el("span", { class: "detail" }, f.message))),
+      (g.checks || []).map((c) => c.flagged
+        ? el("div", { class: `check-row flagged ${c.severity}` },
+          el("span", { class: "mark", "aria-hidden": "true" }), el("span", { class: "name" }, c.label),
+          el("span", { class: "sev" }, severity(c.severity) + (c.points ? ` · −${c.points}` : "")), el("span", { class: "detail" }, c.detail))
+        : el("div", { class: "check-row" },
+          el("span", { class: "mark", "aria-label": t("passed") }, "✓"), el("span", { class: "name" }, c.label),
+          el("span", { class: "detail" }, c.detail))))));
+  return out;
 }
 
-// ---------- EN | TR ----------
-// Switching redraws everything in place: static text, labels made in JS, and the current result and
-// game fetched again, so the server's text (notices are not re-shown) comes in the new language too.
+// ---------- language and theme (two switches in the top bar) ----------
+// Switching the language redraws everything in place: static text, labels made in JS, and the current
+// result and game fetched again, so the server's text (notices are not re-shown) comes in the new language too.
 async function setLanguage(value) {
   setLang(value);
   for (const b of document.querySelectorAll("#lang button")) b.setAttribute("aria-pressed", String(b.dataset.lang === getLang()));
@@ -1655,13 +1795,14 @@ async function setLanguage(value) {
   renderChips();
   if (!tagPop.hidden) openTagList();
   refreshList();
+  filtersSummary();
   setSearching(state.searching);
-  setAnalyzing(state.analyzing);
   marketsText();
   marketsButton();
   if (markets.result) renderMarkets();
   loadShortlist(); // complaint names come in the new language
-  $("#table-title").textContent = tableTitles[tableView]();
+  renderTitle();
+  if (state.games.length) renderTable();
   try {
     if (state.runId && state.result) {
       const res = await api(`/api/tag-runs/${state.runId}`);
@@ -1671,14 +1812,13 @@ async function setLanguage(value) {
       }
     }
     const shown = state.panelGame;
-    if (shown && !state.games.some((x) => x.game.appid === shown.game.appid)) renderPanel(await fetchGame(shown.game.appid));
+    if (shown && !state.games.some((x) => x.game.appid === shown.game.appid)) renderPanel(await fetchGame(shown.game.appid), panelTab(), false);
   } catch { /* the old language stays until the next search */ }
 }
 document.querySelectorAll("#lang button").forEach((b) => b.addEventListener("click", () => setLanguage(b.dataset.lang)));
 
-// ---------- dark | light ----------
 // The theme is set before the first paint by the script in index.html; this keeps the switch in sync,
-// remembers the choice and redraws what holds colors outside CSS (the 3D scene, the History chart).
+// remembers the choice and redraws what holds colors outside CSS (the 3D scene, the ring, the History chart).
 function setTheme(theme) {
   theme = theme === "light" ? "light" : "dark";
   document.documentElement.dataset.theme = theme;
@@ -1686,8 +1826,7 @@ function setTheme(theme) {
   try { localStorage.setItem("theme", theme); } catch { /* storage blocked: not remembered */ }
   map3d?.recolor();
   map2d.relabel(); // redraws
-  const active = document.querySelector("#panel .tabs button.active");
-  if (state.panelGame && active) renderPanel(state.panelGame, [...active.parentNode.children].indexOf(active));
+  if (state.panelGame) renderPanel(state.panelGame, panelTab(), false);
 }
 document.querySelectorAll("#theme button").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.theme)));
 for (const b of document.querySelectorAll("#theme button")) {

@@ -142,3 +142,43 @@ def test_verdict_fails_on_a_weak_effect_or_none():
 def test_verdict_without_enough_rows():
     assert bt.verdict(synthetic_rows(lambda i: i, n=2)) == ("not enough data", [])
     assert "## Verdict: the signal not enough data" in bt.render(synthetic_rows(lambda i: i, n=2), [])
+
+
+def test_past_entrants_finished_their_outcome_window_by_t():
+    t = M("2020-01")
+    games = [(game(1), hist(("2016-06", 600, 0))),  # released 43 months before T: known at T
+             (game(2), hist(("2018-06", 600, 0)))]  # 19 months before: its outcome runs past T
+    row = bt.tag_row("X", games, t)
+    assert (row.past.entrants, row.past.hits) == (1, 1)
+    assert (row.before.entrants, row.before.hits) == (1, 1)
+
+
+def test_a_candidate_must_hold_on_the_check_cutoffs():
+    def rows(hits_for, cutoffs=("2019-01", "2020-01", "2021-01", "2022-01")):
+        out = []
+        for t in cutoffs:
+            for r in synthetic_rows(hits_for):
+                r.t = M(t)
+                r.market = r.market.model_copy(update={"n_underserved": int(r.tag[1:])})
+                out.append(r)
+        return out
+    measure = bt.CANDIDATES["underserved games"]
+    recent = rows(lambda i: 5 + i, bt.RECENT_CUTOFFS)
+    assert bt.candidate("underserved games", measure, rows(lambda i: 5 + i), recent).passed
+    assert not bt.candidate("underserved games", measure, rows(lambda i: 5 + i)).passed  # no recent rows
+    assert not bt.candidate("underserved games", measure, rows(lambda i: 5 + i),
+                            rows(lambda i: 30 - i, bt.RECENT_CUTOFFS)).passed  # reversed lately
+    assert not bt.candidate("underserved games", measure, rows(lambda i: 40 + i // 4), recent).passed  # too small
+    flat = bt.candidate("underserved games", measure, rows(lambda i: 20), recent)
+    assert not flat.passed and flat.check[0] != flat.check[0]  # no variation: NaN
+    text = bt.render(rows(lambda i: 5 + i), [], recent)
+    assert "| underserved games |" in text and "## Recent check (2023-01, 2024-01" in text
+
+
+def test_recent_rows_use_12_month_windows():
+    t = M("2023-01")
+    games = [(game(1), hist(("2023-06", 300, 0), ("2024-03", 300, 0))),  # 600 in its first 12 months
+             (game(2), hist(("2023-06", 300, 0), ("2024-09", 300, 0))),  # only 300 within 12 months
+             (game(3), hist(("2024-02", 600, 0)))]  # released 13 months after T: not an entrant
+    row = bt.tag_row("X", games, t, 12, 12)
+    assert (row.after.entrants, row.after.hits) == (2, 1)

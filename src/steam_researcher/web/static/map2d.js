@@ -1,10 +1,12 @@
-// 2D opportunity map (SVG): x = demand, y = dissatisfaction, size = estimated revenue (log),
-// color = opportunity score. Same interface as map3d.js; needs no CDN, so it always works.
-import { scoreColor } from "/static/palette.js";
-import { fmt, pct, percent, t } from "/static/i18n.js";
+// 2D opportunity map (SVG): x = demand (reviews, log scale), y = dissatisfaction (% positive, lower is
+// higher up), size = estimated revenue (log), color = opportunity score. Same interface as map3d.js;
+// needs no CDN, so it always works.
+import { mapColor } from "/static/palette.js";
+import { percent, t } from "/static/i18n.js";
 
 const NS = "http://www.w3.org/2000/svg";
-const PAD = { l: 58, r: 28, t: 26, b: 46 };
+const PAD = { l: 64, r: 28, t: 26, b: 58 };
+const NAMED = 5; // the best games get their name written next to the bubble
 
 function svg(tag, attrs = {}, text = null) {
   const node = document.createElementNS(NS, tag);
@@ -13,7 +15,12 @@ function svg(tag, attrs = {}, text = null) {
   return node;
 }
 
-export function createMap2d(container, { onSelect, describe }) {
+// 1200 -> "1.2K", 15000 -> "15K"
+const reviewsText = (n) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : `${Math.round(n)}`);
+
+// describe(g): the hover card's content (a DOM node). axes(): the result's axes in reviews and % positive
+// ({demand_log: [lo, hi], rating: [at 0, at 1]}), so the ticks read as the table does.
+export function createMap2d(container, { onSelect, describe, axes }) {
   const tooltip = container.querySelector("#tooltip");
   const root = svg("svg", { class: "map2d", role: "img", "aria-label": t("Opportunity map, 2D") });
   container.prepend(root);
@@ -35,22 +42,29 @@ export function createMap2d(container, { onSelect, describe }) {
   const x = (v) => PAD.l + scale(dx, v) * (w - PAD.l - PAD.r);
   const y = (v) => h - PAD.b - scale(dy, v) * (h - PAD.t - PAD.b);
 
+  // Tick labels in the units people know: reviews for demand, % positive for dissatisfaction.
+  function xTick(v) {
+    const a = axes?.();
+    if (!a) return percent(v * 100);
+    const [lo, hi] = a.demand_log;
+    return reviewsText(10 ** (lo + v * (hi - lo)));
+  }
+  function yTick(v) {
+    const a = axes?.();
+    if (!a) return percent(v * 100);
+    const [at0, at1] = a.rating;
+    return percent(at0 + v * (at1 - at0));
+  }
+
   function showTooltip(e, g) {
-    const o = g.opportunity, box = container.getBoundingClientRect();
-    tooltip.replaceChildren(
-      Object.assign(document.createElement("b"), { textContent: g.game.name }),
-      Object.assign(document.createElement("span"), {
-        textContent: describe ? describe(g) : t("Score {score} · {n} reviews · {pct} pos", { score: Math.round(o.score), n: fmt(g.reviews), pct: percent(g.rating) }),
-      }),
-      Object.assign(document.createElement("span"), {
-        textContent: t("demand {demand} · dissatisfaction {dissatisfaction} · fixability {fixability}",
-          { demand: pct(o.demand), dissatisfaction: pct(o.dissatisfaction), fixability: pct(o.fixability) })
-          + (o.penalty ? t(" · -{points} risks", { points: Math.round(o.penalty) }) : ""),
-      }),
-    );
-    tooltip.style.left = `${e.clientX - box.left}px`;
-    tooltip.style.top = `${e.clientY - box.top}px`;
+    const box = container.getBoundingClientRect();
+    tooltip.replaceChildren(describe(g));
     tooltip.hidden = false;
+    // keep the card inside the map: flip it to the left of / above the pointer near the edges
+    const left = e.clientX - box.left, top = e.clientY - box.top;
+    const flipX = left + 16 + tooltip.offsetWidth > box.width, flipY = top + 16 + tooltip.offsetHeight > box.height;
+    tooltip.style.left = `${flipX ? left - tooltip.offsetWidth - 32 : left}px`;
+    tooltip.style.top = `${flipY ? top - tooltip.offsetHeight - 32 : top}px`;
   }
 
   function draw() {
@@ -59,22 +73,26 @@ export function createMap2d(container, { onSelect, describe }) {
     if (w < 120 || h < 120) return;
 
     const [x0, x1] = dx, [y0, y1] = dy;
+    // The corner the method looks for: lots of demand, unhappy players.
+    const zx = x(x0 + (x1 - x0) * 0.5), zy = y(y1);
+    root.append(
+      svg("rect", { class: "zone", x: zx, y: zy, width: x(x1) - zx, height: y(y0 + (y1 - y0) * 0.5) - zy, rx: 10 }),
+      svg("text", { class: "zone-label", x: x(x1) - 12, y: zy + 22, "text-anchor": "end" }, t("PROVEN DEMAND · POOR EXECUTION")),
+    );
     for (let i = 0; i <= 4; i++) {
       const vx = x0 + (i / 4) * (x1 - x0), vy = y0 + (i / 4) * (y1 - y0);
       root.append(
-        svg("line", { class: "grid", x1: x(x0), x2: x(x1), y1: y(vy), y2: y(vy) }),
-        svg("line", { class: "grid", x1: x(vx), x2: x(vx), y1: y(y0), y2: y(y1) }),
-        svg("text", { class: "tick", x: x(x0) - 8, y: y(vy) + 4, "text-anchor": "end" }, pct(vy)),
-        svg("text", { class: "tick", x: x(vx), y: y(y0) + 17, "text-anchor": "middle" }, pct(vx)),
+        svg("line", { class: i ? "grid" : "axis", x1: x(x0), x2: x(x1), y1: y(vy), y2: y(vy) }),
+        svg("line", { class: i ? "grid" : "axis", x1: x(vx), x2: x(vx), y1: y(y0), y2: y(y1) }),
+        svg("text", { class: "tick", x: x(x0) - 10, y: y(vy) + 4, "text-anchor": "end" }, yTick(vy)),
+        svg("text", { class: "tick", x: x(vx), y: y(y0) + 20, "text-anchor": "middle" }, xTick(vx)),
       );
     }
+    const midY = (y(y0) + y(y1)) / 2;
     root.append(
-      svg("line", { class: "axis demand", x1: x(x0), x2: x(x1), y1: y(y0), y2: y(y0) }),
-      svg("line", { class: "axis dissatisfaction", x1: x(x0), x2: x(x0), y1: y(y0), y2: y(y1) }),
-      svg("text", { class: "axis-label", x: x(x1), y: h - 8, "text-anchor": "end" }, t("Demand →")),
-      svg("text", { class: "axis-label", x: 16, y: y(y1), "text-anchor": "end", transform: `rotate(-90 16 ${y(y1)})` },
-        t("Dissatisfaction →")),
-      svg("text", { class: "hint", x: x(x1) - 8, y: y(y1) + 16, "text-anchor": "end" }, t("Best opportunities ↗")),
+      svg("text", { class: "axis-label", x: (x(x0) + x(x1)) / 2, y: h - 10, "text-anchor": "middle" }, t("Demand → reviews (log scale)")),
+      svg("text", { class: "axis-label", x: 16, y: midY, "text-anchor": "middle", transform: `rotate(-90 16 ${midY})` },
+        t("Dissatisfaction ↑ % positive")),
     );
 
     // Bubble size by revenue, relative within this result (like the 3D spheres).
@@ -84,28 +102,27 @@ export function createMap2d(container, { onSelect, describe }) {
     const lo = Math.min(...priced), hi = Math.max(...priced);
     const unit = Math.min(w, h) / 100;
     const size = (i) => (games[i].price > 0 ? (hi > lo ? (grosses[i] - lo) / (hi - lo) : 0.5) : 0);
-    const items = games.map((g, i) => ({ g, r: (2.4 + 4.6 * size(i)) * unit }));
+    const items = games.map((g, i) => ({ g, r: (1.6 + 3.6 * size(i)) * unit }));
+    const best = new Set([...games].sort((a, b) => b.opportunity.score - a.opportunity.score).slice(0, NAMED).map((g) => g.game.appid));
     items.sort((a, b) => b.r - a.r); // big ones first, so small ones stay clickable on top
 
-    let pick = null;
+    const names = [];
     for (const { g, r } of items) {
       const o = g.opportunity, appid = g.game.appid;
-      const dot = svg("circle", { class: "bubble", cx: x(o.demand), cy: y(o.dissatisfaction), r, fill: scoreColor(o.score) });
+      const cx = x(o.demand), cy = y(o.dissatisfaction);
+      const dot = svg("circle", { class: "bubble", cx, cy, r, fill: mapColor(o.score) });
       dot.addEventListener("pointermove", (e) => showTooltip(e, g));
       dot.addEventListener("pointerleave", () => (tooltip.hidden = true));
       dot.addEventListener("click", () => { select(appid); onSelect(appid); });
       root.append(dot);
-      if (appid === selected) pick = { g, r };
+      if (appid === selected) root.append(svg("circle", { class: "ring", cx, cy, r: r + 5 }));
+      if (appid === selected || best.has(appid)) {
+        const right = cx < w - 180; // names go right of the bubble, or left near the right edge
+        names.push(svg("text", { class: appid === selected ? "bubble-name picked" : "bubble-name",
+          x: right ? cx + r + 6 : cx - r - 6, y: cy + 4, "text-anchor": right ? "start" : "end" }, g.game.name));
+      }
     }
-    if (pick) {
-      const cx = x(pick.g.opportunity.demand), cy = y(pick.g.opportunity.dissatisfaction);
-      const below = cy - pick.r - 12 < PAD.t; // no room above: put the name below
-      root.append(
-        svg("circle", { class: "ring", cx, cy, r: pick.r + 5 }),
-        svg("text", { class: "bubble-name", x: cx, y: below ? cy + pick.r + 22 : cy - pick.r - 12,
-          "text-anchor": cx > w - 160 ? "end" : cx < 160 ? "start" : "middle" }, pick.g.game.name),
-      );
-    }
+    root.append(...names); // on top of every bubble
   }
 
   function setGames(list) {

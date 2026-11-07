@@ -12,7 +12,7 @@ Based on CodeMonkey's Underserved Audience method: look for genres where players
 - **Compares markets:** ranks every Steam tag by how many of its popular games players rate poorly, against how many already serve them well.
 - **Estimates sales and revenue** with the Box Method (reviews × 30–100).
 - **Uses Steam's own review numbers** for analyzed games (the store page's "All Reviews"). Reviews from review-bomb periods count toward demand but not toward % positive.
-- **Flags misleading numbers:** review bombs, streamer spikes, deep discounts, very cheap prices, online multiplayer, niche audiences and AAA expectations. It also flags fading demand (few reviews lately) and games that are already improving (rated much better in the last 12 months).
+- **Flags misleading numbers:** review bombs, sudden review spikes (a sale, an update, a streamer), deep discounts, very cheap prices, online multiplayer, niche audiences and AAA expectations. It also flags fading demand (few reviews lately) and games that are already improving (rated much better in the last 12 months).
 - **Mines reviews:** what players complain about (bugs, controls, UI, content, performance, abandonment, ...), whether each complaint is still common lately, real quotes and a design pillar for each, plus what players love about the game. It reads both the most helpful and the newest reviews.
 - **Ranks games** by an opportunity score. Hover a score to see exactly how it was calculated.
 - **Remembers runs:** every search is saved, and a rerun shows which scores went up or down. Export a Markdown report or CSV.
@@ -61,25 +61,24 @@ uv run pytest -q
 - Installed with the one command: use the **Steam Researcher** desktop shortcut (Windows), or type `steam-researcher`.
 - From the source code: double-click **`Steam Researcher.bat`** (Windows), or run `uv run sr ui` in the project folder.
 
-The page has three parts: the **sidebar** on the left (search, filters, one game, views), the **main area** in the middle (ranking, map, markets or shortlist), and the **details panel** that opens on the right when you pick a game. On a narrow window they stack, and the details panel fills the screen.
+The page has a **top bar** (the Games | Markets | Shortlist views, the search box, How it works, and the language and theme switches), the **main area** (ranking, map, markets or shortlist), and the **details panel** that opens on the right when you pick a game. On a narrow window the details panel fills the screen.
 
-In the sidebar, click the tag field and tick one or more Steam tags (up to 5; typing only filters the list). Games must have all the ticked tags. Adjust the **Filters** if you like (or pick a preset: Default, Proven demand, Quick look; the section folds away with its arrow), and press **Find opportunities**. The page remembers your tags and filters for next time. The first run of a tag takes about 30 seconds; you can cancel it at any time.
+Click the search box at the top and tick one or more Steam tags (up to 5; typing only filters the list). Games must have all the ticked tags. The button under the title shows the current **filters**; click it to change them (or pick a preset: Default, Proven demand, Quick look). Press **Search**. The page remembers your tags and filters for next time. While a search runs, each game appears as it is checked and scored; the first run of a tag takes about 30 seconds, and you can cancel it at any time.
 
-- **Table | Map:** the switch above the results shows the ranking as a table or as the opportunity map, each at full size. The page remembers your choice.
-- **Opportunity map (2D | 3D):** each bubble is a game. Left–right is demand and height is dissatisfaction; in 3D, depth is fixability. Size is estimated revenue and color is the score (blue = low, gold = high). Click a bubble to inspect it. In 3D, drag to orbit and scroll to zoom.
-- **Market strip:** how many games in the tag have demand, how many are underserved and how many are well served (85%+ positive), with a short verdict.
-- **Opportunity summary (optional):** under the market strip, press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-summaries).
-- **Details panel:** opens on the right when you click a row or a bubble, and closes with × or Esc. It shows the score breakdown, review numbers and their source, the game's tags (click one to search that tag), the last 12 months of reviews, revenue estimate, what players complain about (with quotes, trends and design pillars), what players love, risk checks and a monthly review chart. Its **Summary** tab (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the complaint categories (e.g. price, cheaters), each with a quote from a review. It is saved with the run and added to the report.
+- **List | Map:** the switch above the results shows the ranking as a list or as the opportunity map. The page remembers your choice.
+- **Opportunity map (2D | 3D):** each bubble is a game. Left–right is demand (reviews) and height is dissatisfaction (% positive); in 3D, depth is fixability. Size is estimated revenue and color is the score (violet = high). The top right corner is the one the method looks for: proven demand, poor execution. Click a bubble to inspect it. In 3D, drag to orbit and scroll to zoom.
+- **Market sentence:** under the title, how many of the tag's games with demand leave players disappointed, how many please them (85%+ positive), and the unmet share.
+- **AI summary (optional):** the AI button under the title opens the summary; press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-summaries).
+- **Ranking:** rank, game, score, biggest complaint and estimated revenue; a ⚠ −N badge marks games that lost points to risks. The first 8 show; **Show N more** lists the rest. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV** above the list.
+- **Details panel:** opens on the right when you click a row or a bubble, and closes with × or Esc. **Overview** has the score with a one-line why, the rating, reviews, last 12 months and estimated revenue, the top complaints with a quote, the risks that cost points, what players love and the game's tags (click one to search that tag). **Complaints** has every complaint category with trends, design pillars and quotes. **Summary** (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the categories (e.g. price, cheaters), each with a quote. **History** has the monthly review chart and every risk check, passed or not.
 - **What a term means:** every project-specific word (Fixability, Unmet share, Est. revenue, ...) has a small **i** next to it; hover or tap it for a one- or two-sentence explanation. **How it works** lists them all, plus every risk.
 - **Score card:** hover or focus any score to see its three parts, their weights, each risk penalty and why.
-- **Ranking table:** click a column header to sort and a row to select a game. Find a game by name or tick **Hide games with risk penalties**; the map follows. The **Risks** column lists the risks that cost each game points, with the points. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV**.
-- **Markets:** pick **Markets** under *Views* in the sidebar and press **Build market ranking** to rank every tag (about 7 minutes the first time, then from the cache). Click a tag to search it.
-- **Shortlist:** star (☆) a game in the ranking or the panel to keep it. Pick **Shortlist** under *Views* to see the starred games with the score they had when you starred them, add a note to each, or download the list as CSV. It stays after a restart and a cache clear.
-- **Past runs:** reopen any earlier search or market ranking, even after a restart.
-- **One game:** paste an AppID or a Steam store link into the *One game* box in the sidebar; the game opens in the details panel.
-- **How it works:** the green **How it works** button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
-- **Language:** the **EN | TR** switch at the top right changes the whole interface, including messages and the score card.
-- **Dark | light theme:** the ☾ | ☀ switch right of EN | TR. The page follows your system setting until you pick one, then remembers it.
+- **Markets:** pick **Markets** in the top bar and press **Build market ranking** to rank every tag (about 7 minutes the first time, then from the cache). Find a tag by name, or show the small ones too. Click a tag to search it.
+- **Shortlist:** press **Shortlist** in the details panel to keep a game. The **Shortlist** view shows the starred games with the score they had when you starred them; add a note to each, or download the list as CSV. It stays after a restart and a cache clear.
+- **Past searches:** click the empty search box to reopen any earlier search or market ranking, even after a restart.
+- **One game:** paste an AppID or a Steam store link into the search box and press Enter; the game opens in the details panel.
+- **How it works:** the button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
+- **Language and theme:** **EN | TR** at the top right switches between English and Turkish (the whole interface, including messages and the score card); the moon | sun switch next to it picks the dark or light theme. The page follows your system theme until you pick one, then remembers it.
 
 **Command line.** The examples are written for the source code. If you installed with the one command, leave out `uv run`: type `sr report --tag "Job Simulator"`.
 
@@ -91,7 +90,7 @@ uv run sr analyze 1330660 --summary                # plus the game summary (need
 uv run sr report --tag "Job Simulator"             # rank a tag, writes reports/job-simulator.md
 uv run sr markets --top 30                         # rank every tag by underserved games
 uv run sr report --tag "Job Simulator" --summary   # plus the opportunity summary (needs Ollama)
-uv run sr runs                                     # saved runs (also in the web UI's Past runs)
+uv run sr runs                                     # saved runs (also in the web UI's past searches)
 uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report
 ```
 
@@ -190,3 +189,4 @@ So read the Markets view, the market strip and the unmet share as a **filter for
 - **Review mining is keyword-based and English-only.** On hand-labeled reviews from games it was never tuned on, it finds 64% of complaints, and 80% of what it reports is right. Read the quotes, not just the percentages.
 - **No price history:** only the current price is checked for deep discounts.
 - **SteamSpy tag lists may be incomplete**, and search results use SteamSpy's review counts until a game is analyzed.
+
