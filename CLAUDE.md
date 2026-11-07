@@ -204,6 +204,7 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 - **Tuning on it:** use only the 2019-01 and 2020-01 cutoffs. Adopt a change only if it also wins on 2021-01 and 2022-01.
 - **Cost:** histograms are cached 30 days (`HIST_TTL`). `--all --dry-run` counts the fetches.
 - **Biases** (listed in the report): survivorship, today's tags, review bombs counted in the histogram, and games with < 10 reviews left out.
+- **Result (full run, Nov 7 2026; 32k histograms, 676 usable rows, 180 tags): the signal does not hold.** Gap vs hit rate rho -0.04 (-0.17 to +0.09), -0.06 with market size held fixed; top fifth's hit rate 10.7% vs bottom 11.6%. Not one of the criteria, but clear: gap vs sold rate +0.19 (+0.05 to +0.31), sold rate rising by fifth 14% -> 21%; market size vs hit rate +0.28. So a high unmet share means players keep buying, not that a new game gets rated well. As agreed, the app presents it as a filter for exploring: the help dialog's "Markets and the unmet share" section and the `unmet_share` ⓘ say so. It tests the tag-level share only, not the per-game score or the miner.
 
 ## Box Method check (Nov 2026)
 

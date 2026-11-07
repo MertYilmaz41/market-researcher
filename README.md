@@ -164,7 +164,27 @@ SteamSpy / Steam APIs ──► HttpClient (rate limit, retry, SQLite cache)
 
 SteamDB isn't used because it has no public API.
 
+## Is the method proven? A tool for exploring, not a forecast
+
+The method assumes that where many players are unhappy, a better game will do well. The tool was tested against history to see if that holds at the market level (`uv run python -m steam_researcher.backtest --all`, report in `reports/backtest.md`):
+
+- **How:** for 180 Steam tags, each tag's unmet share (underserved games / (underserved + well-served games)) was rebuilt as it was in January 2019, 2020, 2021 and 2022 from monthly review histories (32,000 games). Then the games released in the next 24 months were followed. A *hit* is a new game with 500+ reviews at 80%+ positive in its first two years; *sold* is 500+ reviews at any rating.
+- **The rule, fixed before the results were seen:** the unmet share counts as a predictor only if tags with a higher share had more hits, beyond chance, also with market size held fixed, and the top fifth's hit rate was at least 1.25× the bottom fifth's.
+- **Result: none of these held.**
+
+  | Tags by unmet share (fifths) | Lowest | 2 | 3 | 4 | Highest |
+  |---|---|---|---|---|---|
+  | Hit rate (500+ reviews, 80%+ positive) | 11.6% | 11.2% | 11.0% | 11.0% | 10.7% |
+  | Sold rate (500+ reviews) | 14.4% | 16.0% | 17.4% | 18.1% | 20.5% |
+
+  The correlation of unmet share with the hit rate was −0.04 (95% interval −0.17 to +0.09): no link either way. With the sold rate it was +0.19 (+0.05 to +0.31).
+- **What it means:** where the unmet share is high, players keep buying new games of that kind, so the demand is real. But the new games disappointed them about as often as the old ones; few of them were rated well. A high unmet share tells you where to look, not that a new game there will succeed. Making the better game is still on you.
+
+So read the Markets view, the market strip and the unmet share as a **filter for exploring**: they narrow thousands of tags down to the ones worth a closer look. Then read the complaints and quotes of the games themselves. The backtest tests the tag-level share only; the per-game score and the complaint mining were not tested against later success. It also has known biases (games removed from Steam are missing, tags are today's), listed in the report.
+
 ## Limitations
+
+- **The unmet share is not a proven predictor:** see [above](#is-the-method-proven-a-tool-for-exploring-not-a-forecast).
 
 - **Revenue is a rough estimate:** full price, before Steam's cut, discounts and regional pricing.
 - **Review mining is keyword-based and English-only.** On hand-labeled reviews from games it was never tuned on, it finds 64% of complaints, and 80% of what it reports is right. Read the quotes, not just the percentages.

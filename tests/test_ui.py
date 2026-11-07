@@ -399,8 +399,8 @@ def test_ui_help_dialog(base_url, browser):
     page.goto(base_url)
     page.wait_for_selector(".tag-chip")  # app.js is running
     page.click("#help-toggle")
-    assert page.is_visible("#help") and page.locator("#help section").count() == 9
-    assert "80%" in page.inner_text("#help")
+    assert page.is_visible("#help") and page.locator("#help section").count() == 10
+    assert "80%" in page.inner_text("#help") and "not shown to predict success" in page.inner_text("#help")
     glossary = page.inner_text("#help-terms")
     assert "Fixability" in glossary and "Unmet share" in glossary and "Fading demand" in page.inner_text("#help-risks")
     page.keyboard.press("Escape")

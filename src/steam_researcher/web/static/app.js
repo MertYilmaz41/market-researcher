@@ -1336,7 +1336,7 @@ function terms() {
     with_demand: [t("With demand"), t("Games with at least the minimum number of reviews set in the Filters.")],
     underserved: [t("Underserved"), t("Games with demand whose % positive is inside the range set in the Filters: many players, let down.")],
     well_served: [t("Well served"), t("Games with demand that players rate {pct} positive or more: these players already have a good game.", { pct: percent(state.result?.well_served ?? 85) })],
-    unmet_share: [t("Unmet share"), t("Of the games with demand that are clearly rated, the share that are underserved: underserved / (underserved + well served). Higher means players have fewer good games to choose from.")],
+    unmet_share: [t("Unmet share"), t("Of the games with demand that are clearly rated, the share that are underserved: underserved / (underserved + well served). Higher means players have fewer good games to choose from. A filter for exploring, not a forecast: in a backtest, new games in high-share tags sold more often, but were not rated well more often.")],
     min_reviews: [t("Minimum reviews"), t("How proven the demand must be: a game needs at least this many reviews to be considered.")],
     pct_range: [t("% positive range"), t("Which games count as letting players down. 5-70% leaves out games that are simply broken (under 5%) and games players already like (over 70%).")],
     reviews_read: [t("Reviews read per game"), t("How many reviews are read to find the complaints, half the most helpful and half the newest. More is slower but more reliable.")],
