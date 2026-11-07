@@ -132,3 +132,13 @@ def test_price_and_cheater_complaints():
     assert got["price"] == 1 and got["cheaters"] == 1
     # a single-player cheat menu, or a complaint about anti-cheat software, is not about cheaters
     assert "cheaters" not in codes(mine([rev("Added kernel-level anti-cheat and the cheat menu is gone.")], []))
+
+
+def test_price_and_cheaters_are_scored_only_on_schema_2_rows():
+    from market_researcher.mining import evaluate as ev
+    rows = [{"text": "Not worth the money.", "labels": []},  # labeled before price was a category
+            {"text": "Not worth the money.", "labels": ["price"], "schema": 2},
+            {"text": "Full of cheaters.", "labels": [], "schema": 2}]
+    scores, _ = ev.evaluate(rows)
+    assert (scores["price"].tp, scores["price"].fp) == (1, 0)
+    assert scores["cheaters"].fp == 1

@@ -30,6 +30,8 @@ CATEGORIES = [  # code, Turkish name, hint (see LABELING.md)
     ("performance", "Kötü performans", "düşük FPS, takılma, uzun yükleme, optimizasyon"),
     ("abandoned", "Geliştirici bıraktı", "güncelleme yok, vaat tutulmadı, yıllardır bitmemiş, vaat edilen tür ya da özellik yok"),
     ("realism", "Gerçekçi simülasyon değil", "arcade gibi, gerçek hayata uymuyor"),
+    ("price", "Fiyatına değmez / parayla kazanma", "pahalı, bu fiyata değmez, pay-to-win, mikro ödemeler"),
+    ("cheaters", "Hileciler / hackerlar", "çok oyunculuda hileci, aimbot, wallhack"),
     ("scope_unrealistic", "AAA beklentisi", "indie'den GTA ölçeği bekliyor"),
 ]
 CODES = [c for c, _n, _h in CATEGORIES]
@@ -90,7 +92,7 @@ def make_app(items: list[dict], out: Path) -> FastAPI:
         labels = [] if a.unsure else [c for c in CODES if c in a.labels]
         row = {"id": a.id, "appid": r["appid"], "playtime_minutes": r.get("playtime_minutes"), "text": r["text"],
                "labels": labels, "idea_praise": a.idea_praise and not a.unsure, "unsure": a.unsure,
-               "labeler": "user"}
+               "labeler": "user", "schema": 2}  # schema 2: price and cheaters are labeled too (LABELING.md rule 4)
         with lock:
             answers[a.id] = row
             out.write_text("".join(json.dumps(answers[str(x["id"])], ensure_ascii=False) + "\n"

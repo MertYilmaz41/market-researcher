@@ -24,7 +24,7 @@ FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 FIXTURE = FIXTURES / "labeled_reviews.jsonl"
 HOLDOUT = FIXTURES / "labeled_reviews_holdout.jsonl"
 IDEA = "idea_praise"
-UNLABELED = {"price", "cheaters"}  # categories the label sets don't mark (LABELING.md rule 4): not scored
+UNLABELED = {"price", "cheaters"}  # only rows with "schema": 2 mark these (LABELING.md rule 4); scored only there
 LABELED = [c.code for c in CATEGORIES if c.code not in UNLABELED]
 
 
@@ -61,12 +61,14 @@ def detect(text: str) -> set[str]:
 def evaluate(labeled: list[dict], detections: list[set[str]] | None = None) -> tuple[dict[str, Score], Score]:
     """Per-category scores (plus IDEA), and the micro total over the complaint categories.
     detections: what another miner found in each review (default: the keyword miner)."""
-    codes = LABELED + [IDEA]
+    codes = LABELED + sorted(UNLABELED) + [IDEA]
     scores = {code: Score() for code in codes}
     detections = detections or [detect(row["text"]) for row in labeled]
     for row, found in zip(labeled, detections):
         truth = set(row["labels"]) | ({IDEA} if row.get("idea_praise") else set())
         for code in codes:
+            if code in UNLABELED and row.get("schema", 1) < 2:
+                continue
             s = scores[code]
             s.tp += code in truth and code in found
             s.fp += code in found and code not in truth
@@ -179,6 +181,8 @@ def game_table(scores: list[GameScore]) -> str:
 def table(scores: dict[str, Score], total: Score) -> str:
     lines = [f"{'category':<18} {'labeled':>7} {'found':>5} {'right':>5} {'precision':>9} {'recall':>6}"]
     for code, s in [*scores.items(), ("TOTAL (complaints)", total)]:
+        if code in UNLABELED and not s.tp + s.fp + s.fn:
+            continue  # no schema 2 row has it, or none was labeled
         lines.append(f"{code:<18} {s.tp + s.fn:>7} {s.tp + s.fp:>5} {s.tp:>5} {s.precision:>9.0%} {s.recall:>6.0%}")
     return "\n".join(lines)
 
@@ -197,7 +201,7 @@ def main() -> None:
         per_review = (time.perf_counter() - start) / len(rows)
         print(f"{path.name}: {len(rows)} labeled reviews, keywords, {per_review * 1000:.1f} ms per review")
         print(table(*evaluate(rows, detections)))
-        print("not scored (no labels): " + ", ".join(f"{c} {sum(c in d for d in detections)} hits" for c in sorted(UNLABELED)),
+        print("hits in all rows (scored only in schema 2 rows): " + ", ".join(f"{c} {sum(c in d for d in detections)} hits" for c in sorted(UNLABELED)),
               end="\n\n")
         if args.games:
             print(game_table(games(rows, detections)), end="\n\n")
