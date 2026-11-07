@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from market_researcher import notices, pipeline
 from market_researcher.cache import Cache
 from market_researcher.http import HttpClient
-from market_researcher.models import HistPoint
+from market_researcher.models import HistPoint, OpportunitySummary
 from market_researcher.pipeline import TagResult
 from market_researcher.runs import RunStore
 from market_researcher.web import server
@@ -50,9 +50,8 @@ def fake_result():
 
 def test_index_and_static(client):
     html = client.get("/")
-    assert html.status_code == 200 and "src=\"/static/map3d.js" not in html.text  # loaded by app.js
-    assert "/static/app.js" in html.text and "three@0.170.0" in html.text
-    for f in ["app.js", "map2d.js", "map3d.js", "palette.js", "style.css"]:
+    assert html.status_code == 200 and "/static/app.js" in html.text and "three" not in html.text  # no CDN
+    for f in ["app.js", "map2d.js", "palette.js", "style.css"]:
         assert client.get(f"/static/{f}").status_code == 200
 
 
@@ -336,7 +335,7 @@ def test_page_versions_its_scripts(client):
     html = client.get("/").text
     v = re.search(r'src="/static/app\.js\?v=(\w+)"', html).group(1)
     assert f'href="/static/style.css?v={v}"' in html
-    for f in ["palette.js", "map2d.js", "map3d.js"]:  # imported by the scripts: versioned via the import map
+    for f in ["palette.js", "map2d.js"]:  # imported by the scripts: versioned via the import map
         assert f'"/static/{f}": "/static/{f}?v={v}"' in html
     assert client.get(f"/static/app.js?v={v}").status_code == 200
 
@@ -524,5 +523,126 @@ def test_running_search_lists_its_games_and_warns_once_when_reviews_stall(client
 
 def test_game_json_has_verdict_why_and_checks():
     data = server.game_json(fake_result().analyses[1])
-    assert data["verdict"] == "Worth a closer look" and data["why"].endswith(".")
+    assert data["verdict"] == "Solid demand, many unhappy" and data["why"].endswith(".")
     assert any(c["code"] == "netcode" for c in data["checks"])
+
+
+def test_cache_size_warning_and_cleanup(client, monkeypatch):
+    from market_researcher import config
+    cache = server._http().cache
+    cache.set("old", {"a": "x" * 100_000}, ttl=-1)
+    cache.set("fresh", {"b": 1}, ttl=1000)
+    body = client.get("/api/cache").json()
+    assert body["expired"] == 1 and body["bytes"] > 0 and body["warn"] is None
+    monkeypatch.setattr(config, "CACHE_WARN_BYTES", 0)
+    warn = client.get("/api/cache", headers={"X-Lang": "tr"}).json()["warn"]
+    assert warn["level"] == "warning" and "Önbellek" in warn["title"]
+
+    pruned = client.post("/api/cache/prune").json()
+    assert pruned["removed"] == 1 and pruned["expired"] == 0 and pruned["bytes"] < body["bytes"]
+    assert client.post("/api/cache/clear").json()["removed"] == 1
+    assert client.post("/api/cache/everything").status_code == 422
+
+
+def test_cache_cleanup_waits_for_a_running_search(client):
+    server._jobs["x"] = server.Job(kind="tag", request=None)
+    res = client.post("/api/cache/clear")
+    assert res.status_code == 409 and res.json()["notice"]["title"] == "A search is running"
+
+
+def test_only_recent_finished_jobs_stay_in_memory(client, monkeypatch):
+    monkeypatch.setattr(server, "JOBS_KEEP", 2)
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    ids = [client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"] for _ in range(3)]
+    for i in ids:
+        wait(client, i)
+    assert len(server._jobs) == 2
+    # the dropped one is saved: it reloads from the runs DB (and pushes out the least recently used)
+    job = client.get(f"/api/tag-runs/{ids[0]}").json()
+    assert job["status"] == "done" and [g["game"]["name"] for g in job["result"]["games"]] == ["Best Sim", "Other"]
+    assert len(server._jobs) == 2 and ids[0] in server._jobs
+
+
+def test_a_run_whose_summary_is_being_written_stays_in_memory(client, monkeypatch, run_store):
+    monkeypatch.setattr(server, "JOBS_KEEP", 1)
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    first = client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"]
+    wait(client, first)
+
+    def write(*args, **kw):  # while the model writes, another search finishes
+        other = client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"]
+        wait(client, other)
+        assert first in server._jobs  # pinned: not dropped for the newer run
+        return OpportunitySummary(pitch="A pitch.", model="m")
+
+    monkeypatch.setattr(server.summary, "write", write)
+    assert client.post(f"/api/tag-runs/{first}/summary").json()["summary"]["pitch"] == "A pitch."
+    assert run_store.load(first)["result"].summaries["en"].pitch == "A pitch."
+    assert server._pinned == {}
+
+
+def _wait_track(client, run_id):
+    for _ in range(200):
+        job = client.get(f"/api/tag-runs/{run_id}").json()
+        if job["result"]["track"] is not None or (job.get("track_progress") or {}).get("error"):
+            return job
+        time.sleep(0.02)
+    raise AssertionError("track record not measured")
+
+
+def test_track_record_is_measured_once_and_saved(client, monkeypatch, run_store):
+    from market_researcher.market import TrackRecord
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    calls = []
+
+    def measure(http, tags, on_step):
+        calls.append(tags)
+        on_step("Reading review histories", 1, 2)
+        return TrackRecord(start=2022 * 12 + 10, entrants=40, hits=6, sold=12)
+
+    monkeypatch.setattr(pipeline, "track_record", measure)
+    run_id = client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"]
+    assert wait(client, run_id)["result"]["track"] is None
+    assert client.post(f"/api/tag-runs/{run_id}/track").json() == {"started": True}
+    track = _wait_track(client, run_id)["result"]["track"]
+    assert track["hits"] == 6 and track["enough"] and track["first"] == "2022-11"
+    assert track["text"].startswith("Track record: 6 of 40 games released 2022-11 to 2024-10 became hits (15%")
+    assert client.post(f"/api/tag-runs/{run_id}/track").json() == {"started": False} and len(calls) == 1
+    assert run_store.load(run_id)["result"].track.hits == 6  # saved with the run
+
+
+def test_track_record_waits_for_the_run_and_reports_errors(client, monkeypatch):
+    def broken(http, tags, on_step):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(pipeline, "track_record", broken)
+    server._jobs["x"] = server.Job(kind="tag", request=server.TagRunRequest(tags=["Job Simulator"]))
+    assert client.post("/api/tag-runs/x/track").status_code == 409
+    server._jobs["x"].status, server._jobs["x"].result = "done", fake_result()
+    assert client.post("/api/tag-runs/x/track").json() == {"started": True}
+    assert _wait_track(client, "x")["track_progress"]["error"]["title"]
+    assert client.post("/api/tag-runs/x/track").json() == {"started": True}  # a failed measure can be retried
+
+
+def test_a_search_stops_the_track_record(client, monkeypatch):
+    from market_researcher.market import TrackRecord
+    seen = []
+
+    def measure(http, tags, on_step):
+        server._jobs["other"] = server.Job(kind="tag", request=server.TagRunRequest(tags=["Survival"]))
+        try:
+            on_step("Reading review histories", 1, 2)
+        except pipeline.Cancelled:
+            seen.append("cancelled")
+            raise
+        return TrackRecord(start=0)
+
+    monkeypatch.setattr(pipeline, "track_record", measure)
+    server._jobs["x"] = server.Job(kind="tag", request=server.TagRunRequest(tags=["Job Simulator"]), status="done",
+                                   result=fake_result())
+    client.post("/api/tag-runs/x/track")
+    for _ in range(100):
+        if server._jobs["x"].measuring is None and seen:
+            break
+        time.sleep(0.02)
+    assert seen == ["cancelled"] and server._jobs["x"].result.track is None and server._jobs["x"].measuring is None

@@ -54,6 +54,7 @@ def score(
 
 
 PART_LABELS = {"demand": N_("Demand"), "dissatisfaction": N_("Dissatisfaction"), "fixability": N_("Fixability")}
+SHOWN_PARTS = ("demand", "dissatisfaction", "fixability")  # fixability is shown but has no weight
 
 
 def explain(a: Analysis) -> dict:
@@ -70,14 +71,15 @@ def explain(a: Analysis) -> dict:
         "dissatisfaction": _("{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%.",
                              rating=rating, max=config.MAX_RATING, min=config.MIN_RATING),
         "fixability": (_("{fix:.0%} of complaint mentions are things a small team can fix "
-                         "(bugs, UI, performance...), not scope or genre.", fix=o.fixability) if mined else
+                         "(bugs, UI, performance...), not scope or genre. Not counted in the score: "
+                         "it is close to 100% for almost every game.", fix=o.fixability) if mined else
                        _("Reviews couldn't be mined, so {fix:.0%} is assumed.", fix=config.DEFAULT_FIXABILITY)
                        if a.mining is None else
                        _("Reviews were read, but none matched a complaint category, so {fix:.0%} is assumed.",
                          fix=config.DEFAULT_FIXABILITY)),
     }
-    parts = [{"key": k, "label": _(PART_LABELS[k]), "value": getattr(o, k), "weight": w, "basis": basis[k]}
-             for k, w in config.SCORE_WEIGHTS.items()]
+    parts = [{"key": k, "label": _(PART_LABELS[k]), "value": getattr(o, k),
+              "weight": config.SCORE_WEIGHTS.get(k, 0.0), "basis": basis[k]} for k in SHOWN_PARTS]
     reasons = {f.code: f.text() for f in a.flags}
     return {
         "score": o.score,
@@ -85,42 +87,37 @@ def explain(a: Analysis) -> dict:
         "combined": combine({p["key"]: p["value"] for p in parts}),
         "penalties": [{"code": c, "label": _(config.RISK_LABELS.get(c, c)), "points": config.RISK_PENALTIES[c],
                        "reason": reasons.get(c, "")} for c in o.penalized],
-        "zero_part": next((p["label"] for p in parts if p["value"] == 0), None),
+        "zero_part": next((p["label"] for p in parts if p["weight"] and p["value"] == 0), None),
     }
 
 
-def verdict(score: float) -> str:
-    """A word for the score, beside the ring in the web UI's game panel."""
-    if score >= 65:
-        return _("Strong opportunity")
-    if score >= 45:
-        return _("Worth a closer look")
-    return _("Weak opportunity")
+BUYERS = (N_("Many buyers"), N_("Solid demand"), N_("Few buyers"))
+UNHAPPY = (N_("most unhappy"), N_("many unhappy"), N_("mildly unhappy"), N_("mostly satisfied"))
+
+
+def _bands(o) -> tuple[int, int]:
+    """Indexes into BUYERS and UNHAPPY; the same bands as why()."""
+    b = 0 if o.demand >= 0.7 else 1 if o.demand >= 0.4 else 2
+    u = 0 if o.dissatisfaction >= 0.6 else 1 if o.dissatisfaction >= 0.3 else 2 if o.dissatisfaction > 0 else 3
+    return b, u
+
+
+def verdict(a: Analysis) -> str:
+    """What the evidence shows, beside the ring in the web UI's game panel ("Many buyers, most unhappy").
+    Not a judgement such as "Strong opportunity": the score was never shown to predict success."""
+    b, u = _bands(a.opportunity)
+    return _("{buyers}, {unhappy}", buyers=_(BUYERS[b]), unhappy=_(UNHAPPY[u]))
 
 
 def why(a: Analysis) -> str:
-    """The score in one plain sentence, from its three parts (current language)."""
+    """The score in one plain sentence, from its two parts (current language)."""
     o, g = a.opportunity, a.game
-    if o.demand >= 0.7:
-        buyers = _("Many buyers ({n:,} reviews)", n=g.reviews)
-    elif o.demand >= 0.4:
-        buyers = _("Solid demand ({n:,} reviews)", n=g.reviews)
-    else:
-        buyers = _("Few buyers ({n:,} reviews)", n=g.reviews)
-    if o.dissatisfaction >= 0.6:
-        unhappy = _("most of them unhappy ({rating:.0f}% positive)", rating=o.effective_rating)
-    elif o.dissatisfaction >= 0.3:
-        unhappy = _("many of them unhappy ({rating:.0f}% positive)", rating=o.effective_rating)
-    elif o.dissatisfaction > 0:
-        unhappy = _("only mildly unhappy ({rating:.0f}% positive)", rating=o.effective_rating)
-    else:
-        unhappy = _("and players mostly like it ({rating:.0f}% positive)", rating=o.effective_rating)
-    if a.mining is None or not a.mining.categories:
-        fix = _("its reviews couldn't be read for complaints")
-    elif o.fixability >= 0.9:
-        fix = _("nearly every complaint is something a developer can fix")
-    elif o.fixability >= 0.6:
-        fix = _("most complaints are things a developer can fix")
-    else:
-        fix = _("many complaints are about scope or the genre, which a new game can't fix")
-    return _("{buyers}, {unhappy}, and {fix}.", buyers=buyers, unhappy=unhappy, fix=fix)
+    b, u = _bands(o)
+    buyers = (_("Many buyers ({n:,} reviews)", n=g.reviews), _("Solid demand ({n:,} reviews)", n=g.reviews),
+              _("Few buyers ({n:,} reviews)", n=g.reviews))[b]
+    rating = o.effective_rating
+    unhappy = (_("most of them unhappy ({rating:.0f}% positive)", rating=rating),
+               _("many of them unhappy ({rating:.0f}% positive)", rating=rating),
+               _("only mildly unhappy ({rating:.0f}% positive)", rating=rating),
+               _("and players mostly like it ({rating:.0f}% positive)", rating=rating))[u]
+    return _("{buyers}, {unhappy}.", buyers=buyers, unhappy=unhappy)

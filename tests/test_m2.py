@@ -271,6 +271,21 @@ def test_official_reviews_fall_back(monkeypatch):
     assert (g.positive, g.rating_source, g.steamspy_rating) == (300, "steamspy", None)
 
 
+def test_a_far_too_small_steam_summary_gives_way_to_the_histogram(monkeypatch):
+    from market_researcher import pipeline
+    from market_researcher.models import HistPoint
+
+    # Apex Legends (Nov 2026): Steam's summary said 1,588 reviews, its histogram 1.18 million
+    monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (1186, 1588, 1588))
+    hist = [HistPoint(date=0, up=809_490, down=368_113)]
+    g = pipeline.official_reviews(None, _game(), hist)
+    assert (g.positive, g.reviews, g.rating_source) == (809_490, 1_177_603, "histogram")
+    # a review-bombed game whose rated total is under half of the histogram still uses Steam's numbers
+    monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (3527, 4855, 11224))
+    g = pipeline.official_reviews(None, _game(), [HistPoint(date=0, up=6000, down=5300)])
+    assert g.rating_source == "steam" and g.reviews == 11224
+
+
 def test_rating_source_text():
     from market_researcher.report import rating_source_text
 

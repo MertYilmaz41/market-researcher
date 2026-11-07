@@ -94,7 +94,7 @@ def test_failed_and_missing_reviews():
 
 def test_zero_and_weak_scores():
     assert "No real opportunity found" in titles(post(tag_result(analyses=[analysis(0, "Meh")])))
-    weak = titles(post(tag_result(analyses=[analysis(12, "Meh")])))
+    weak = titles(post(tag_result(analyses=[analysis(8, "Meh")])))
     assert "Only weak opportunities" in weak and "Analysis complete" in weak
 
 

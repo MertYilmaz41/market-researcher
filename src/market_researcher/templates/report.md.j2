@@ -5,9 +5,12 @@
 {% if market %}
 **{{ _("Market:") }}** {{ market }}. {{ _('"Well served" = {pct}%+ positive; the gap is the share of underserved among those two groups.', pct=well_served) }}
 {% endif %}
+{% if track %}
+{{ track }}
+{% endif %}
 > **{{ _("Proven Demand + Poor Execution = High Opportunity.") }}** {{ _("The score (0-100) is a weighted geometric mean of") }}
-> {{ _("demand (review volume), dissatisfaction (how far below 70% positive) and fixability (share of complaints a") }}
-> {{ _("small team can fix), minus points for risk flags. Review-bombed periods are removed from the rating first.") }}
+> {{ _("demand (review volume) and dissatisfaction (how far below 70% positive), minus points for risk flags.") }}
+> {{ _("Review-bombed periods are removed from the rating first. Fixability is shown but not counted.") }}
 {% if summary %}
 ## {{ _("Opportunity summary") }}
 
@@ -42,7 +45,7 @@
 - **{{ _("Demand:") }}** {{ _("{n} reviews, {owners} owners (SteamSpy). Box Method: ~{units} units, {low} - {high} gross at {price}.", n=num(a.game.reviews), owners=a.game.owners, units=num(box(a).units_mid), low=money(box(a).gross_low), high=money(box(a).gross_high), price=fmt_price(a.game.base_price)) }}
 - **{{ _("Recent demand:") }}** {{ _("{recent} of its reviews came in the last 12 months.", recent=recent_text(a)) }}
 - **{{ _("Satisfaction:") }}** {{ _("{rating} positive", rating=percent(a.game.rating)) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %}{{ _(", {rating} with review bombs removed", rating=percent(a.opportunity.effective_rating)) }}{% endif %} ({{ rating_source_text(a.game) }}).
-- **{{ _("Score parts:") }}** {{ _("demand {demand}, dissatisfaction {dissatisfaction}, fixability {fixability}", demand=pct(a.opportunity.demand), dissatisfaction=pct(a.opportunity.dissatisfaction), fixability=pct(a.opportunity.fixability)) }}{% if a.opportunity.penalty %}{{ _(", penalty -{points} ({names})", points=a.opportunity.penalty|int, names=a.opportunity.penalized|map("risk_label")|join(", ")) }}{% endif %}.
+- **{{ _("Score parts:") }}** {{ _("demand {demand}, dissatisfaction {dissatisfaction} (fixability {fixability}, not counted)", demand=pct(a.opportunity.demand), dissatisfaction=pct(a.opportunity.dissatisfaction), fixability=pct(a.opportunity.fixability)) }}{% if a.opportunity.penalty %}{{ _(", penalty -{points} ({names})", points=a.opportunity.penalty|int, names=a.opportunity.penalized|map("risk_label")|join(", ")) }}{% endif %}.
 {% if a.game.tags %}- **{{ _("Tags:") }}** {{ (a.game.tags|list)[:8]|join(", ") }}
 {% endif %}
 {% set gs = game_summaries.get(a.game.appid) %}{% if gs %}

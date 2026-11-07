@@ -14,7 +14,7 @@ from market_researcher.pipeline import TagResult
 from market_researcher.report import render
 from market_researcher.runs import ADAPTERS, RunStore
 from market_researcher.web import server
-from test_llm_miner import fake_ollama
+from test_llm import fake_ollama
 from test_m4 import analysis, flag
 from test_web import wait
 

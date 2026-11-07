@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from . import config, risk, scoring
-from .market import MarketStats, TagMarket, market_stats
+from . import backtest, config, risk, scoring
+from .market import MarketStats, TagMarket, TrackRecord, market_stats
 from .http import HttpClient, RetryableStatus
 from .i18n import _
 from .mining import mine
@@ -69,10 +69,16 @@ def official_reviews(http: HttpClient, game: Game, hist: list[HistPoint]) -> Gam
     except (RuntimeError, httpx.HTTPError, RetryableStatus):
         summary = None
     offtopic = 0
+    hist_total = sum(p.total for p in hist) if hist else 0
+    # Steam's summary is sometimes far too small: Apex Legends (Nov 2026) got 1,588 reviews from it, while its
+    # histogram holds 1.18 million and its store page 453,416 in English alone. Then the histogram is used.
+    # Compared with the total including review-bomb periods, which the histogram counts too.
+    if summary and summary[2] < hist_total / 2:
+        summary = None
     if summary:
         positive, total, with_offtopic = summary
         source, offtopic = "steam", with_offtopic - total
-    elif hist and (total := sum(p.total for p in hist)):
+    elif total := hist_total:
         positive, source = sum(p.up for p in hist), "histogram"
     else:
         return game
@@ -192,6 +198,7 @@ class TagResult:
     market: MarketStats | None = None  # the whole tag, not just the analyzed games
     summaries: dict[str, OpportunitySummary] = field(default_factory=dict)  # language -> LLM summary (summary.py)
     game_summaries: dict[int, dict[str, GameSummary]] = field(default_factory=dict)  # appid -> language -> summary
+    track: TrackRecord | None = None  # the tag's track record, measured on request after the run (track_record)
 
 
 def run_tag(
@@ -312,9 +319,33 @@ def run_markets(
 
 
 def market_rank(row: TagMarket) -> tuple:
-    """Specific tags with several underserved games first, by gap. Broad tags (Indie, Action...) have
-    the most underserved games only because they are huge, and a tag with 1-2 such games proves little:
-    both go last."""
+    """Most well-served games first, then most games with demand: in the backtest (reports/backtest.md)
+    new games did better in tags with many well-liked games (rho +0.36, +0.15 with market size held fixed)
+    and in big markets (+0.33), while the unmet share predicted nothing. Broad tags (Indie, Action...) go
+    last: the backtest only covered tags with up to TRACK_MAX_GAMES games, and they'd top every list."""
     m = row.stats
-    tier = 2 if m.n_underserved < config.MARKET_MIN_UNDERSERVED else 1 if m.n_games > BROAD_TAG_GAMES else 0
-    return tier, -m.gap, -m.n_underserved
+    return (1 if m.n_games > BROAD_TAG_GAMES else 0), -m.n_well_served, -m.n_demand
+
+
+def track_record(http: HttpClient, tags: list[str], on_step: Callable[[str, int, int], None] | None = None,
+                 now: float | None = None) -> TrackRecord:
+    """The tag's games released 48-24 months ago and how many became hits in their first 24 months, from one
+    review histogram per game (cached 30 days). The backtest's definitions, measured at today's month."""
+    now = time.time() if now is None else now
+    start = backtest.month(int(now)) - backtest.HORIZON - backtest.OUTCOME
+    games = [g for g in tag_games(http, tags) if g.positive + g.negative >= backtest.MIN_HIST_REVIEWS]
+    if len(games) > config.TRACK_MAX_GAMES:
+        return TrackRecord(start=start, measured_at=now, too_broad=len(games))
+    hists = []
+    for i, g in enumerate(games):
+        if on_step:
+            on_step(_("Reading review histories"), i, len(games))
+        try:
+            hists.append(steam_store.review_histogram(http, g.appid, ttl=backtest.HIST_TTL))
+        except Exception:  # one missing history must not sink the measure; that game just isn't counted
+            continue
+    if on_step:
+        on_step(_("Reading review histories"), len(games), len(games))
+    out = backtest.outcomes(hists, start, backtest.HORIZON, backtest.OUTCOME)
+    return TrackRecord(start=start, months=backtest.HORIZON, entrants=out.entrants, hits=out.hits, sold=out.sold,
+                       measured_at=now)

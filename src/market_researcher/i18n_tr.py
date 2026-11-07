@@ -79,10 +79,8 @@ TR: dict[str, str] = {
         "SteamSpy {n} oyunu %{lo:g}-{hi:g} olumlu aralığına koydu ama Steam'in kendi rakamları koymuyor: {names}. "
         "Bu oyunlar sıralamada kalır ve Steam'in rakamlarıyla puanlanır.",
     "Review texts unavailable": "İnceleme metinleri alınamadı",
-    "Couldn't load review texts for {n} game(s), so their complaints weren't mined and fixability "
-    "was assumed to be 50%.":
-        "{n} oyunun inceleme metinleri yüklenemedi; bu yüzden şikayetleri çıkarılamadı ve "
-        "düzeltilebilirlik %50 varsayıldı.",
+    "Couldn't load review texts for {n} game(s), so their complaints weren't mined.":
+        "{n} oyunun inceleme metinleri yüklenemedi; bu yüzden şikayetleri çıkarılamadı.",
     "Run again later to fill them in.": "Eksikleri doldurmak için daha sonra tekrar çalıştırın.",
     "No real opportunity found": "Gerçek bir fırsat bulunamadı",
     "Every analyzed game is above 70% positive once review bombs are removed, so none shows a disappointed audience.":
@@ -123,8 +121,7 @@ TR: dict[str, str] = {
     "Free game": "Ücretsiz oyun",
     "It's free to play, so the Box Method revenue estimate doesn't apply.":
         "Oyun ücretsiz, bu yüzden Box Method gelir tahmini uygulanmaz.",
-    "Complaints couldn't be mined; fixability was assumed to be 50%.":
-        "Şikayetler çıkarılamadı; düzeltilebilirlik %50 varsayıldı.",
+    "Complaints couldn't be mined.": "Şikayetler çıkarılamadı.",
     "Try again later.": "Daha sonra tekrar deneyin.",
     "No negative reviews to mine": "İncelenecek olumsuz inceleme yok",
     "There are no English negative reviews, so there are no complaints to learn from.":
@@ -206,9 +203,14 @@ TR: dict[str, str] = {
     "Rating without spikes": "Sıçramasız puan",
     "Review spike": "İnceleme sıçraması",
     # scoring.verdict / scoring.why: the game panel's one-line reading of the score
-    "Strong opportunity": "Güçlü fırsat",
-    "Worth a closer look": "Yakından bakmaya değer",
-    "Weak opportunity": "Zayıf fırsat",
+    "Many buyers": "Çok alıcı",
+    "Solid demand": "Sağlam talep",
+    "Few buyers": "Az alıcı",
+    "most unhappy": "çoğu memnun değil",
+    "many unhappy": "birçoğu memnun değil",
+    "mildly unhappy": "biraz memnuniyetsiz",
+    "mostly satisfied": "çoğunlukla memnun",
+    "{buyers}, {unhappy}": "{buyers}, {unhappy}",
     "Many buyers ({n:,} reviews)": "Çok alıcı ({n:,} inceleme)",
     "Solid demand ({n:,} reviews)": "Sağlam talep ({n:,} inceleme)",
     "Few buyers ({n:,} reviews)": "Az alıcı ({n:,} inceleme)",
@@ -216,12 +218,7 @@ TR: dict[str, str] = {
     "many of them unhappy ({rating:.0f}% positive)": "birçoğu memnun değil (%{rating:.0f} olumlu)",
     "only mildly unhappy ({rating:.0f}% positive)": "yalnızca biraz memnuniyetsiz (%{rating:.0f} olumlu)",
     "and players mostly like it ({rating:.0f}% positive)": "oyuncular çoğunlukla seviyor (%{rating:.0f} olumlu)",
-    "its reviews couldn't be read for complaints": "şikayetler için incelemeleri okunamadı",
-    "nearly every complaint is something a developer can fix": "neredeyse her şikayet bir geliştiricinin düzeltebileceği türden",
-    "most complaints are things a developer can fix": "şikayetlerin çoğu bir geliştiricinin düzeltebileceği türden",
-    "many complaints are about scope or the genre, which a new game can't fix":
-        "şikayetlerin çoğu kapsam ya da türle ilgili; yeni bir oyun bunları düzeltemez",
-    "{buyers}, {unhappy}, and {fix}.": "{buyers}, {unhappy}; {fix}.",
+    "{buyers}, {unhappy}.": "{buyers}, {unhappy}.",
     # risk.checks: why a check passed
     "none": "yok",
     "full price": "tam fiyat",
@@ -258,9 +255,10 @@ TR: dict[str, str] = {
     "{n:,} reviews. Log scale: {lo} reviews = 0%, {hi:,}+ = 100%.":
         "{n:,} inceleme. Logaritmik ölçek: {lo} inceleme = %0, {hi:,}+ = %100.",
     "{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%.": "{rating}. %{max:g}+ olumlu = %0, %{min:g} = %100.",
-    "{fix:.0%} of complaint mentions are things a small team can fix (bugs, UI, performance...), not scope or genre.":
+    "{fix:.0%} of complaint mentions are things a small team can fix (bugs, UI, performance...), not scope or genre. "
+    "Not counted in the score: it is close to 100% for almost every game.":
         "Şikayetlerin {fix:.0%} kadarı küçük bir ekibin düzeltebileceği şeyler (hatalar, arayüz, performans...), "
-        "kapsam ya da tür değil.",
+        "kapsam ya da tür değil. Puana katılmaz: neredeyse her oyunda %100'e yakın.",
     "Reviews couldn't be mined, so {fix:.0%} is assumed.": "İncelemeler çıkarılamadı, bu yüzden {fix:.0%} varsayıldı.",
     "Reviews were read, but none matched a complaint category, so {fix:.0%} is assumed.":
         "İncelemeler okundu ama hiçbiri bir şikâyet kategorisine uymadı, bu yüzden {fix:.0%} varsayıldı.",
@@ -389,12 +387,14 @@ TR: dict[str, str] = {
     "Fetching SteamSpy, Steam store data and reviews...": "SteamSpy, Steam mağaza verileri ve incelemeler alınıyor...",
     "Report written to {path} (the run is also saved: mr runs, or Past runs in mr ui)":
         "Rapor {path} dosyasına yazıldı (tarama da kaydedildi: mr runs ya da mr ui'de Geçmiş taramalar)",
-    "Markets: tags by underserved games (>={min} reviews, {lo:g}-{hi:g}% positive)":
-        "Pazarlar: karşılanmamış oyunlarına göre etiketler (>={min} inceleme, %{lo:g}-{hi:g} olumlu)",
-    "Unmet share = underserved / (underserved + well served). High share + many underserved games = "
-    "an audience that good games don't reach yet.":
-        "Karşılanmama oranı = karşılanmamış / (karşılanmamış + iyi karşılanmış). Yüksek oran + çok sayıda karşılanmamış oyun = "
-        "iyi oyunların henüz ulaşmadığı bir kitle.",
+    "Markets: tags by well-served games (>={min} reviews, {lo:g}-{hi:g}% positive)":
+        "Pazarlar: iyi karşılanmış oyunlarına göre etiketler (>={min} inceleme, %{lo:g}-{hi:g} olumlu)",
+    "Ranked by well-served games, then games with demand: in a backtest, new games did better "
+    "in such tags. Unmet share = underserved / (underserved + well served); it did not "
+    "predict success.":
+        "İyi karşılanmış oyun sayısına, sonra talep gören oyun sayısına göre sıralı: geriye dönük testte yeni oyunlar "
+        "böyle etiketlerde daha iyi iş çıkardı. Karşılanmama oranı = karşılanmamış / (karşılanmamış + iyi karşılanmış); "
+        "başarıyı tahmin etmedi.",
     "Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).":
         "SteamSpy'ın arayamadığı {n} etiket atlandı (onları mr discover ile tek tek arayın).",
     "Could not read {tag}:": "{tag} okunamadı:",
@@ -416,8 +416,8 @@ TR: dict[str, str] = {
     "Top tags: {tags}": "Öne çıkan etiketler: {tags}",
     "Box Method: ~{units} units (x45), revenue {low} - {high} (x30-x100)":
         "Box Method: ~{units} satış (x45), gelir {low} - {high} (x30-x100)",
-    "demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, fixability {fixability}":
-        "talep {demand}, {rating} olumluda memnuniyetsizlik {dissatisfaction}, düzeltilebilirlik {fixability}",
+    "demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive (fixability {fixability}, not counted)":
+        "talep {demand}, {rating} olumluda memnuniyetsizlik {dissatisfaction} (düzeltilebilirlik {fixability}, puana katılmaz)",
     ", penalty -{points:.0f} for {names}": ", ceza -{points:.0f}: {names}",
     "Opportunity score: {score:.0f}/100": "Fırsat puanı: {score:.0f}/100",
     "Review texts unavailable:": "İnceleme metinleri alınamadı:",
@@ -449,10 +449,10 @@ TR: dict[str, str] = {
         '"İyi karşılanmış" = %{pct}+ olumlu; boşluk, bu iki grup içinde karşılanmamışların payıdır.',
     "Proven Demand + Poor Execution = High Opportunity.": "Kanıtlanmış Talep + Kötü Yapım = Büyük Fırsat.",
     "The score (0-100) is a weighted geometric mean of": "Puan (0-100), şunların ağırlıklı geometrik ortalamasıdır:",
-    "demand (review volume), dissatisfaction (how far below 70% positive) and fixability (share of complaints a":
-        "talep (inceleme hacmi), memnuniyetsizlik (%70 olumlunun ne kadar altında) ve düzeltilebilirlik (küçük bir",
-    "small team can fix), minus points for risk flags. Review-bombed periods are removed from the rating first.":
-        "ekibin düzeltebileceği şikayetlerin payı); risk işaretleri için puan düşülür. İnceleme bombardımanı dönemleri önce puandan çıkarılır.",
+    "demand (review volume) and dissatisfaction (how far below 70% positive), minus points for risk flags.":
+        "talep (inceleme hacmi) ve memnuniyetsizlik (%70 olumlunun ne kadar altında); risk işaretleri için puan düşülür.",
+    "Review-bombed periods are removed from the rating first. Fixability is shown but not counted.":
+        "İnceleme bombardımanı dönemleri önce puandan çıkarılır. Düzeltilebilirlik gösterilir ama puana katılmaz.",
     "(score {score})": "(puan {score})",
     "Steam store": "Steam mağazası",
     "Released {date}": "Çıkış {date}",
@@ -465,8 +465,8 @@ TR: dict[str, str] = {
     "{rating} positive": "{rating} olumlu",
     ", {rating} with review bombs removed": ", inceleme bombardımanları çıkarılınca {rating}",
     "Score parts:": "Puan parçaları:",
-    "demand {demand}, dissatisfaction {dissatisfaction}, fixability {fixability}":
-        "talep {demand}, memnuniyetsizlik {dissatisfaction}, düzeltilebilirlik {fixability}",
+    "demand {demand}, dissatisfaction {dissatisfaction} (fixability {fixability}, not counted)":
+        "talep {demand}, memnuniyetsizlik {dissatisfaction} (düzeltilebilirlik {fixability}, puana katılmaz)",
     ", penalty -{points} ({names})": ", ceza -{points} ({names})",
     "Tags:": "Etiketler:",
     "{pct} of negative reviews still praise the idea or its potential.":
@@ -519,4 +519,20 @@ TR: dict[str, str] = {
     "({model}, {seconds:.0f} s; it can be wrong)": "({model}, {seconds:.0f} sn; yanılabilir)",
     "Removed {n:,} expired entries. Cache file: {before:.0f} MB -> {after:.0f} MB.":
         "Süresi dolmuş {n:,} kayıt silindi. Önbellek dosyası: {before:.0f} MB -> {after:.0f} MB.",
+    "The cache takes {mb:,.0f} MB": "Önbellek {mb:,.0f} MB yer kaplıyor",
+    "Old downloads stay on disk until you remove them.": "Eski indirmeler siz silene kadar diskte kalır.",
+    "Clean it up with the cache button in the top bar. Saved runs and the shortlist are kept.":
+        "Üst bardaki önbellek düğmesinden temizleyin. Kayıtlı taramalar ve kısa liste silinmez.",
+    "A search is running": "Bir arama sürüyor",
+    "Track record: not measured; the tag is too broad ({n:,} games with 10+ reviews).":
+        "Geçmiş başarı: ölçülmedi; etiket çok geniş (10+ incelemeli {n:,} oyun).",
+    "Track record: only {n} games released {first} to {last}; too few to tell.":
+        "Geçmiş başarı: {first} ile {last} arasında yalnızca {n} oyun çıktı; bir şey söylemek için çok az.",
+    "Track record: {hits} of {n} games released {first} to {last} became hits ({rate:.0%}; "
+    "500+ reviews at 80%+ positive in their first 2 years).":
+        "Geçmiş başarı: {first} ile {last} arasında çıkan {n} oyundan {hits} tanesi başarılı oldu ({rate:.0%}; "
+        "ilk 2 yılında %80+ olumlu 500+ inceleme).",
+    "Reading review histories": "İnceleme geçmişleri okunuyor",
+    "The cache can't be cleaned while a search is using it.": "Bir arama kullanırken önbellek temizlenemez.",
+    "Wait for it to finish or cancel it, then try again.": "Bitmesini bekleyin ya da iptal edin, sonra tekrar deneyin.",
 }

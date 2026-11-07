@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Market Researcher</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="16x16 32x32">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/mark-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap">
@@ -16,21 +19,16 @@
         : matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
     } catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
-      }
-    }
-  </script>
+  <!-- filled by the server (server.versioned_index): every local module with its ?v= -->
+  <script type="importmap">{"imports": {}}</script>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <svg class="logo" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" stroke="currentColor" stroke-width="1.5"/><circle cx="14" cy="14" r="6.5" stroke="currentColor" stroke-width="1.5"/><circle cx="14" cy="14" r="2" fill="currentColor"/></svg>
+    <a class="brand" href="/" aria-label="Market Researcher">
+      <!-- logo/mark-small.svg; its colors are the --logo-* tokens in style.css -->
+      <svg class="logo" width="28" height="28" viewBox="0 0 64 64" aria-hidden="true"><rect class="logo-bg" width="64" height="64" rx="14"/><path class="logo-fg" d="M15 14v35h35" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><circle class="logo-fg" cx="43" cy="21" r="8"/></svg>
       <span class="brand-name">Market Researcher</span>
-    </div>
+    </a>
     <nav id="table-view" class="nav" aria-label="Views" data-i18n-attr="aria-label">
       <button type="button" data-view="games" aria-pressed="true"><span data-i18n>Games</span></button>
       <button type="button" data-view="markets" aria-pressed="false"><span data-i18n>Markets</span></button>
@@ -73,6 +71,20 @@
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
       </button>
     </div>
+    <div class="settings-wrap">
+      <button type="button" id="settings-toggle" class="settings-btn" aria-expanded="false" aria-controls="settings" aria-label="Cache" title="Cache" data-i18n-attr="aria-label,title">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><ellipse cx="8" cy="3.8" rx="5" ry="2" stroke="currentColor" stroke-width="1.4"/><path d="M3 3.8v8.4c0 1.1 2.2 2 5 2s5-.9 5-2V3.8M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" stroke="currentColor" stroke-width="1.4"/></svg>
+      </button>
+      <div id="settings" class="pop settings" hidden>
+        <b data-i18n>Cache</b>
+        <p id="cache-size" class="cache-size"></p>
+        <div class="settings-actions">
+          <button type="button" id="cache-prune" class="ghost" data-i18n>Remove expired</button>
+          <button type="button" id="cache-clear" class="ghost" data-i18n>Clear all</button>
+        </div>
+        <p class="muted" data-i18n>Downloaded Steam data is kept here so searches run faster. Saved runs and the shortlist are kept. After clearing all, the first search of each tag is slow again.</p>
+      </div>
+    </div>
   </header>
   <dialog id="help" class="help" aria-labelledby="help-title">
     <form method="dialog" class="help-head">
@@ -94,15 +106,15 @@
       </section>
       <section>
         <h3 data-i18n>The score</h3>
-        <p data-i18n>0 to 100, from three parts: demand (how many reviews), dissatisfaction (how far below 70% positive) and fixability (how many complaints a new game could fix). Risks such as an abandoned or fading game subtract points. Hover over any score to see how it was reached.</p>
+        <p data-i18n>0 to 100, from two parts: demand (how many reviews) and dissatisfaction (how far below 70% positive). Risks such as an abandoned or fading game subtract points. Hover over any score to see how it was reached. The words beside it ("Many buyers, most unhappy") say what the score rests on. Neither was shown to predict how a new game would do, so use them to choose which games to read about.</p>
       </section>
       <section>
         <h3 data-i18n>The map</h3>
-        <p data-i18n>Further right means more demand, higher up means unhappier players, a bigger bubble means more estimated revenue, and the color is the score. The best opportunities sit at the top right. The 3D view adds fixability as depth.</p>
+        <p data-i18n>Further right means more demand, higher up means unhappier players, a bigger bubble means more estimated revenue, and the color is the score. The best opportunities sit at the top right.</p>
       </section>
       <section>
         <h3 data-i18n>Markets and the unmet share</h3>
-        <p data-i18n>The Markets view and the sentence under a search's title describe a whole tag. The unmet share shows that players keep buying though few games please them; it was not shown to predict success. In a backtest of 180 tags (2019-2022), new games in the fifth with the highest share reached 500 reviews more often than in the lowest (21% vs 14%), but not 500 reviews at 80%+ positive (11% vs 12%). Use it to pick markets to look into.</p>
+        <p data-i18n>The Markets view and the sentences under a search's title describe a whole tag. In a backtest of 180 tags (2019-2022), new games did better where earlier games had done well: in tags whose games of 2-4 years before became hits more often (the track record measured after each search), with many well-served games, and in big markets. The Markets view is ranked by those. The unmet share shows that players keep buying though few games please them; it was not shown to predict success (new games there reached 500 reviews more often, 21% vs 14%, but not 500 reviews at 80%+ positive, 11% vs 12%).</p>
       </section>
       <section>
         <h3 data-i18n>Complaints</h3>
@@ -137,6 +149,7 @@
           <span id="games-kicker" class="kicker" hidden></span>
           <h1 id="table-title">Find underserved audiences</h1>
           <p id="market-line" class="lead"></p>
+          <p id="track-line" class="track-line"></p>
           <div class="chip-row">
             <div class="filters-wrap">
               <button type="button" id="filters-toggle" class="filter-chip" aria-expanded="false" aria-controls="filters">
@@ -204,12 +217,6 @@
               <a id="download" class="link" data-i18n>Report (.md)</a>
               <a id="download-csv" class="link">CSV</a>
             </div>
-            <div id="map-tools" class="map-tools" hidden>
-              <div id="map-view" class="seg" role="group" aria-label="Map view" data-i18n-attr="aria-label">
-                <button type="button" data-view="2d" aria-pressed="false">2D</button>
-                <button type="button" data-view="3d" aria-pressed="true">3D</button>
-              </div>
-            </div>
             <div id="games-mode" class="seg" role="group" aria-label="Show games as" data-i18n-attr="aria-label">
               <button type="button" data-mode="table" aria-pressed="true" data-i18n>List</button>
               <button type="button" data-mode="map" aria-pressed="false" data-i18n>Map</button>
@@ -233,7 +240,7 @@
             <p id="table-note" class="muted"></p>
           </div>
           <div id="map" class="map" hidden>
-            <div id="map-empty" class="empty"><p><span data-i18n>Click the search box at the top, tick one or more tags and press Search.</span><br><span data-i18n>Each bubble is a game; click one to inspect it. In 3D, drag to orbit and scroll to zoom.</span></p></div>
+            <div id="map-empty" class="empty"><p><span data-i18n>Click the search box at the top, tick one or more tags and press Search.</span><br><span data-i18n>Each bubble is a game; click one to inspect it.</span></p></div>
             <div id="tooltip" class="tooltip" hidden></div>
           </div>
           <p id="map-legend" class="map-legend" hidden></p>

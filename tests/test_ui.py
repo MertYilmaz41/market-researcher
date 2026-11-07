@@ -16,7 +16,7 @@ uvicorn = pytest.importorskip("uvicorn")
 from market_researcher.cache import Cache  # noqa: E402
 from market_researcher.http import HttpClient  # noqa: E402
 from market_researcher import pipeline  # noqa: E402
-from market_researcher.market import TagMarket, market_stats  # noqa: E402
+from market_researcher.market import TagMarket, TrackRecord, market_stats  # noqa: E402
 from market_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, SummaryPoint  # noqa: E402
 from market_researcher.runs import RunStore  # noqa: E402
 from market_researcher.web import server  # noqa: E402
@@ -27,7 +27,7 @@ from test_web import fake_result  # noqa: E402
 TAGS = ["Crafting", "Job Simulator", "Survival", "Colony Sim", "Building"]
 # Nothing is pre-picked on a first visit: most tests start as a returning user with one tag remembered.
 PICKED = "localStorage.getItem('filters') || localStorage.setItem('filters', JSON.stringify({tags: ['Job Simulator']}))"
-ENGLISH = "localStorage.setItem('mapView', '2d'); localStorage.setItem('lang', 'en')"
+ENGLISH = "localStorage.setItem('lang', 'en')"
 
 
 def _free_port() -> int:
@@ -68,6 +68,12 @@ def base_url(tmp_path_factory):
                 for t in ["Survival", "Crafting"]]
         return pipeline.MarketsResult(rows=rows, skipped=["Incremental"])
 
+    def track_record(http, tags, on_step):
+        on_step("Reading review histories", 1, 2)
+        time.sleep(0.5)  # long enough to see "Measuring"
+        return TrackRecord(start=2022 * 12 + 10, entrants=40, hits=6, sold=12)
+
+    mp.setattr(pipeline, "track_record", track_record)
     mp.setattr(server.steam_store, "tag_names", lambda http: TAGS)
     mp.setattr(pipeline, "run_tag", run_tag)
     mp.setattr(pipeline, "run_markets", run_markets)
@@ -116,7 +122,8 @@ def _open(browser, base_url, width=1400, height=900, picked=True, english=True):
     page = browser.new_page(viewport={"width": width, "height": height})
     page.errors = []
     page.on("pageerror", lambda e: page.errors.append(str(e)))
-    page.add_init_script(ENGLISH if english else "localStorage.setItem('mapView', '2d')")  # 2D: no CDN/WebGL needed
+    if english:
+        page.add_init_script(ENGLISH)
     if picked:
         page.add_init_script(PICKED)
     page.goto(base_url)
@@ -377,6 +384,49 @@ def test_ui_top_bar_switches(base_url, browser):
     assert page.get_attribute("html", "data-theme") == "light"
     assert page.get_attribute('#lang button[data-lang="en"]', "aria-pressed") == "true"  # the language didn't change
     assert page.errors == []
+
+
+def test_ui_track_record_after_a_search(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
+    page.wait_for_function("document.querySelector('#track-line').innerText.includes('Track record: 6 of 40 games')")
+    assert page.is_visible("#track-line .info[data-term=track_record]")
+    assert page.errors == []
+
+
+def test_ui_cache_settings(base_url, browser, monkeypatch):
+    from market_researcher import config
+    server._http().cache.set("old", {"a": "x" * 10_000}, ttl=-1)
+    monkeypatch.setattr(config, "CACHE_WARN_BYTES", 0)
+    page = _open(browser, base_url)
+    # A big cache warns once at load, and the ⚙ gets a dot.
+    page.wait_for_function("document.querySelector('#toasts').innerText.includes('The cache takes')")
+    assert "has-dot" in page.get_attribute("#settings-toggle", "class")
+    page.click("#settings-toggle")
+    page.wait_for_function("document.querySelector('#cache-size').textContent.includes('MB')")
+    assert "1 expired entries" in page.text_content("#cache-size")
+    page.click("#cache-prune")
+    page.wait_for_function("document.querySelector('#toasts').innerText.includes('Cache cleaned')")
+    assert "0 expired entries" in page.text_content("#cache-size")
+    page.keyboard.press("Escape")
+    assert page.is_hidden("#settings")
+    assert page.errors == []
+
+
+def test_ui_logo_goes_home(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
+    page.click("#ranking tbody tr:first-child")
+    page.click('#table-view button[data-view="shortlist"]')
+    chips = _chips(page)
+    with page.expect_navigation():
+        page.click(".brand")
+    # the start page: the Games view, no result, no game open; tags and filters stay remembered
+    page.wait_for_selector("#tag-form")
+    assert page.get_attribute('#table-view button[data-view="games"]', "aria-pressed") == "true"
+    assert page.query_selector_all("#ranking tbody tr") == [] and page.is_hidden("#drawer")
+    page.wait_for_function(f"document.querySelectorAll('.tag-chip').length === {len(chips)}")
+    assert _chips(page) == chips
 
 
 def test_ui_shortlist(base_url, browser):

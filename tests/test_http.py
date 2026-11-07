@@ -1,3 +1,6 @@
+import json
+import sqlite3
+
 import httpx
 import pytest
 
@@ -117,3 +120,41 @@ def test_cache_prune_drops_only_expired_entries(tmp_path, monkeypatch):
     assert cache.prune() == 1
     assert cache.get("fresh") == {"b": 1} and cache.get("old") is None
     assert cache.size() < before  # VACUUM gave the space back
+
+
+def test_cache_clear_shrinks_the_file_and_stats_count_expired(tmp_path, monkeypatch):
+    cache = Cache(tmp_path / "c.sqlite")
+    cache.set("old", {"a": "x" * 100_000}, ttl=10)
+    cache.set("fresh", {"b": 1}, ttl=10**13)
+    monkeypatch.setattr("market_researcher.cache.time.time", lambda: 10**12)
+    stats = cache.stats()
+    assert stats["expired"] == 1 and stats["bytes"] == cache.size()
+    before = cache.size()
+    assert cache.clear() == 2
+    assert cache.get("fresh") is None and cache.size() < before
+
+
+def test_cache_values_are_compressed(tmp_path):
+    cache = Cache(tmp_path / "c.sqlite")
+    value = {"reviews": [{"review": "The game crashes on launch."}] * 500}
+    cache.set("k", value, ttl=1000)
+    assert cache.get("k") == value
+    stored = cache.conn.execute("SELECT value FROM responses WHERE key = 'k'").fetchone()[0]
+    assert isinstance(stored, bytes) and len(stored) < len(json.dumps(value)) / 3
+
+
+def test_older_versions_plain_table_is_ignored_and_dropped_on_clear(tmp_path):
+    path = tmp_path / "c.sqlite"
+    old = sqlite3.connect(path)  # what a version before compression writes to the same file
+    old.execute("CREATE TABLE cache (key TEXT PRIMARY KEY, value TEXT, expires REAL)")
+    old.execute("INSERT INTO cache VALUES ('k', ?, ?)", (json.dumps({"a": 1}), 10**13))
+    old.commit()
+    old.close()
+    cache = Cache(path)
+    assert cache.get("k") is None  # never read: the new version has its own table
+    cache.set("k", {"b": 2}, ttl=1000)
+    plain = sqlite3.connect(path).execute("SELECT value FROM cache").fetchone()[0]
+    assert json.loads(plain) == {"a": 1}  # and the old version's rows are untouched
+    cache.clear()
+    tables = {r[0] for r in cache.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    assert tables == {"responses"}

@@ -1,15 +1,17 @@
+<img src="logo/mark.svg" alt="" width="72" align="left">
+
 # Market Researcher
 
 Find underserved Steam audiences: games people clearly wanted, but that disappointed them.
 
 > **Proven Demand + Poor Execution = High Opportunity**
 
-Based on CodeMonkey's Underserved Audience method: look for genres where players bought a game in large numbers but were let down by how it was made, then build the better version.
+Based on [Code Monkey](https://www.youtube.com/@CodeMonkeyUnity)'s Underserved Audience method: look for genres where players bought a game in large numbers but were let down by how it was made, then build the better version.
 
 ## What it does
 
 - **Discovers** games in one or more tags (e.g. *Job Simulator*, or *Crafting + Survival*) with many reviews but a low rating (5–70% positive).
-- **Compares markets:** ranks every Steam tag by how many of its popular games players rate poorly, against how many already serve them well.
+- **Compares markets:** ranks every Steam tag by how many of its popular games players rate well, then by market size: in a backtest, new games did better in such tags. Each search also measures the tag's **track record**: how many of its games from 2–4 years ago became hits.
 - **Estimates sales and revenue** with the Box Method (reviews × 30–100).
 - **Uses Steam's own review numbers** for analyzed games (the store page's "All Reviews"). Reviews from review-bomb periods count toward demand but not toward % positive.
 - **Flags misleading numbers:** review bombs, sudden review spikes (a sale, an update, a streamer), deep discounts, very cheap prices, online multiplayer, niche audiences and AAA expectations. It also flags fading demand (few reviews lately) and games that are already improving (rated much better in the last 12 months).
@@ -19,6 +21,19 @@ Based on CodeMonkey's Underserved Audience method: look for genres where players
 - **English or Turkish interface:** web UI, command line and reports. Review analysis stays English.
 
 ## Installation
+
+### Requirements
+
+**Needed:**
+
+- **An operating system uv supports:** Windows 10 or newer (x86_64), macOS 13 Ventura or newer, or a 64-bit Linux. The installer below brings everything else, including Python 3.13.
+- **An internet connection:** the app reads its data from Steam and SteamSpy while it runs.
+- **A current web browser:** the interface opens in your browser and needs import maps: Chrome or Edge 89+, Firefox 108+, Safari 16.4+.
+- **Disk space:** about 250 MB for the app and its Python, plus the data cache, which grows with use (often a few hundred MB; the cache button at the top right shows its size and cleans it).
+
+**Only to build from the source code:** [uv](https://docs.astral.sh/uv/), and [Git](https://git-scm.com/) to download the code (or download it as a ZIP from GitHub instead).
+
+**Optional, for the AI summaries:** [Ollama](https://ollama.com) and about 8 GB of disk for its model; see [below](#optional-local-ai-for-the-summaries).
 
 ### One command
 
@@ -46,11 +61,14 @@ For development, or to change the code. You need [uv](https://docs.astral.sh/uv/
 # 1. Install uv (Windows; for macOS/Linux see https://docs.astral.sh/uv/)
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
-# 2. Install dependencies, from the project folder
+# 2. Download the code (or download the ZIP from GitHub and unpack it)
+git clone https://github.com/MertYilmaz41/market-researcher.git
+
+# 3. Install dependencies, from the project folder
 cd market-researcher
 uv sync
 
-# 3. Optional: check that everything works
+# 4. Optional: check that everything works
 uv run pytest -q
 ```
 
@@ -66,13 +84,13 @@ The page has a **top bar** (the Games | Markets | Shortlist views, the search bo
 Click the search box at the top and tick one or more Steam tags (up to 5; typing only filters the list). Games must have all the ticked tags. The button under the title shows the current **filters**; click it to change them (or pick a preset: Default, Proven demand, Quick look). Press **Search**. The page remembers your tags and filters for next time. While a search runs, each game appears as it is checked and scored; the first run of a tag takes about 30 seconds, and you can cancel it at any time.
 
 - **List | Map:** the switch above the results shows the ranking as a list or as the opportunity map. The page remembers your choice.
-- **Opportunity map (2D | 3D):** each bubble is a game. Left–right is demand (reviews) and height is dissatisfaction (% positive); in 3D, depth is fixability. Size is estimated revenue and color is the score (violet = high). The top right corner is the one the method looks for: proven demand, poor execution. Click a bubble to inspect it. In 3D, drag to orbit and scroll to zoom.
-- **Market sentence:** under the title, how many of the tag's games with demand leave players disappointed, how many please them (85%+ positive), and the unmet share.
+- **Opportunity map:** each bubble is a game. Left–right is demand (reviews) and height is dissatisfaction (% positive). Size is estimated revenue and color is the score (violet = high). The top right corner is the one the method looks for: proven demand, poor execution. Click a bubble to inspect it.
+- **Market sentence:** under the title, how many of the tag's games with demand leave players disappointed, how many please them (85%+ positive), and the unmet share. A second line shows the tag's track record once it is measured (a few minutes the first time).
 - **AI summary (optional):** the AI button under the title opens the summary; press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-summaries).
 - **Ranking:** rank, game, score, biggest complaint and estimated revenue; a ⚠ −N badge marks games that lost points to risks. The first 8 show; **Show N more** lists the rest. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV** above the list.
 - **Details panel:** opens on the right when you click a row or a bubble, and closes with × or Esc. **Overview** has the score with a one-line why, the rating, reviews, last 12 months and estimated revenue, the top complaints with a quote, the risks that cost points, what players love and the game's tags (click one to search that tag). **Complaints** has every complaint category with trends, design pillars and quotes. **Summary** (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the categories (e.g. price, cheaters), each with a quote. **History** has the monthly review chart and every risk check, passed or not.
 - **What a term means:** every project-specific word (Fixability, Unmet share, Est. revenue, ...) has a small **i** next to it; hover or tap it for a one- or two-sentence explanation. **How it works** lists them all, plus every risk.
-- **Score card:** hover or focus any score to see its three parts, their weights, each risk penalty and why.
+- **Score card:** hover or focus any score to see its two parts (demand and dissatisfaction), their weights, each risk penalty and why. Fixability is shown there too, but not counted: it is close to 100% for almost every game.
 - **Markets:** pick **Markets** in the top bar and press **Build market ranking** to rank every tag (about 7 minutes the first time, then from the cache). Find a tag by name, or show the small ones too. Click a tag to search it.
 - **Shortlist:** press **Shortlist** in the details panel to keep a game. The **Shortlist** view shows the starred games with the score they had when you starred them; add a note to each, or download the list as CSV. It stays after a restart and a cache clear.
 - **Past searches:** click the empty search box to reopen any earlier search or market ranking, even after a restart.
@@ -88,7 +106,7 @@ uv run mr discover -t Crafting -t Survival         # games with all of these tag
 uv run mr analyze 1330660                          # deep dive on one game (Steam AppID)
 uv run mr analyze 1330660 --summary                # plus the game summary (needs Ollama)
 uv run mr report --tag "Job Simulator"             # rank a tag, writes reports/job-simulator.md
-uv run mr markets --top 30                         # rank every tag by underserved games
+uv run mr markets --top 30                         # rank every tag by well-served games
 uv run mr report --tag "Job Simulator" --summary   # plus the opportunity summary (needs Ollama)
 uv run mr runs                                     # saved runs (also in the web UI's past searches)
 uv run mr --lang tr report --tag "Job Simulator"   # Turkish output and report
@@ -107,7 +125,7 @@ uv run mr --lang tr report --tag "Job Simulator"   # Turkish output and report
 | Clear the cache | `uv run mr cache clear` |
 | Help | `uv run mr --help`, `uv run mr report --help` |
 
-The first run of a tag takes about 30 seconds because of API rate limits. After that, data comes from the cache in `~/.cache/market-researcher` (refreshed daily, weekly for store details). Saved runs are kept separately in `~/.local/share/market-researcher`, so clearing the cache keeps them.
+The first run of a tag takes about 30 seconds because of API rate limits. After that, data comes from the cache in `~/.cache/market-researcher` (refreshed daily; SteamSpy's game details and the tag list weekly). Saved runs are kept separately in `~/.local/share/market-researcher`, so clearing the cache keeps them.
 
 ### Optional: local AI for the summaries
 
@@ -128,7 +146,7 @@ Treat the summaries as a first draft: check each point against the games and quo
 | **Installation** | `install.ps1` / `install.sh` install the app as a [uv tool](https://docs.astral.sh/uv/concepts/tools/) with its own Python; packaged with `uv_build`, released to PyPI by a GitHub Actions workflow on version tags |
 | **Command line** | [Typer](https://typer.tiangolo.com/) for commands and options, [Rich](https://rich.readthedocs.io/) for colored tables and progress |
 | **Web server** | [FastAPI](https://fastapi.tiangolo.com/) on [Uvicorn](https://www.uvicorn.org/), bound to `127.0.0.1`. Long searches run as background jobs that the page polls |
-| **Frontend** | Plain HTML, CSS and JavaScript ES modules, with **no build step and no framework**. The 2D map is hand-drawn SVG; the 3D map uses [three.js](https://threejs.org/) `0.170.0` from a CDN, and the page falls back to 2D without it |
+| **Frontend** | Plain HTML, CSS and JavaScript ES modules, with **no build step and no framework**. The map is hand-drawn SVG, so the page needs nothing from a CDN |
 | **Data models** | [Pydantic](https://docs.pydantic.dev/) for games, analyses, API payloads and saved runs |
 | **HTTP** | [httpx](https://www.python-httpx.org/) with [tenacity](https://tenacity.readthedocs.io/) retries, per-host rate limiting and a SQLite response cache, so repeated runs barely touch Steam |
 | **Storage** | [SQLite](https://www.sqlite.org/) (Python's built-in `sqlite3`): one database for the HTTP cache, a separate one for saved runs and the shortlist |
@@ -182,13 +200,13 @@ The method assumes that where many players are unhappy, a better game will do we
 
   The correlation of unmet share with the hit rate was −0.04 (95% interval −0.17 to +0.09): no link either way. With the sold rate it was +0.19 (+0.05 to +0.31).
 - **What it means:** where the unmet share is high, players keep buying new games of that kind, so the demand is real. But the new games disappointed them about as often as the old ones; few of them were rated well. A high unmet share tells you where to look, not that a new game there will succeed. Making the better game is still on you.
+- **Other measures, written down before they were measured:** three did predict hits: the tag's earlier games' hit rate (released 2–4 years before; correlation +0.47, top fifth 14.6% vs bottom fifth 7.3%), the number of well-served games (+0.36) and market size (+0.33). New games did well where earlier games had done well. The Markets view is ranked by the last two, and each tag search measures the first as the tag's track record (it reads one review history per game, so the first time takes a few minutes, up to about 20).
 
-So read the Markets view, the market strip and the unmet share as a **filter for exploring**: they narrow thousands of tags down to the ones worth a closer look. Then read the complaints and quotes of the games themselves. The backtest tests the tag-level share only; the per-game score and the complaint mining were not tested against later success. It also has known biases (games removed from Steam are missing, tags are today's), listed in the report.
+So read the unmet share as a **filter for exploring**: it narrows thousands of tags down to the ones worth a closer look. Then read the complaints and quotes of the games themselves. The backtest tests tag-level measures only; the per-game score and the complaint mining were not tested against later success, so the words beside a score describe the evidence ("Many buyers, most unhappy") rather than promise an opportunity. It also has known biases (games removed from Steam are missing, tags are today's), listed in the report.
 
 ## Limitations
 
 - **The unmet share is not a proven predictor:** see [above](#is-the-method-proven-a-tool-for-exploring-not-a-forecast).
-
 - **Revenue is a rough estimate:** full price, before Steam's cut, discounts and regional pricing.
 - **Review mining is keyword-based and English-only.** On hand-labeled reviews from games it was never tuned on, it finds 64% of complaints, and 80% of what it reports is right. Read the quotes, not just the percentages.
 - **No price history:** only the current price is checked for deep discounts.
@@ -200,6 +218,6 @@ So read the Markets view, the market strip and the unmet share as a **filter for
 
 ## Credits and license
 
-The method is CodeMonkey's "Underserved Audience" idea; this project automates it and is not made by CodeMonkey.
+Thanks to [Code Monkey](https://www.youtube.com/@CodeMonkeyUnity): the idea for this tool comes from his "Underserved Audience" method (proven demand + poor execution = opportunity). This project only automates the method.
 
 Released under the [MIT License](LICENSE).

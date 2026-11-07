@@ -2,12 +2,14 @@
 
 import contextvars
 import hashlib
+import json
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -104,9 +106,14 @@ class Job:
     slow: bool = False  # a review page has taken SLOW_REVIEW_SECONDS: warned once in the status
     result: pipeline.TagResult | pipeline.MarketsResult | None = None
     error: dict | None = None  # a Notice dict
+    # The tag's track record being measured after the run (POST .../track): done, total, step_start,
+    # step_done, error (a Notice dict). None when not measuring.
+    measuring: dict | None = None
 
 
-_jobs: dict[str, Job] = {}
+_jobs: dict[str, Job] = {}  # oldest first; _job() moves a job to the end when it's used
+JOBS_KEEP = 10  # finished jobs kept in memory; older ones reload from the saved runs when asked for
+_pinned: dict[str, int] = {}  # job id -> summaries being written for it: never dropped meanwhile
 _runs = runs.RunStore()
 _lock = threading.Lock()
 _summary_lock = threading.Lock()  # one summary at a time: the local model has one GPU
@@ -151,7 +158,7 @@ def game_json(a: Analysis) -> dict:
         recent_share=recent / total if total else None,
         recent_rating=risk.recent_rating(a.histogram, a.analyzed_at),
         score_explained=scoring.explain(a),
-        verdict=scoring.verdict(a.opportunity.score),
+        verdict=scoring.verdict(a),
         why=scoring.why(a),
         checks=risk.checks(a),
     )
@@ -189,6 +196,7 @@ def _run(job_id: str) -> None:
             if job.status != "cancelled":  # a cancelled run ends quietly, whatever it was doing
                 for k, v in fields.items():
                     setattr(job, k, v)
+            _trim_jobs()
 
     try:
         http = _http()
@@ -213,9 +221,20 @@ def _run(job_id: str) -> None:
 REQUESTS = {"tag": TagRunRequest, "market": MarketRunRequest}
 
 
+def _trim_jobs() -> None:
+    """Keep running jobs and the JOBS_KEEP most recently used finished ones (call with _lock held).
+    A finished search is saved, so one dropped here reloads from the runs DB when it's asked for again."""
+    finished = [k for k, j in _jobs.items() if j.status != "running" and k not in _pinned]
+    for k in finished[:-JOBS_KEEP]:
+        del _jobs[k]
+
+
 def _job(job_id: str, kind: str = "tag") -> Job:
     """A running job, or a finished one from the saved runs."""
-    job = _jobs.get(job_id)
+    with _lock:
+        job = _jobs.pop(job_id, None)
+        if job is not None:
+            _jobs[job_id] = job  # most recently used: the last to be dropped
     if job is None:
         saved = _runs.load(job_id)
         if saved is not None:
@@ -223,10 +242,26 @@ def _job(job_id: str, kind: str = "tag") -> Job:
                       status="done", message="", result=saved["result"])
             with _lock:
                 _jobs[job_id] = job
+                _trim_jobs()
     if job is None or job.kind != kind:
         raise HTTPException(404, _("This run no longer exists. It may have been deleted, or the server "
                                    "was restarted while it was running."))
     return job
+
+
+@contextmanager
+def _pinned_job(job_id: str):
+    """The job, kept in memory until the block ends. A summary is written into the job's result and then
+    saved; if the job were dropped and reloaded meanwhile, two copies would each save without the other's."""
+    with _lock:  # pinned before it's looked up, so it can't be dropped in between
+        _pinned[job_id] = _pinned.get(job_id, 0) + 1
+    try:
+        yield _job(job_id)
+    finally:
+        with _lock:
+            _pinned[job_id] -= 1
+            if not _pinned[job_id]:
+                del _pinned[job_id]
 
 
 @app.get("/", include_in_schema=False)
@@ -246,8 +281,8 @@ def versioned_index() -> str:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     html = html.replace('href="/static/style.css"', f'href="/static/style.css?v={v}"')
     html = html.replace('src="/static/app.js"', f'src="/static/app.js?v={v}"')
-    scripts = "".join(f'\n        "/static/{f.name}": "/static/{f.name}?v={v}",' for f in files if f.suffix == ".js")
-    return html.replace('"imports": {', '"imports": {' + scripts, 1)
+    imports = {f"/static/{f.name}": f"/static/{f.name}?v={v}" for f in files if f.suffix == ".js"}
+    return html.replace('{"imports": {}}', json.dumps({"imports": imports}), 1)
 
 
 @app.get("/api/tags")
@@ -295,9 +330,58 @@ def _status(job_id: str, job: Job, result_json) -> dict:
                 job.slow = True
                 out["slow"] = notices.slow_reviews().model_dump()
         result = job.result
+        if job.measuring is not None:
+            m = job.measuring
+            out["track_progress"] = {"done": m["done"], "total": m["total"], "error": m["error"],
+                                     "eta": eta(m["done"], m["total"], m["step_done"], m["step_start"], _now())}
     if result is not None:
         out["result"] = result_json(job_id, job.request, result)
     return out
+
+
+@app.post("/api/tag-runs/{job_id}/track")
+def measure_track(job_id: str) -> dict:
+    """Start measuring the tag's track record (pipeline.track_record) in the background, once per run.
+    Progress comes with the run's status (track_progress), the result with the run (result.track)."""
+    job = _job(job_id)
+    if job.result is None:
+        raise HTTPException(409, _("The run hasn't finished yet."))
+    with _lock:
+        if job.result.track is not None or (job.measuring is not None and job.measuring["error"] is None):
+            return {"started": False}
+        job.measuring = {"done": 0, "total": 0, "step_start": _now(), "step_done": 0, "error": None}
+    threading.Thread(target=contextvars.copy_context().run, args=(_measure, job_id), daemon=True).start()
+    return {"started": True}
+
+
+def _measure(job_id: str) -> None:
+    with _pinned_job(job_id) as job:
+        m = job.measuring
+
+        def step(message: str, done: int, total: int) -> None:
+            with _lock:
+                # A search comes first: it needs the same Steam host. The page measures again when the
+                # run is shown next, and the histograms read so far are cached.
+                if any(j.status == "running" for j in _jobs.values()):
+                    raise pipeline.Cancelled
+                if total != m["total"]:
+                    m["step_start"], m["step_done"] = _now(), done
+                m["done"], m["total"] = done, total
+
+        try:
+            track = pipeline.track_record(_http(), job.request.tags, step)
+        except pipeline.Cancelled:
+            with _lock:
+                job.measuring = None
+            return
+        except Exception as e:
+            with _lock:
+                m["error"] = notices.friendly_error(e).model_dump()
+            return
+        with _lock:
+            job.result.track = track
+            job.measuring = None
+        _runs.update_result(job_id, job.result)
 
 
 def _score_changes(job_id: str, ranked: list[Analysis]) -> dict[int, float | None]:
@@ -372,6 +456,31 @@ def delete_shortlist(appid: int) -> dict:
     return {"games": _shortlist_json()}
 
 
+def _cache_json() -> dict:
+    stats = _http().cache.stats()
+    big = stats["bytes"] > config.CACHE_WARN_BYTES
+    return {**stats, "warn": notices.cache_large(stats["bytes"]).model_dump() if big else None}
+
+
+@app.get("/api/cache")
+def get_cache() -> dict:
+    return _cache_json()
+
+
+@app.post("/api/cache/{action}")
+def clean_cache(action: Literal["prune", "clear"]):
+    """Remove expired entries (prune) or all of them (clear), and shrink the file. Not while a search runs:
+    it shares the cache, and VACUUM would hold its lock for seconds."""
+    with _lock:
+        busy = any(j.status == "running" for j in _jobs.values())
+    if busy:
+        notice = notices.cache_busy()
+        return JSONResponse(status_code=409, content={"detail": notice.message, "notice": notice.model_dump()})
+    cache = _http().cache
+    removed = cache.prune() if action == "prune" else cache.clear()
+    return {"removed": removed, **_cache_json()}
+
+
 @app.get("/api/shortlist.csv")
 def shortlist_download() -> PlainTextResponse:
     return PlainTextResponse(shortlist_csv(_runs.shortlist()), media_type="text/csv",
@@ -407,8 +516,18 @@ def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -
         "axes": {"demand_log": [config.DEMAND_LOG_MIN, config.DEMAND_LOG_MAX],
                  "rating": [config.MAX_RATING, config.MIN_RATING]},
         "compared": bool(changes),
+        "track": _track_json(result.track),
         "notices": [n.model_dump() for n in post],
     }
+
+
+def _track_json(tr: market.TrackRecord | None) -> dict | None:
+    if tr is None:
+        return None
+    first, last = tr.window()
+    return {"text": market.track_text(tr), "entrants": tr.entrants, "hits": tr.hits, "hit_rate": tr.hit_rate,
+            "too_broad": tr.too_broad, "first": first, "last": last,
+            "enough": tr.too_broad is None and tr.entrants >= market.MIN_TRACK_ENTRANTS}
 
 
 def _summary_json(s) -> dict | None:
@@ -502,6 +621,7 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
                   n_tag_games=res.n_tag_games, min_reviews=r.min_reviews, lo=r.lo, hi=r.hi,
                   not_games=res.not_games, unlisted=res.unlisted,
                   market=market.summary(res.market) if res.market else "",
+                  track=market.track_text(res.track) if res.track else "",
                   summary=res.summaries.get(lang()),
                   game_summaries={k: v[lang()] for k, v in res.game_summaries.items() if lang() in v})
     return PlainTextResponse(text, media_type="text/markdown", headers={
@@ -511,52 +631,52 @@ def tag_run_report(job_id: str) -> PlainTextResponse:
 @app.post("/api/tag-runs/{job_id}/summary")
 def write_summary(job_id: str):
     """The run's opportunity summary in the request's language, written by the local LLM once and saved."""
-    job = _job(job_id)
-    if job.result is None:
-        raise HTTPException(409, _("The run hasn't finished yet."))
-    res, language = job.result, lang()
-    with _summary_lock:
-        s = res.summaries.get(language)
-        if s is None:
-            try:
-                s = summary.write(pipeline.tag_label(job.request.tags), res.analyses, res.market, language)
-            except llm.LLMUnavailable as e:
-                notice = notices.llm_unavailable(e.missing_model)
-                return JSONResponse(status_code=503, content={"detail": notice.message, "notice": notice.model_dump()})
-            except Exception as e:
-                notice = notices.friendly_error(e)
-                return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
-            res.summaries[language] = s
-            _runs.update_result(job_id, res)
-    return {"summary": _summary_json(s)}
+    with _pinned_job(job_id) as job:
+        if job.result is None:
+            raise HTTPException(409, _("The run hasn't finished yet."))
+        res, language = job.result, lang()
+        with _summary_lock:
+            s = res.summaries.get(language)
+            if s is None:
+                try:
+                    s = summary.write(pipeline.tag_label(job.request.tags), res.analyses, res.market, language)
+                except llm.LLMUnavailable as e:
+                    notice = notices.llm_unavailable(e.missing_model)
+                    return JSONResponse(status_code=503, content={"detail": notice.message, "notice": notice.model_dump()})
+                except Exception as e:
+                    notice = notices.friendly_error(e)
+                    return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
+                res.summaries[language] = s
+                _runs.update_result(job_id, res)
+        return {"summary": _summary_json(s)}
 
 
 @app.post("/api/tag-runs/{job_id}/games/{appid}/summary")
 def write_game_summary(job_id: str, appid: int):
     """One game of the run, read by the local LLM (why players are unhappy, what to do, complaints no
     category covers), in the request's language; written once and saved with the run."""
-    job = _job(job_id)
-    if job.result is None:
-        raise HTTPException(409, _("The run hasn't finished yet."))
-    res, language = job.result, lang()
-    a = next((x for x in res.analyses if x.game.appid == appid), None)
-    if a is None:
-        raise HTTPException(404, _("This game isn't part of the run."))
-    with _summary_lock:
-        s = res.game_summaries.get(appid, {}).get(language)
-        if s is None:
-            try:
-                negative = pipeline.review_sample(_http(), appid, "negative", job.request.reviews)
-                s = summary.write_game(a, negative, language)
-            except llm.LLMUnavailable as e:
-                notice = notices.llm_unavailable(e.missing_model)
-                return JSONResponse(status_code=503, content={"detail": notice.message, "notice": notice.model_dump()})
-            except Exception as e:
-                notice = notices.friendly_error(e)
-                return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
-            res.game_summaries.setdefault(appid, {})[language] = s
-            _runs.update_result(job_id, res)
-    return {"summary": _summary_json(s)}
+    with _pinned_job(job_id) as job:
+        if job.result is None:
+            raise HTTPException(409, _("The run hasn't finished yet."))
+        res, language = job.result, lang()
+        a = next((x for x in res.analyses if x.game.appid == appid), None)
+        if a is None:
+            raise HTTPException(404, _("This game isn't part of the run."))
+        with _summary_lock:
+            s = res.game_summaries.get(appid, {}).get(language)
+            if s is None:
+                try:
+                    negative = pipeline.review_sample(_http(), appid, "negative", job.request.reviews)
+                    s = summary.write_game(a, negative, language)
+                except llm.LLMUnavailable as e:
+                    notice = notices.llm_unavailable(e.missing_model)
+                    return JSONResponse(status_code=503, content={"detail": notice.message, "notice": notice.model_dump()})
+                except Exception as e:
+                    notice = notices.friendly_error(e)
+                    return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
+                res.game_summaries.setdefault(appid, {})[language] = s
+                _runs.update_result(job_id, res)
+        return {"summary": _summary_json(s)}
 
 
 @app.get("/api/games/{appid}")

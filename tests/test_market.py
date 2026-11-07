@@ -74,7 +74,7 @@ def test_discover_prints_market_line(monkeypatch):
     assert "Market:" in res.output and "1 underserved" in res.output
 
 
-def test_market_rank_puts_specific_underserved_tags_first():
+def test_market_rank_puts_tags_with_many_well_served_games_first():
     from market_researcher.market import TagMarket
 
     def row(tag, n_games, under, well):
@@ -84,7 +84,45 @@ def test_market_rank_puts_specific_underserved_tags_first():
 
     rows = [row("Indie", 50_000, 3000, 6000), row("Rugby", 20, 1, 0), row("Job Sim", 130, 10, 24),
             row("Colony Sim", 400, 30, 10)]
-    assert [r.tag for r in sorted(rows, key=pipeline.market_rank)] == ["Colony Sim", "Job Sim", "Indie", "Rugby"]
+    # by well-served games (the backtest's signal, not the unmet share); broad tags last
+    assert [r.tag for r in sorted(rows, key=pipeline.market_rank)] == ["Job Sim", "Colony Sim", "Rugby", "Indie"]
+
+
+def _ts(year, month):
+    import datetime as dt
+    return int(dt.datetime(year, month, 15, tzinfo=dt.UTC).timestamp())
+
+
+def test_track_record_counts_hits_among_games_released_48_to_24_months_ago(monkeypatch):
+    from market_researcher.models import HistPoint
+    now = _ts(2026, 11)  # window: released 2022-11 to 2024-10
+    hists = {
+        1: [HistPoint(date=_ts(2023, 1), up=900, down=100)],  # hit
+        2: [HistPoint(date=_ts(2023, 6), up=300, down=300)],  # sold, no hit
+        3: [HistPoint(date=_ts(2024, 10), up=5, down=5)],  # entrant, neither
+        4: [HistPoint(date=_ts(2021, 1), up=900, down=100)],  # released before the window
+        5: [HistPoint(date=_ts(2025, 1), up=900, down=100)],  # after it
+        6: [HistPoint(date=_ts(2023, 1), up=400, down=0), HistPoint(date=_ts(2025, 6), up=400, down=0)],  # 500 only later
+    }
+    games = [game(pos=50, neg=50, appid=a) for a in hists] + [game(pos=3, neg=3, appid=99)]  # 99: under 10 reviews
+    fetched = []
+    monkeypatch.setattr(pipeline, "tag_games", lambda http, tags: games)
+    monkeypatch.setattr(pipeline.steam_store, "review_histogram",
+                        lambda http, appid, ttl: fetched.append(appid) or hists[appid])
+    tr = pipeline.track_record(None, ["Colony Sim"], now=now)
+    assert 99 not in fetched
+    assert (tr.entrants, tr.hits, tr.sold) == (4, 1, 2) and tr.window() == ("2022-11", "2024-10")
+    assert "too few to tell" in market.track_text(tr)
+    tr.entrants = 20
+    assert market.track_text(tr).startswith("Track record: 1 of 20 games released 2022-11 to 2024-10 became hits (5%")
+
+
+def test_track_record_skips_broad_tags(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "TRACK_MAX_GAMES", 2)
+    monkeypatch.setattr(pipeline, "tag_games", lambda http, tags: [game(pos=50, neg=50, appid=a) for a in range(3)])
+    monkeypatch.setattr(pipeline.steam_store, "review_histogram", lambda *a, **k: pytest.fail("fetched a histogram"))
+    tr = pipeline.track_record(None, ["Indie"], now=_ts(2026, 11))
+    assert tr.too_broad == 3 and "too broad (3 games" in market.track_text(tr)
 
 
 def priced(price, pct=40, n=1000, appid=1):

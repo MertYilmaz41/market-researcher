@@ -23,7 +23,7 @@ TAG_EXAMPLES = "Job Simulator, Colony Sim, Management, Base Building, Life Sim, 
 SLOW_RUN_SECONDS = 180  # warn before a first run longer than this (a default 15-game run is ~2-3 min)
 BROAD_TAG_GAMES = 1000
 FEW_CANDIDATES = 3
-WEAK_SCORE = 20
+WEAK_SCORE = 12  # was 20 while fixability was in the score (the same games score lower without it)
 
 
 class Notice(BaseModel):
@@ -170,8 +170,8 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
     if no_reviews:
         out.append(Notice(
             level="warning", title=_("Review texts unavailable"),
-            message=_("Couldn't load review texts for {n} game(s), so their complaints weren't "
-                      "mined and fixability was assumed to be 50%.", n=len(no_reviews)),
+            message=_("Couldn't load review texts for {n} game(s), so their complaints weren't mined.",
+                      n=len(no_reviews)),
             hint=_("Run again later to fill them in."),
         ))
 
@@ -244,7 +244,7 @@ def for_game(a: Analysis) -> list[Notice]:
     if a.review_error:
         out.append(Notice(
             level="warning", title=_("Review texts unavailable"),
-            message=_("Complaints couldn't be mined; fixability was assumed to be 50%."),
+            message=_("Complaints couldn't be mined."),
             hint=_("Try again later."),
         ))
     elif a.mining and a.mining.n_negative == 0:
@@ -299,6 +299,19 @@ def slow_reviews() -> Notice:
                   message=_("Some pages take 40 s or more. The search keeps going; a game whose reviews fail "
                             "still gets ranked."),
                   hint="")
+
+
+def cache_large(size: int) -> Notice:
+    """The cache file has grown past config.CACHE_WARN_BYTES (expired entries stay until pruned)."""
+    return Notice(level="warning", title=_("The cache takes {mb:,.0f} MB", mb=size / 1e6),
+                  message=_("Old downloads stay on disk until you remove them."),
+                  hint=_("Clean it up with the cache button in the top bar. Saved runs and the shortlist are kept."))
+
+
+def cache_busy() -> Notice:
+    return Notice(level="info", title=_("A search is running"),
+                  message=_("The cache can't be cleaned while a search is using it."),
+                  hint=_("Wait for it to finish or cancel it, then try again."))
 
 
 def llm_unavailable(missing_model: str | None) -> Notice:

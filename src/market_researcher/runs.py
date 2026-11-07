@@ -28,7 +28,7 @@ ADAPTERS = {"tag": TypeAdapter(TagResult), "market": TypeAdapter(MarketsResult)}
 def compare_key(tags: list[str], min_reviews: int, lo: float, hi: float, reviews: int | None = None) -> str:
     """Runs with the same tags (any order or case), filters and reviews read per game can be compared:
     a bigger review sample alone moves complaint shares and fixability, so its score changes would mislead."""
-    return json.dumps([sorted(t.casefold() for t in tags), min_reviews, lo, hi, reviews])
+    return json.dumps([sorted(t.casefold() for t in tags), min_reviews, lo, hi, reviews, config.SCORE_VERSION])
 
 
 class RunStore:

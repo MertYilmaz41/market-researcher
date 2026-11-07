@@ -1,9 +1,6 @@
 """Score the keyword miner against hand-labeled reviews (tests/fixtures/labeled_reviews.jsonl).
 
-    uv run python -m market_researcher.mining.evaluate [path ...]
-    uv run python -m market_researcher.mining.evaluate --miner llm --model qwen3:14b   (local LLM, see llm.py)
-    uv run python -m market_researcher.mining.evaluate --miner verify   (keywords, then the LLM drops wrong ones)
-    uv run python -m market_researcher.mining.evaluate --miner fill     (keywords; the LLM only where they find nothing)
+    uv run python -m market_researcher.mining.evaluate [path ...] [--games]
 
 Tune mining/lexicon.py against labeled_reviews.jsonl only. labeled_reviews_holdout.jsonl (other games)
 is never tuned on: it shows whether a change helps on reviews the lexicon wasn't fitted to.
@@ -20,8 +17,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import config
-from . import llm
 from .keywords import _IDEA, _hits, clean
 from .lexicon import CATEGORIES
 
@@ -79,16 +74,6 @@ def evaluate(labeled: list[dict], detections: list[set[str]] | None = None) -> t
         if code != IDEA:
             total.tp, total.fp, total.fn = total.tp + s.tp, total.fp + s.fp, total.fn + s.fn
     return scores, total
-
-
-def fill(labeled: list[dict], model: str) -> list[set[str]]:
-    """Keywords first; the LLM looks only at reviews where they found no complaint, and its complaints
-    are added. Its idea-praise calls are ignored: keywords keep that one."""
-    found = [detect(row["text"]) for row in labeled]
-    empty = [i for i, f in enumerate(found) if not f - {IDEA}]
-    for i, extra in zip(empty, llm.classify([labeled[i]["text"] for i in empty], model)):
-        found[i] |= extra - {IDEA}
-    return found
 
 
 def mistakes(labeled: list[dict], code: str) -> list[tuple[str, dict]]:
@@ -197,10 +182,8 @@ def table(scores: dict[str, Score], total: Score) -> str:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Score a complaint miner against hand-labeled reviews.")
+    ap = argparse.ArgumentParser(description="Score the keyword miner against hand-labeled reviews.")
     ap.add_argument("paths", nargs="*", type=Path, help="labeled JSONL files (default: tuning set and held-out set)")
-    ap.add_argument("--miner", choices=["keywords", "llm", "verify", "fill"], default="keywords")
-    ap.add_argument("--model", default=config.LLM_MODEL, help="Ollama model for --miner llm / verify")
     ap.add_argument("--games", action="store_true",
                     help="also compare per game: top complaints and fixability, as the app shows them")
     args = ap.parse_args()
@@ -208,30 +191,13 @@ def main() -> None:
     for path in args.paths or [FIXTURE, HOLDOUT]:
         rows = load(path)
         start = time.perf_counter()
-        if args.miner == "llm":
-            detections = llm.classify([r["text"] for r in rows], args.model)
-            name = f"LLM {args.model}"
-        elif args.miner == "fill":
-            detections = fill(rows, args.model)
-            name = f"keywords, {args.model} on reviews they find nothing in"
-        elif args.miner == "verify":
-            detections = llm.verify([r["text"] for r in rows], [detect(r["text"]) for r in rows], args.model)
-            name = f"keywords checked by {args.model}"
-        else:
-            detections = [detect(r["text"]) for r in rows]
-            name = "keywords"
+        detections = [detect(r["text"]) for r in rows]
         per_review = (time.perf_counter() - start) / len(rows)
-        print(f"{path.name}: {len(rows)} labeled reviews, {name}, {per_review:.2f} s per review "
-              f"(~{per_review * 200 / 60:.1f} min for a game's 200 negative reviews)")
-        if args.miner != "keywords" and (share := llm.vram_share(args.model)) is not None:
-            print(f"model in GPU memory: {share:.0%}")
+        print(f"{path.name}: {len(rows)} labeled reviews, keywords, {per_review * 1000:.1f} ms per review")
         print(table(*evaluate(rows, detections)), end="\n\n")
         if args.games:
             print(game_table(games(rows, detections)), end="\n\n")
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except llm.LLMUnavailable as e:
-        sys.exit(str(e))
+    main()

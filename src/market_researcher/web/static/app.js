@@ -143,53 +143,10 @@ async function apiError(res) {
   return new ApiError({ level: "error", title: t("Request failed (HTTP {status})", { status: res.status }), message: detail || res.statusText, hint: "" });
 }
 
-// ---------- opportunity map: 2D (always works) and 3D (needs three.js from the CDN + WebGL) ----------
-const onMapSelect = (appid) => selectGame(appid);
-const map2d = createMap2d($("#map"), { onSelect: onMapSelect, describe: mapCard, axes: () => state.result?.axes });
-let map3d = null;
-try {
-  const { createMap } = await import("/static/map3d.js");
-  const m = createMap($("#map"), { onSelect: onMapSelect, describe: mapCard });
-  if (!m.available) throw new Error("WebGL is disabled in this browser");
-  map3d = m;
-} catch (err) {
-  console.error(err);
-  toast("warning", t("3D map unavailable"),
-    t("The 3D library couldn't load (no internet, the CDN is blocked, or WebGL is off)."),
-    t("The 2D map shows the same games. Reload the page to try 3D again."));
-}
-// Both maps always hold the current games and selection, so switching views is instant.
-const map = {
-  setGames(games) { map2d.setGames(games); map3d?.setGames(games); },
-  select(appid) { map2d.select(appid); map3d?.select(appid); },
-  relabel() { map2d.relabel(); map3d?.relabel(); },
-};
-
-const MAP_LEGEND = {
-  "2d": () => t("Bubble size = est. revenue · free-to-play games get the smallest bubble · color = score · ratings exclude review-bomb periods"),
-  "3d": () => t("x: demand · y: dissatisfaction · z: fixability · size: revenue · color: score · drag to orbit, scroll to zoom"),
-};
-let mapView = "3d";
-function setMapView(view) {
-  if (view !== "2d" && !map3d) view = "2d";
-  else if (view !== "2d") view = "3d";
-  map2d.setVisible(view === "2d");
-  map3d?.setVisible(view === "3d");
-  mapView = view;
-  $("#map-legend").textContent = MAP_LEGEND[view]();
-  if (!map3d) $('#map-view button[data-view="3d"]').title = t("3D map unavailable in this browser");
-  for (const b of document.querySelectorAll("#map-view button")) {
-    b.setAttribute("aria-pressed", String(b.dataset.view === view));
-  }
-  try { localStorage.setItem("mapView", view); } catch { /* private mode: just not remembered */ }
-}
-document.querySelectorAll("#map-view button").forEach((b) => b.addEventListener("click", () => setMapView(b.dataset.view)));
-if (!map3d) {
-  $('#map-view button[data-view="3d"]').disabled = true;
-}
-let savedView = "2d";
-try { savedView = localStorage.getItem("mapView") || "2d"; } catch { /* storage blocked */ }
-setMapView(savedView);
+// ---------- opportunity map (2D SVG, no CDN needed) ----------
+const map = createMap2d($("#map"), { onSelect: (appid) => selectGame(appid), describe: mapCard, axes: () => state.result?.axes });
+const mapLegend = () => t("Bubble size = est. revenue · free-to-play games get the smallest bubble · color = score · ratings exclude review-bomb periods");
+$("#map-legend").textContent = mapLegend();
 
 // The Games view shows the ranking as a list or as the map, never both.
 let gamesMode = "table";
@@ -198,9 +155,8 @@ function setGamesMode(mode) {
   $("#games-view .table-wrap").hidden = gamesMode !== "table";
   $("#map").hidden = gamesMode !== "map";
   $("#map-legend").hidden = gamesMode !== "map" || !state.games.length;
-  $("#map-tools").hidden = gamesMode !== "map";
   for (const b of document.querySelectorAll("#games-mode button")) b.setAttribute("aria-pressed", String(b.dataset.mode === gamesMode));
-  if (gamesMode === "map") setMapView(mapView); // resizes the shown map to its new box
+  map.setVisible(gamesMode === "map"); // resizes the map to its new box
   try { localStorage.setItem("gamesMode", gamesMode); } catch { /* storage blocked */ }
 }
 $("#games-mode").addEventListener("click", (e) => {
@@ -282,6 +238,67 @@ document.addEventListener("keydown", (e) => {
   if (!$("#filters").hidden) { openFilters(false); $("#filters-toggle").focus(); e.preventDefault(); }
 });
 document.querySelectorAll("input").forEach((i) => i.addEventListener("input", () => i.classList.remove("invalid")));
+
+// ---------- the cache button in the top bar: the cache's size, and cleaning it up ----------
+const mb = (bytes) => fmt(Math.round(bytes / 1e6));
+let cacheBytes = 0; // the size last shown, so a cleanup can tell how much it freed
+
+function showCache(c) {
+  cacheBytes = c.bytes;
+  $("#cache-size").textContent = t("{mb} MB · {n} expired entries", { mb: mb(c.bytes), n: fmt(c.expired) });
+  $("#settings-toggle").classList.toggle("has-dot", Boolean(c.warn));
+}
+
+async function loadCache(warn = false) {
+  try {
+    const res = await api("/api/cache");
+    if (!res.ok) throw await apiError(res);
+    const c = await res.json();
+    showCache(c);
+    if (warn) notify(c.warn);
+  } catch (err) {
+    if (!warn) notifyError(err); // the check at load stays quiet
+  }
+}
+
+function openSettings(open = true) {
+  $("#settings").hidden = !open;
+  $("#settings-toggle").setAttribute("aria-expanded", String(open));
+  if (open) {
+    $("#cache-size").textContent = t("Loading...");
+    loadCache();
+  }
+}
+$("#settings-toggle").addEventListener("click", () => openSettings($("#settings").hidden));
+document.addEventListener("click", (e) => {
+  if (!$("#settings").hidden && !e.target.closest(".settings-wrap, #toasts")) openSettings(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#settings").hidden) { openSettings(false); $("#settings-toggle").focus(); e.preventDefault(); }
+});
+
+async function cleanCache(action) {
+  if (action === "clear" && !confirm(t("Delete all cached Steam data? Saved runs and the shortlist are kept."))) return;
+  const buttons = [$("#cache-prune"), $("#cache-clear")];
+  const before = buttons.map((b) => b.textContent);
+  buttons.forEach((b) => { b.disabled = true; });
+  $(action === "prune" ? "#cache-prune" : "#cache-clear").textContent = t("Cleaning...");
+  try {
+    const old = cacheBytes;
+    const res = await api(`/api/cache/${action}`, { method: "POST" });
+    if (!res.ok) throw await apiError(res);
+    const c = await res.json();
+    showCache(c);
+    toast("success", t("Cache cleaned"), t("Removed {n} entries; freed {mb} MB.",
+      { n: fmt(c.removed), mb: mb(Math.max(0, old - c.bytes)) }));
+  } catch (err) {
+    notifyError(err);
+  } finally {
+    buttons.forEach((b, i) => { b.disabled = false; b.textContent = before[i]; });
+  }
+}
+$("#cache-prune").addEventListener("click", () => cleanCache("prune"));
+$("#cache-clear").addEventListener("click", () => cleanCache("clear"));
 
 // ---------- filters and tags are remembered in this browser; presets fill the filter fields ----------
 const FILTER_IDS = ["min-reviews", "lo", "hi", "max-games", "reviews"];
@@ -769,6 +786,7 @@ function renderTitle(searching = null) {
   $("#games-kicker").textContent = searching ? t("Games · searching") : "";
   $("#table-title").textContent = searching || r?.tag || t("Find underserved audiences");
   renderMarketLine(searching ? null : r);
+  renderTrackLine();
   if (!searching && !r) $("#market-line").textContent = t("Steam games that many people bought but rate poorly, ranked as chances for a better game.");
   renderSummary();
 }
@@ -799,6 +817,7 @@ function showResult(result, id, quiet = false) {
   $("#map-legend").hidden = gamesMode !== "map" || !state.games.length;
   map.setGames(state.games);
   renderTable();
+  measureTrack(id);
   if (quiet) {
     const g = state.games.find((x) => x.game.appid === state.selected);
     if (g) renderPanel(g, panelTab(), false);
@@ -835,6 +854,56 @@ function renderMarketLine(r) {
       under: fmt(m.n_underserved), demand: fmt(m.n_demand), range: range(r.lo, r.hi), well: fmt(m.n_well_served),
       pct: percent(r.well_served) }),
     " ", el("b", {}, t("Unmet share {pct}", { pct: pct(m.gap) })), info("unmet_share"));
+}
+
+// ---------- the tag's track record: measured in the background after a search, saved with the run ----------
+// How the tag's games of 2-4 years ago did (the backtest's strongest signal); one review history per game,
+// so a first measure takes minutes. The server stops it when a new search starts; showing the run again resumes.
+const track = { runId: null, progress: null, polling: false };
+
+function renderTrackLine() {
+  const line = $("#track-line");
+  const r = state.searching ? null : state.result;
+  if (!r?.market) return line.replaceChildren();
+  if (r.track) return line.replaceChildren(r.track.text, " ", info("track_record"));
+  const p = track.runId === state.runId ? track.progress : null;
+  if (!p) return line.replaceChildren();
+  if (p.error) return line.replaceChildren(t("The track record couldn't be measured: {why}", { why: p.error.message }));
+  const left = etaText(p.eta);
+  line.replaceChildren(p.total
+    ? t("Measuring the track record · {done} / {total} games", { done: fmt(p.done), total: fmt(p.total) })
+    : t("Measuring the track record..."), left ? ` · ${left}` : "", " ", info("track_record"));
+}
+
+async function measureTrack(id) {
+  if (!state.result?.market || state.result.track || (track.polling && track.runId === id)) return;
+  Object.assign(track, { runId: id, progress: { done: 0, total: 0 }, polling: true });
+  renderTrackLine();
+  try {
+    const res = await api(`/api/tag-runs/${id}/track`, { method: "POST" });
+    if (!res.ok) throw await apiError(res);
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      if (track.runId !== id || state.searching) return;
+      const r = await api(`/api/tag-runs/${id}`);
+      if (!r.ok) throw await apiError(r);
+      const job = await r.json();
+      if (track.runId !== id) return;
+      if (job.result?.track) {
+        if (state.runId === id) state.result.track = job.result.track;
+        track.progress = null;
+        return renderTrackLine();
+      }
+      track.progress = job.track_progress || null;
+      renderTrackLine();
+      if (!job.track_progress || job.track_progress.error) return; // stopped for a search, or failed
+    }
+  } catch {
+    track.progress = null;
+    renderTrackLine();
+  } finally {
+    if (track.runId === id) track.polling = false;
+  }
 }
 
 // ---------- opportunity summary: written on request by a local LLM (Ollama), saved with the run ----------
@@ -996,7 +1065,7 @@ function marketsText() {
     $("#markets-note").textContent = t("Rank every Steam tag by its games with demand that players rate poorly. Uses the Filters; the first build takes ~7 minutes, then ~1 day from the cache.");
     return;
   }
-  const notes = [t("{n} tags ranked by unmet share, games with ≥ {min} reviews; underserved = {range} positive. Broad tags (1,000+ games) and tags with under 3 underserved games come last.", {
+  const notes = [t("{n} tags ranked by well-served games, then games with demand (≥ {min} reviews): in a backtest, new games did better in such tags. Underserved = {range} positive. Broad tags (1,000+ games) come last.", {
     n: markets.rows.length, min: fmt(result.min_reviews), range: range(result.lo, result.hi) })];
   if (result.skipped.length) notes.push(t("{n} tags SteamSpy can't search are left out (search them one by one).", { n: result.skipped.length }));
   $("#markets-note").textContent = notes.join(" ");
@@ -1049,14 +1118,14 @@ function renderMarkets() {
     ), () => searchTag(r.tag));
   }));
   $("#markets-shown").textContent = t("{n} of {total} tags shown · click a tag to search it", { n: rows.length, total: markets.rows.length });
-  // The top three by the server's order (unmet share, broad and thin tags last), among the shown ones.
+  // The top three by the server's order (well-served games, then games with demand; broad tags last), among the shown ones.
   const top = [...shown].sort((a, b) => a.rank - b.rank).slice(0, 3);
   $("#market-cards").hidden = !top.length;
   $("#market-cards").replaceChildren(...top.map((r) => el("button", { type: "button", class: "market-card", onclick: () => searchTag(r.tag) },
     el("span", { class: "top" }, `#${r.rank}`, el("b", {}, marketVerdict(r)[0])),
     el("span", { class: "tag" }, r.tag),
-    el("span", { class: "share" }, el("b", {}, pct(r.gap)),
-      el("span", {}, t("unmet · {under} underserved vs {well} well served", { under: n(r.n_underserved), well: n(r.n_well_served) }))),
+    el("span", { class: "share" }, el("b", {}, n(r.n_well_served)),
+      el("span", {}, t("well served of {demand} with demand · unmet share {pct}", { demand: n(r.n_demand), pct: pct(r.gap) }))),
     el("span", { class: "go" }, t("Search this tag →")))));
 }
 $("#market-find").addEventListener("input", renderMarkets);
@@ -1186,7 +1255,7 @@ function delta(g) {
     d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "=");
 }
 
-// The score as a tinted pill (violet 65+, near-white 45+, gray under).
+// The score as a tinted pill (violet 56+, near-white 35+, gray under).
 function pill(score, size = "") {
   return el("span", { class: `pill ${scoreLevel(score)} ${size}` }, Math.round(score));
 }
@@ -1331,7 +1400,7 @@ function selectGame(appid, focus = true) {
   if (!g) return;
   state.selected = appid;
   if (!state.showAll && g.rank > SHOWN) { state.showAll = true; renderTable(); }
-  map.select(appid); // both views, so the hidden one is in sync when you switch
+  map.select(appid); // also while the list is shown, so the map is in sync when you switch
   highlightRow();
   renderPanel(g, 0, focus);
   document.querySelector(`#ranking tr[data-appid="${appid}"]`)?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
@@ -1348,11 +1417,11 @@ function fillScoreTip(g) {
     el("span", {}, label), el("b", {}, value), note ? el("p", {}, note) : null);
   scoreTip.replaceChildren(
     el("div", { class: "tip-head" }, el("b", {}, t("Opportunity score {score}", { score: Math.round(e.score) })), el("span", {}, "/ 100")),
-    el("p", { class: "tip-lead" }, t("Proven demand + poor execution = high opportunity. Three parts, each 0-100%:")),
+    el("p", { class: "tip-lead" }, t("Proven demand + poor execution = high opportunity. Two parts count, each 0-100%:")),
     ...e.parts.map((p) => el("div", { class: "tip-part" },
       el("div", { class: "tip-part-head" },
         el("span", {}, p.label),
-        el("i", {}, t("weight {pct}", { pct: pct(p.weight) })),
+        el("i", {}, p.weight ? t("weight {pct}", { pct: pct(p.weight) }) : t("not counted")),
         el("b", {}, pct(p.value))),
       el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(p.value * 100)}%` })),
       el("p", {}, p.basis))),
@@ -1361,8 +1430,8 @@ function fillScoreTip(g) {
       ...e.penalties.map((p) => row("minus", t("{label} (risk)", { label: p.label }), `-${p.points}`, p.reason)),
       row("total", t("Score"), Math.round(e.score))),
     el("p", { class: `tip-note${e.zero_part ? " warn" : ""}` }, e.zero_part
-      ? t("{part} is 0%, so the score is 0: a good opportunity needs all three parts.", { part: e.zero_part })
-      : t("If any part is 0%, the score is 0: a good opportunity needs all three parts.")),
+      ? t("{part} is 0%, so the score is 0: a good opportunity needs both parts.", { part: e.zero_part })
+      : t("If either part is 0%, the score is 0: a good opportunity needs both parts.")),
   );
 }
 
@@ -1406,7 +1475,7 @@ function terms() {
   return {
     demand: [t("Demand"), t("How many people bought games like this, judged by the number of reviews. Each extra review counts a little less (log scale), so one hit doesn't drown out the rest.")],
     dissatisfaction: [t("Dissatisfaction"), t("How unhappy the players are: how far the game's % positive is below 70%. A 40% game scores higher than a 65% one.")],
-    fixability: [t("Fixability"), t("How many of the complaints a new game could avoid: bugs, controls, missing content, performance and the like. Complaints about price or the genre itself don't count.")],
+    fixability: [t("Fixability"), t("How many of the complaints a new game could avoid: bugs, controls, missing content, performance and the like. Complaints about price or the genre itself don't count. Shown, but not counted in the score: it is close to 100% for almost every game.")],
     risk_penalty: [t("Risk penalty"), t("Points taken off the score for something that makes a game a weaker opportunity than it looks, e.g. online multiplayer, fading interest, or recent reviews showing it's already fixed. The ⚠ badge in the list shows them; a game's History tab lists every check.")],
     revenue: [t("Estimated revenue"), t("Box Method: each review stands for about 30 to 100 copies sold (45 in the middle), times the full price. A rough figure before Steam's cut, discounts, refunds and taxes. Checked against games that published their sales, x45 was right on average, but for a single game it was off by up to about 3 times either way. What the developer keeps is often half of this or less.")],
     price_range: [t("Price range"), t("The undiscounted prices of the paid games with demand in this market: the median, and the range the middle half sits in. Well-served games are the ones at 85%+ positive. Worked out from the data, not by the model. These are today's list prices: older games are often cheaper now than at launch, so a new game can usually ask a little more.")],
@@ -1416,6 +1485,7 @@ function terms() {
     with_demand: [t("With demand"), t("Games with at least the minimum number of reviews set in the Filters.")],
     underserved: [t("Underserved"), t("Games with demand whose % positive is inside the range set in the Filters: many players, let down.")],
     well_served: [t("Well served"), t("Games with demand that players rate {pct} positive or more: these players already have a good game.", { pct: percent(state.result?.well_served ?? 85) })],
+    track_record: [t("Track record"), t("How the tag's games released 2 to 4 years ago did: the share that became hits, 500+ reviews at 80%+ positive in their first 2 years. In a backtest it was the best sign of how new games would do (new games did better where it was high), unlike the unmet share. Rates fell year by year as Steam grew, so compare tags with each other, not with older numbers. It reads one review history per game, so the first time takes a few minutes (up to about 20); then it's saved with the run. Tags with over 800 games aren't measured.")],
     unmet_share: [t("Unmet share"), t("Of the games with demand that are clearly rated, the share that are underserved: underserved / (underserved + well served). Higher means players have fewer good games to choose from. A filter for exploring, not a forecast: in a backtest, new games in high-share tags sold more often, but were not rated well more often.")],
     min_reviews: [t("Minimum reviews"), t("How proven the demand must be: a game needs at least this many reviews to be considered.")],
     pct_range: [t("% positive range"), t("Which games count as letting players down. 5-70% leaves out games that are simply broken (under 5%) and games players already like (over 70%).")],
@@ -1790,7 +1860,7 @@ async function setLanguage(value) {
   applyStatic();
   relabelInfo();
   renderGlossary();
-  setMapView(mapView);
+  $("#map-legend").textContent = mapLegend();
   map.relabel();
   renderChips();
   if (!tagPop.hidden) openTagList();
@@ -1818,14 +1888,13 @@ async function setLanguage(value) {
 document.querySelectorAll("#lang button").forEach((b) => b.addEventListener("click", () => setLanguage(b.dataset.lang)));
 
 // The theme is set before the first paint by the script in index.html; this keeps the switch in sync,
-// remembers the choice and redraws what holds colors outside CSS (the 3D scene, the ring, the History chart).
+// remembers the choice and redraws what holds colors outside CSS (the map, the ring, the History chart).
 function setTheme(theme) {
   theme = theme === "light" ? "light" : "dark";
   document.documentElement.dataset.theme = theme;
   for (const b of document.querySelectorAll("#theme button")) b.setAttribute("aria-pressed", String(b.dataset.theme === theme));
   try { localStorage.setItem("theme", theme); } catch { /* storage blocked: not remembered */ }
-  map3d?.recolor();
-  map2d.relabel(); // redraws
+  map.relabel(); // redraws
   if (state.panelGame) renderPanel(state.panelGame, panelTab(), false);
 }
 document.querySelectorAll("#theme button").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.theme)));
@@ -1836,3 +1905,4 @@ let savedMode = "table";
 try { savedMode = localStorage.getItem("gamesMode") || "table"; } catch { /* storage blocked */ }
 setGamesMode(savedMode);
 setLanguage(getLang());
+loadCache(true); // warns once if the cache has grown large

@@ -1,6 +1,6 @@
 // 2D opportunity map (SVG): x = demand (reviews, log scale), y = dissatisfaction (% positive, lower is
-// higher up), size = estimated revenue (log), color = opportunity score. Same interface as map3d.js;
-// needs no CDN, so it always works.
+// higher up), size = estimated revenue (log), color = opportunity score.
+// It needs no CDN.
 import { mapColor } from "/static/palette.js";
 import { percent, t } from "/static/i18n.js";
 
@@ -95,7 +95,7 @@ export function createMap2d(container, { onSelect, describe, axes }) {
         t("Dissatisfaction ↑ % positive")),
     );
 
-    // Bubble size by revenue, relative within this result (like the 3D spheres).
+    // Bubble size by revenue, relative within this result.
     // Free-to-play games have no Box Method revenue: smallest bubble, and left out of the scale.
     const grosses = games.map((g) => Math.log10(Math.max(1, g.box.gross_mid)));
     const priced = grosses.filter((_, i) => games[i].price > 0);

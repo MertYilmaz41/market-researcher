@@ -139,6 +139,7 @@ def render(
     not_games: list[str],
     unlisted: list[str],
     market: str = "",  # market.summary() of the whole tag
+    track: str = "",  # market.track_text() of the tag, when it was measured
     summary: OpportunitySummary | None = None,  # the run's LLM summary in the report language
     game_summaries: dict[int, GameSummary] | None = None,  # appid -> LLM game summary in the report language
 ) -> str:
@@ -159,6 +160,7 @@ def render(
         not_games=not_games,
         unlisted=unlisted,
         market=market,
+        track=track,
         summary=summary,
         game_summaries=game_summaries or {},
         summary_games=min(config.SUMMARY_GAMES, len(rank(analyses))),

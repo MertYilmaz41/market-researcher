@@ -294,7 +294,7 @@ def markets(
     top: int = typer.Option(30, min=1, help="Max rows to show"),
     no_cache: bool = NO_CACHE_OPT,
 ):
-    """Rank every Steam tag by how underserved its audience is (first run ~7 min, then cached)."""
+    """Rank every Steam tag by its well-served games and market size (first run ~7 min, then cached)."""
     lo, hi = _rating_range(rating)
     _print_notices(notices.for_filters(min_reviews, lo, hi, 0, 0))
     http = HttpClient(use_cache=not no_cache)
@@ -303,7 +303,7 @@ def markets(
         result = run_markets(http, min_reviews, lo, hi,
                              lambda msg, done, total: progress.update(task, description=msg[:50], completed=done, total=total))
 
-    table = Table(title=_("Markets: tags by underserved games (>={min} reviews, {lo:g}-{hi:g}% positive)",
+    table = Table(title=_("Markets: tags by well-served games (>={min} reviews, {lo:g}-{hi:g}% positive)",
                           min=min_reviews, lo=lo, hi=hi))
     for i, col in enumerate(["#", _("Tag"), _("Games"), _("With demand"), _("Underserved"),
                              _("Well served ({pct}%+)", pct=config.WELL_SERVED_RATING), _("Unmet share"), _("Underserved revenue")]):
@@ -313,8 +313,9 @@ def markets(
         table.add_row(str(i), r.tag, num(m.n_games), num(m.n_demand), f"[bold]{num(m.n_underserved)}[/]",
                       num(m.n_well_served), fmt("{x:.0%}", x=m.gap), money(m.underserved_gross))
     console.print(table)
-    console.print("[dim]" + _("Unmet share = underserved / (underserved + well served). High share + many underserved games = "
-                              "an audience that good games don't reach yet.") + "[/]")
+    console.print("[dim]" + _("Ranked by well-served games, then games with demand: in a backtest, new games did better "
+                              "in such tags. Unmet share = underserved / (underserved + well served); it did not "
+                              "predict success.") + "[/]")
     if result.skipped:
         console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).",
                                   n=len(result.skipped)) + "[/]")
@@ -362,7 +363,7 @@ def _print_analysis(a: Analysis) -> None:
         console.print(_("Box Method: ~{units} units (x45), revenue {low} - {high} (x30-x100)",
                         units=num(est.units_mid), low=money(est.gross_low), high=money(est.gross_high)))
     o = a.opportunity
-    parts = _("demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, fixability {fixability}",
+    parts = _("demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive (fixability {fixability}, not counted)",
               demand=fmt("{x:.0%}", x=o.demand), dissatisfaction=fmt("{x:.0%}", x=o.dissatisfaction),
               rating=percent(o.effective_rating), fixability=fmt("{x:.0%}", x=o.fixability))
     if o.penalty:
@@ -426,7 +427,7 @@ def ui(
     port: int = typer.Option(8501, help="Local port"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the browser"),
 ):
-    """Open the web UI (3D opportunity map) in your browser."""
+    """Open the web UI in your browser."""
     import threading
     import webbrowser
 

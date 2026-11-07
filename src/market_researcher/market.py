@@ -80,3 +80,40 @@ def price_text(m: MarketStats) -> str:
 class TagMarket(BaseModel):
     tag: str
     stats: MarketStats
+
+
+class TrackRecord(BaseModel):
+    """How the tag's games released 48-24 months ago did in their first 24 months: the backtest's strongest
+    signal ("earlier entrants' hit rate", rho +0.47; reports/backtest.md). Hit: >= 500 reviews at >= 80%."""
+    start: int  # first month of the release window (backtest month index: year * 12 + month - 1)
+    months: int = 24
+    entrants: int = 0
+    hits: int = 0
+    sold: int = 0  # >= 500 reviews, any rating
+    measured_at: float = 0.0
+    too_broad: int | None = None  # not measured: the tag has this many games with 10+ reviews
+
+    @property
+    def hit_rate(self) -> float:
+        return self.hits / self.entrants if self.entrants else 0.0
+
+    def window(self) -> tuple[str, str]:
+        """("2022-11", "2024-10"): the first and last release month."""
+        end = self.start + self.months - 1
+        return f"{self.start // 12}-{self.start % 12 + 1:02d}", f"{end // 12}-{end % 12 + 1:02d}"
+
+
+MIN_TRACK_ENTRANTS = 10  # the backtest's floor: fewer releases say too little
+
+
+def track_text(tr: TrackRecord) -> str:
+    """One sentence for the CLI, the report and the web (no symbols outside cp1254)."""
+    if tr.too_broad is not None:
+        return _("Track record: not measured; the tag is too broad ({n:,} games with 10+ reviews).", n=tr.too_broad)
+    first, last = tr.window()
+    if tr.entrants < MIN_TRACK_ENTRANTS:
+        return _("Track record: only {n} games released {first} to {last}; too few to tell.",
+                 n=tr.entrants, first=first, last=last)
+    return _("Track record: {hits} of {n} games released {first} to {last} became hits ({rate:.0%}; "
+             "500+ reviews at 80%+ positive in their first 2 years).",
+             hits=tr.hits, n=tr.entrants, first=first, last=last, rate=tr.hit_rate)

@@ -40,7 +40,9 @@ MAX_RATING = 70.0
 
 # Market view (market.py): a demand game at >= this % positive already serves its players well
 WELL_SERVED_RATING = 85
-MARKET_MIN_UNDERSERVED = 3  # fewer underserved games than this: too little to rank a tag on
+# A tag's track record (pipeline.track_record) reads one review histogram per game with 10+ reviews; the
+# backtest only measured tags with up to this many such games, so bigger ones aren't measured (~20 min at most).
+TRACK_MAX_GAMES = 800
 LOW_GAP = 0.30  # under 30% of rated demand games underserved: "already well served" notice
 
 # Box Method review -> sales multipliers
@@ -51,6 +53,7 @@ BOX_HIGH = 100
 # Cache
 CACHE_DIR = Path.home() / ".cache" / "market-researcher"
 CACHE_DB = CACHE_DIR / "market_researcher.sqlite"
+CACHE_WARN_BYTES = 500 * 10**6  # the web page warns once the cache file is bigger than this
 # Saved runs live apart from the cache, so `mr cache clear` keeps them.
 DATA_DIR = Path.home() / ".local" / "share" / "market-researcher"
 RUNS_DB = DATA_DIR / "runs.sqlite"
@@ -71,13 +74,10 @@ SHORT_PLAYTIME_MINUTES = 120
 SHORT_PLAYTIME_WEIGHT = 0.5
 RECENT_MIN_NEGATIVE = 10  # negative reviews from the last 12 months needed to say if a complaint is still common
 
-# Local LLM via Ollama. It writes the opportunity summary of a tag run (summary.py). Complaint
-# detection with it (mining/llm.py) is measurement only: on the held-out reviews it stayed at
-# 48-71% precision (keywords: 86%), so the keyword miner is used.
-#   python -m market_researcher.mining.evaluate --miner llm --model <name>
+# Local LLM via Ollama. It writes the opportunity and game summaries (summary.py). Complaint detection
+# with it was measured and not adopted (CLAUDE.md, "Review mining is keyword-only").
 LLM_URL = "http://localhost:11434"
 LLM_MODEL = "gemma4:12b"  # best of the models measured for the summaries (Nov 2026: summary_eval and a blind read)
-LLM_BATCH = 8  # reviews per request (complaint detection)
 SUMMARY_GAMES = 10  # top-ranked games the opportunity summary reads
 SUMMARY_CTX = 16384  # context window for the summary request (its evidence is ~5-8k tokens)
 GAME_SUMMARY_REVIEWS = 25  # negative reviews with no complaint category that a game summary reads
@@ -104,8 +104,11 @@ RECOVERED_MIN_RECENT = 50  # reviews in the last 12 months needed to judge the r
 RECOVERED_DELTA = 15  # ...which must beat the all-time rating by this many points (or reach MAX_RATING)
 HARD_TAGS = {"Physics", "Open World", "MMORPG", "Massively Multiplayer"}
 
-# Opportunity score: weighted geometric mean of [0,1] parts, x100, minus risk penalties
-SCORE_WEIGHTS = {"demand": 0.40, "dissatisfaction": 0.35, "fixability": 0.25}
+# Opportunity score: weighted geometric mean of [0,1] parts, x100, minus risk penalties. Fixability was a
+# third part (0.25) until Nov 2026; it is ~100% for almost every game, so it only raised every score.
+# It is still computed and shown, but not counted.
+SCORE_WEIGHTS = {"demand": 0.40, "dissatisfaction": 0.35}
+SCORE_VERSION = 2  # in runs.compare_key: runs scored by the old formula aren't compared with new ones
 DEMAND_LOG_MIN = 1.5  # log10(reviews) mapped to 0 (~32 reviews)
 DEMAND_LOG_MAX = 4.0  # ...and to 1 (10,000 reviews)
 DEFAULT_FIXABILITY = 0.5  # when reviews couldn't be mined

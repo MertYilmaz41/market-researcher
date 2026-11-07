@@ -100,7 +100,8 @@ def test_explain_walks_from_parts_to_score():
     a = _analysis_for(game(), [flag("netcode"), flag("niche_x")])
     e = scoring.explain(a)
     assert [p["label"] for p in e["parts"]] == ["Demand", "Dissatisfaction", "Fixability"]
-    assert [p["weight"] for p in e["parts"]] == [0.40, 0.35, 0.25]
+    assert [p["weight"] for p in e["parts"]] == [0.40, 0.35, 0.0]  # fixability is shown, not counted
+    assert "Not counted in the score" in e["parts"][2]["basis"]
     assert e["combined"] - 15 == pytest.approx(e["score"])  # only netcode is penalized
     assert e["penalties"] == [{"code": "netcode", "label": "Online multiplayer", "points": 15, "reason": "netcode"}]
     assert "1,000 reviews" in e["parts"][0]["basis"] and "40% positive" in e["parts"][1]["basis"]
@@ -174,16 +175,31 @@ def test_recent_figures_count_back_from_the_analysis_time():
 
 # --- plain-language verdict and checks (web UI game panel) -----------------------------------------
 
-def test_verdict_bands():
-    assert [scoring.verdict(s) for s in (80, 65, 50, 45, 10)] == [
-        "Strong opportunity", "Strong opportunity", "Worth a closer look", "Worth a closer look", "Weak opportunity"]
+def test_verdict_says_what_the_evidence_shows():
+    def v(pos, neg):
+        return scoring.verdict(_analysis_for(game(pos=pos, neg=neg)))
+
+    assert v(3_000, 17_000) == "Many buyers, most unhappy"  # 20,000 reviews at 15%
+    assert v(400, 600) == "Solid demand, many unhappy"  # 1,000 at 40%
+    assert v(20, 30) == "Few buyers, many unhappy"
+    assert v(900, 100) == "Solid demand, mostly satisfied"
+    from market_researcher.i18n import use
+    with use("tr"):
+        assert v(400, 600) == "Sağlam talep, birçoğu memnun değil"
 
 
-def test_why_reads_the_three_parts():
-    a = _analysis_for(game(), [flag("netcode")])  # 1,000 reviews at 40%, every complaint fixable
-    assert scoring.why(a) == ("Solid demand (1,000 reviews), many of them unhappy (40% positive), "
-                              "and nearly every complaint is something a developer can fix.")
-    assert "couldn't be read for complaints" in scoring.why(_analysis_for(game(), mined=False))
+def test_fixability_does_not_change_the_score():
+    def scored(fix):
+        m = mining()
+        m.fixability = fix
+        return scoring.score(game(), [], m).score
+
+    assert scored(0.2) == scored(1.0) > 0
+
+
+def test_why_reads_the_two_parts():
+    a = _analysis_for(game(), [flag("netcode")])  # 1,000 reviews at 40%
+    assert scoring.why(a) == "Solid demand (1,000 reviews), many of them unhappy (40% positive)."
     assert "players mostly like it" in scoring.why(_analysis_for(game(pos=900, neg=100)))
     from market_researcher.i18n import use
     with use("tr"):
