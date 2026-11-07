@@ -1,6 +1,6 @@
 import pytest
 
-from steam_researcher import config
+from market_researcher import config
 
 
 @pytest.fixture(autouse=True)

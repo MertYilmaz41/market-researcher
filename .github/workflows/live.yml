@@ -16,4 +16,4 @@ jobs:
       - run: uv sync
       - run: uv run pytest tests/test_live.py -v
         env:
-          SR_LIVE: "1"
+          MR_LIVE: "1"

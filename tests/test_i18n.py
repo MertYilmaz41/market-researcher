@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from steam_researcher import config, i18n
-from steam_researcher.i18n import _, num, use
-from steam_researcher.i18n_tr import TR
-from steam_researcher.mining.lexicon import CATEGORIES
-from steam_researcher.models import CategoryResult, RiskFlag
+from market_researcher import config, i18n
+from market_researcher.i18n import _, num, use
+from market_researcher.i18n_tr import TR
+from market_researcher.mining.lexicon import CATEGORIES
+from market_researcher.models import CategoryResult, RiskFlag
 
 PACKAGE = Path(i18n.__file__).parent
 
@@ -149,23 +149,23 @@ def test_page_translation_keeps_placeholders(english):
 def test_cli_speaks_turkish(monkeypatch):
     from typer.testing import CliRunner
 
-    from steam_researcher.cli import app
+    from market_researcher.cli import app
     from test_m4 import analysis, flag
 
     a = analysis(42, "Solo", [flag("deep_discount", "warn")], appid=5)
-    monkeypatch.setattr("steam_researcher.cli.analyze_game", lambda http, appid, n: a)
+    monkeypatch.setattr("market_researcher.cli.analyze_game", lambda http, appid, n: a)
     tr = CliRunner().invoke(app, ["--lang", "tr", "analyze", "5"])
     assert tr.exit_code == 0, tr.output
     assert "Fırsat puanı" in tr.output and "Risk kontrolleri" in tr.output and "Oyunu bozan hatalar" in tr.output
     assert i18n.lang() == "en"  # the language doesn't leak past the command
-    en = CliRunner().invoke(app, ["analyze", "5"], env={"SR_LANG": ""})
+    en = CliRunner().invoke(app, ["analyze", "5"], env={"MR_LANG": ""})
     assert "Opportunity score" in en.output and "Fırsat" not in en.output
-    assert CliRunner().invoke(app, ["analyze", "5"], env={"SR_LANG": "tr"}).output.count("Fırsat puanı") == 1
+    assert CliRunner().invoke(app, ["analyze", "5"], env={"MR_LANG": "tr"}).output.count("Fırsat puanı") == 1
     assert CliRunner().invoke(app, ["--lang", "xx", "analyze", "5"]).exit_code == 2
 
 
 def test_report_in_turkish():
-    from steam_researcher.report import render
+    from market_researcher.report import render
     from test_web import fake_result
 
     r = fake_result()

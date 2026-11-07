@@ -1,9 +1,9 @@
 import pytest
 from typer.testing import CliRunner
 
-from steam_researcher import market, notices, pipeline
-from steam_researcher.cli import app
-from steam_researcher.market import MarketStats, market_stats
+from market_researcher import market, notices, pipeline
+from market_researcher.cli import app
+from market_researcher.market import MarketStats, market_stats
 
 from test_m4 import game
 from test_notices import post, tag_result
@@ -68,14 +68,14 @@ def test_cli_markets(monkeypatch):
 
 
 def test_discover_prints_market_line(monkeypatch):
-    monkeypatch.setattr("steam_researcher.sources.steamspy.games_by_tag", lambda http, tag: [g(40), g(95, appid=2)])
-    monkeypatch.setattr("steam_researcher.cli.verify_games", lambda http, c, n, p=None: (c[:n], [], set()))
+    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", lambda http, tag: [g(40), g(95, appid=2)])
+    monkeypatch.setattr("market_researcher.cli.verify_games", lambda http, c, n, p=None: (c[:n], [], set()))
     res = CliRunner().invoke(app, ["discover", "-t", "Hot"])
     assert "Market:" in res.output and "1 underserved" in res.output
 
 
 def test_market_rank_puts_specific_underserved_tags_first():
-    from steam_researcher.market import TagMarket
+    from market_researcher.market import TagMarket
 
     def row(tag, n_games, under, well):
         gap = under / (under + well) if under + well else 0
@@ -88,7 +88,7 @@ def test_market_rank_puts_specific_underserved_tags_first():
 
 
 def priced(price, pct=40, n=1000, appid=1):
-    from steam_researcher.models import Game
+    from market_researcher.models import Game
     pos = round(n * pct / 100)
     return Game(appid=appid, name="G", positive=pos, negative=n - pos, price_cents=price, initial_price_cents=price)
 

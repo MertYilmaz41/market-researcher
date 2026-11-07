@@ -1,8 +1,8 @@
 """Backtest: did tags the tool would have called underserved at a past date T later reward new games?
 
-    uv run python -m steam_researcher.backtest --tags "Job Simulator" --tags "Colony Sim"
-    uv run python -m steam_researcher.backtest --all --dry-run     (how many histograms a full run needs)
-    uv run python -m steam_researcher.backtest --all               (hours the first time, then cached)
+    uv run python -m market_researcher.backtest --tags "Job Simulator" --tags "Colony Sim"
+    uv run python -m market_researcher.backtest --all --dry-run     (how many histograms a full run needs)
+    uv run python -m market_researcher.backtest --all               (hours the first time, then cached)
 
 Each game's monthly review histogram gives its review count and % positive at any month, and its
 release month (the first month with reviews; Steam reviews start in Oct 2010, so older games look

@@ -107,7 +107,7 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
             message=_("Only {under:,} of the {rated:,} rated games with demand are underserved; "
                       "{well:,} are {good}%+ positive.", under=m.n_underserved,
                       rated=m.n_underserved + m.n_well_served, well=m.n_well_served, good=config.WELL_SERVED_RATING),
-            hint=_("Players here already have good games. Compare tags in the Markets view (sr markets)."),
+            hint=_("Players here already have good games. Compare tags in the Markets view (mr markets)."),
         ))
 
     if n_cand == 0:
@@ -290,7 +290,7 @@ def friendly_error(exc: BaseException) -> Notice:
                       hint=_("Try again later. If it persists, the data source needs an update."))
     return Notice(level="error", title=_("Unexpected error"),
                   message=f"{type(exc).__name__}: {exc}",
-                  hint=_("Try again. If it keeps happening, run the CLI with SR_DEBUG=1 for details."))
+                  hint=_("Try again. If it keeps happening, run the CLI with MR_DEBUG=1 for details."))
 
 
 def slow_reviews() -> Notice:

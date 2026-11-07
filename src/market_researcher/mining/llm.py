@@ -1,7 +1,7 @@
 """Complaint detection with a local LLM (Ollama), an alternative to the keyword lexicon.
 
     ollama pull qwen3:14b
-    uv run python -m steam_researcher.mining.evaluate --miner llm --model qwen3:14b
+    uv run python -m market_researcher.mining.evaluate --miner llm --model qwen3:14b
 
 classify() returns the same codes as the keyword miner (mining/lexicon.py categories, plus
 "idea_praise"), so evaluate.py scores both against the same hand-labeled reviews. Reviews are sent

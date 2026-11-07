@@ -6,14 +6,14 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from steam_researcher import config, pipeline, summary
-from steam_researcher.market import MarketStats
-from steam_researcher.mining import llm
-from steam_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, Review, SummaryPoint
-from steam_researcher.pipeline import TagResult
-from steam_researcher.report import render
-from steam_researcher.runs import ADAPTERS, RunStore
-from steam_researcher.web import server
+from market_researcher import config, pipeline, summary
+from market_researcher.market import MarketStats
+from market_researcher.mining import llm
+from market_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, Review, SummaryPoint
+from market_researcher.pipeline import TagResult
+from market_researcher.report import render
+from market_researcher.runs import ADAPTERS, RunStore
+from market_researcher.web import server
 from test_llm_miner import fake_ollama
 from test_m4 import analysis, flag
 from test_web import wait

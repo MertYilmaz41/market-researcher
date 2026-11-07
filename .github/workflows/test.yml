@@ -12,12 +12,12 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3  # full tag: setup-uv publishes no @v10 since v8
       - run: uv sync
       - name: Check the web UI's JavaScript
-        run: for f in src/steam_researcher/web/static/*.js; do node --check "$f"; done
+        run: for f in src/market_researcher/web/static/*.js; do node --check "$f"; done
       - name: Install a browser for the UI tests
         run: uv run playwright install --with-deps chromium
       - run: uv run pytest -q
       - name: Check that the built package installs and starts
         run: |
           uv build
-          uvx --isolated --from dist/*.whl steam-researcher --help
-          uvx --isolated --from dist/*.whl sr --help
+          uvx --isolated --from dist/*.whl market-researcher --help
+          uvx --isolated --from dist/*.whl mr --help

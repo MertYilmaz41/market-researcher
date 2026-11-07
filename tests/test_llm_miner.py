@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from steam_researcher.mining import evaluate, llm
-from steam_researcher.mining.lexicon import CATEGORIES
+from market_researcher.mining import evaluate, llm
+from market_researcher.mining.lexicon import CATEGORIES
 
 
 def fake_ollama(answer, requests=None, status=200):

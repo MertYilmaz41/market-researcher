@@ -1,7 +1,7 @@
-from steam_researcher import runs
-from steam_researcher.market import TagMarket, market_stats
-from steam_researcher.pipeline import MarketsResult, TagResult
-from steam_researcher.runs import RunStore
+from market_researcher import runs
+from market_researcher.market import TagMarket, market_stats
+from market_researcher.pipeline import MarketsResult, TagResult
+from market_researcher.runs import RunStore
 
 from test_m4 import analysis, game
 
@@ -46,8 +46,8 @@ def test_changes():
 
 def test_cli_runs_lists_saved_runs(tmp_path, monkeypatch):
     from typer.testing import CliRunner
-    from steam_researcher import config
-    from steam_researcher.cli import app
+    from market_researcher import config
+    from market_researcher.cli import app
 
     monkeypatch.setattr(config, "RUNS_DB", tmp_path / "runs.sqlite")
     monkeypatch.setattr(RunStore.__init__, "__defaults__", (tmp_path / "runs.sqlite",))

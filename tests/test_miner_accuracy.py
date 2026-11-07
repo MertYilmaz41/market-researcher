@@ -14,7 +14,7 @@ holdout2 77% / 65%.
 
 import pytest
 
-from steam_researcher.mining.evaluate import FIXTURE, FIXTURES, HOLDOUT, IDEA, evaluate, load
+from market_researcher.mining.evaluate import FIXTURE, FIXTURES, HOLDOUT, IDEA, evaluate, load
 
 HOLDOUT2 = FIXTURES / "labeled_reviews_holdout2.jsonl"
 
@@ -35,7 +35,7 @@ def test_each_common_category_is_usable():
 
 
 def test_driving_crash_is_not_a_bug():
-    from steam_researcher.mining.evaluate import detect
+    from market_researcher.mining.evaluate import detect
 
     assert "bugs" not in detect("I turned too far and crashed into a tree.")
     assert "bugs" in detect("The game crashed twice in an hour.")
@@ -43,7 +43,7 @@ def test_driving_crash_is_not_a_bug():
 
 
 def test_patterns_from_the_claude_labeled_set():
-    from steam_researcher.mining.evaluate import detect
+    from market_researcher.mining.evaluate import detect
 
     assert "abandoned" in detect("They removed multiplayer from the game.")
     assert "abandoned" in detect("The official servers were shut down last year.")
@@ -61,7 +61,7 @@ def test_patterns_from_the_claude_labeled_set():
 
 
 def test_game_level_comparison():
-    from steam_researcher.mining.evaluate import games
+    from market_researcher.mining.evaluate import games
 
     rows = [
         {"appid": 1, "playtime_minutes": 600, "text": "Crashes constantly, lots of bugs.", "labels": ["bugs"]},

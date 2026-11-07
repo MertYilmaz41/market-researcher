@@ -3,15 +3,15 @@
     uv run python scripts/sample_reviews.py 2336220 253770 --per-game 17 > sample.jsonl
 
 Each line gets empty `labels` (complaint category codes from mining/lexicon.py) and `idea_praise`
-to fill in by hand; `python -m steam_researcher.mining.evaluate` then scores the miner against them.
+to fill in by hand; `python -m market_researcher.mining.evaluate` then scores the miner against them.
 """
 
 import argparse
 import json
 import sys
 
-from steam_researcher.http import HttpClient
-from steam_researcher.sources import steam_store
+from market_researcher.http import HttpClient
+from market_researcher.sources import steam_store
 
 MAX_CHARS = 700  # keep the fixture small (and readable to label); the miner is scored on this text
 

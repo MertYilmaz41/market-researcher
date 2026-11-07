@@ -29,8 +29,8 @@ console = Console()
 @app.callback()
 def main(
     ctx: typer.Context,
-    lang: str = typer.Option("en", "--lang", envvar="SR_LANG",
-                             help="Output language: en or tr (also SR_LANG). Put it before the command: sr --lang tr report ..."),
+    lang: str = typer.Option("en", "--lang", envvar="MR_LANG",
+                             help="Output language: en or tr (also MR_LANG). Put it before the command: mr --lang tr report ..."),
 ):
     """Find underserved Steam audiences (CodeMonkey's method)."""
     if lang not in LANGS:
@@ -55,7 +55,7 @@ def _print_notices(items: list[notices.Notice]) -> None:
 
 
 def _guarded(func):
-    """Show network/service failures as a friendly message instead of a traceback (SR_DEBUG=1 to see it)."""
+    """Show network/service failures as a friendly message instead of a traceback (MR_DEBUG=1 to see it)."""
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -66,7 +66,7 @@ def _guarded(func):
                 click.exceptions.Abort, KeyboardInterrupt):
             raise
         except Exception as e:
-            if os.environ.get("SR_DEBUG"):
+            if os.environ.get("MR_DEBUG"):
                 raise
             _print_notice(notices.friendly_error(e))
             raise typer.Exit(1) from None
@@ -163,13 +163,13 @@ def discover(
                               "before Steam's cut, regional pricing and discounts.") + "[/]")
     if not_games:
         console.print("[dim]" + _("Excluded non-games: {names}", names=", ".join(not_games)) + "[/]")
-    console.print("[dim]" + _("Next: sr analyze <AppID>, or sr report --tag ...") + "[/]")
+    console.print("[dim]" + _("Next: mr analyze <AppID>, or mr report --tag ...") + "[/]")
 
 
 @app.command()
 @_guarded
 def analyze(
-    appid: int = typer.Argument(..., min=1, help="Steam AppID (from sr discover)"),
+    appid: int = typer.Argument(..., min=1, help="Steam AppID (from mr discover)"),
     reviews: int = typer.Option(300, "--reviews", min=10, max=1000, help="Max negative and max positive reviews to mine"),
     with_summary: bool = typer.Option(False, "--summary", help="Also let a local LLM (Ollama) read the game"),
     no_cache: bool = NO_CACHE_OPT,
@@ -282,7 +282,7 @@ def report(
         console.print(f"[bold]{_('Market:')}[/] {market.summary(result.market)}")
     params = dict(tags=tag, min_reviews=min_reviews, lo=lo, hi=hi, max_games=max_games, reviews=reviews)
     runs.RunStore().save("tag", label, params, result)
-    console.print(_("Report written to {path} (the run is also saved: sr runs, or Past runs in sr ui)", path=f"[bold]{out}[/]"))
+    console.print(_("Report written to {path} (the run is also saved: mr runs, or Past runs in mr ui)", path=f"[bold]{out}[/]"))
     _print_notices(post)
 
 
@@ -316,20 +316,20 @@ def markets(
     console.print("[dim]" + _("Unmet share = underserved / (underserved + well served). High share + many underserved games = "
                               "an audience that good games don't reach yet.") + "[/]")
     if result.skipped:
-        console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with sr discover).",
+        console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).",
                                   n=len(result.skipped)) + "[/]")
     for tag, reason in result.failed:
         console.print(f"[yellow]{_('Could not read {tag}:', tag=tag)}[/] {reason}")
-    console.print("[dim]" + _("Next: sr report --tag <Tag>") + "[/]")
+    console.print("[dim]" + _("Next: mr report --tag <Tag>") + "[/]")
 
 
 @app.command("runs")
 @_guarded
 def list_runs(limit: int = typer.Option(20, min=1, help="Max rows to show")):
-    """Saved runs from sr report and the web UI (open them in sr ui under Past runs)."""
+    """Saved runs from mr report and the web UI (open them in mr ui under Past runs)."""
     items = runs.RunStore().list(limit)
     if not items:
-        console.print(_("No saved runs yet. Run sr report --tag ..., or search in sr ui."))
+        console.print(_("No saved runs yet. Run mr report --tag ..., or search in mr ui."))
         return
     table = Table(title=_("Saved runs"))
     for i, col in enumerate([_("Date"), _("Kind"), _("Search"), _("Rows"), "ID"]):
@@ -433,11 +433,11 @@ def ui(
     import uvicorn
 
     url = f"http://localhost:{port}"
-    console.print(f"Steam Researcher UI running on {url}  (close this window or press Ctrl+C to stop)")
+    console.print(f"Market Researcher UI running on {url}  (close this window or press Ctrl+C to stop)")
     if open_browser:
         threading.Timer(1.5, webbrowser.open, args=[url]).start()
     # 127.0.0.1 only: the UI is not reachable from other devices on the network
-    uvicorn.run("steam_researcher.web.server:app", host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run("market_researcher.web.server:app", host="127.0.0.1", port=port, log_level="warning")
 
 
 @cache_app.command("prune")
@@ -458,9 +458,9 @@ def cache_clear():
 
 
 def start() -> None:
-    """The `steam-researcher` command: like `sr`, but with no command it opens the web UI.
+    """The `market-researcher` command: like `mr`, but with no command it opens the web UI.
 
-    So `uvx steam-researcher` (or the desktop shortcut the installer makes) starts the app in one step.
+    So `uvx market-researcher` (or the desktop shortcut the installer makes) starts the app in one step.
     """
     import sys
 

@@ -4,11 +4,11 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from steam_researcher import notices, pipeline
-from steam_researcher.cli import app
-from steam_researcher.http import RetryableStatus
-from steam_researcher.models import AppDetails
-from steam_researcher.pipeline import TagResult
+from market_researcher import notices, pipeline
+from market_researcher.cli import app
+from market_researcher.http import RetryableStatus
+from market_researcher.models import AppDetails
+from market_researcher.pipeline import TagResult
 
 from test_m4 import analysis, flag, game
 
@@ -173,15 +173,15 @@ def test_cli_network_error_is_friendly(monkeypatch):
     def down(http, tag):
         raise httpx.ConnectError("x", request=REQ)
 
-    monkeypatch.setattr("steam_researcher.sources.steamspy.games_by_tag", down)
-    monkeypatch.delenv("SR_DEBUG", raising=False)
+    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", down)
+    monkeypatch.delenv("MR_DEBUG", raising=False)
     res = CliRunner().invoke(app, ["discover", "--tag", "Job Simulator"])
     assert res.exit_code == 1
     assert "Can't reach steamspy.com" in res.output and "Traceback" not in res.output
 
 
 def test_cli_unknown_tag(monkeypatch):
-    monkeypatch.setattr("steam_researcher.sources.steamspy.games_by_tag", lambda http, tag: [])
+    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", lambda http, tag: [])
     monkeypatch.setattr(notices, "known_tags", lambda http: ["Xyz Sim", "Colony Sim"])
     res = CliRunner().invoke(app, ["discover", "--tag", "Xyzzy"])
     assert res.exit_code == 1 and "Tag not found" in res.output
@@ -202,8 +202,8 @@ def test_tag_games_keeps_only_games_with_every_tag(monkeypatch):
 def test_cli_multiple_tags(monkeypatch):
     by_tag = {"Crafting": [game(appid=1, name="Only Crafting"), game(appid=2, name="Both Games")],
               "Survival": [game(appid=2, name="Both Games"), game(appid=3, name="Only Survival")]}
-    monkeypatch.setattr("steam_researcher.sources.steamspy.games_by_tag", lambda http, tag: by_tag.get(tag, []))
-    monkeypatch.setattr("steam_researcher.cli.verify_games", lambda http, c, n, p=None: (c[:n], [], set()))
+    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", lambda http, tag: by_tag.get(tag, []))
+    monkeypatch.setattr("market_researcher.cli.verify_games", lambda http, c, n, p=None: (c[:n], [], set()))
     res = CliRunner().invoke(app, ["discover", "-t", "Crafting", "-t", "Survival", "--min-reviews", "1", "--rating", "0-100"])
     assert res.exit_code == 0, res.output
     assert "Crafting + Survival" in res.output and "Both Games" in res.output and "Only" not in res.output
@@ -218,13 +218,13 @@ def test_cli_option_bounds():
 
 
 def test_cli_game_not_found_is_not_unexpected(monkeypatch):
-    monkeypatch.setattr("steam_researcher.pipeline.analyze_game", lambda http, appid, n, progress=None: None)
+    monkeypatch.setattr("market_researcher.pipeline.analyze_game", lambda http, appid, n, progress=None: None)
     res = CliRunner().invoke(app, ["analyze", "999999999"])
     assert res.exit_code == 1 and "Game not found" in res.output and "Unexpected error" not in res.output
 
 
 def test_unknown_tag_detected_by_steamspy_fallback():
-    from steam_researcher.sources import steamspy
+    from market_researcher.sources import steamspy
 
     fallback = {"10": {"appid": 10, "name": "Fallback"}}
     real = {"20": {"appid": 20, "name": "Real"}}
@@ -241,7 +241,7 @@ def test_unknown_tag_detected_by_steamspy_fallback():
 # ---------- tag catalog ----------
 
 def test_parse_tag_list():
-    from steam_researcher.sources.steam_store import parse_tag_list
+    from market_researcher.sources.steam_store import parse_tag_list
 
     data = {"response": {"tags": [{"tagid": 1, "name": "indie"}, {"tagid": 2, "name": "Colony Sim"},
                                   {"tagid": 3, "name": "Action"}, {"tagid": 4, "name": "Action"}, {"tagid": 5}]}}
@@ -265,7 +265,7 @@ def test_unsearchable_steam_tag_is_explained_not_suggested_back():
 
 
 def test_renamed_tags_use_the_steamspy_name():
-    from steam_researcher.sources import steamspy
+    from market_researcher.sources import steamspy
 
     asked = []
 
@@ -281,7 +281,7 @@ def test_renamed_tags_use_the_steamspy_name():
 
 
 def test_tag_list_keeps_every_steam_tag():
-    from steam_researcher.sources.steam_store import parse_tag_ids, parse_tag_list
+    from market_researcher.sources.steam_store import parse_tag_ids, parse_tag_list
 
     data = {"response": {"tags": [{"tagid": i, "name": n} for i, n in
                                   enumerate(["Idler", "Incremental", "Point & Click", "Roguelite"], 1)]}}
@@ -310,7 +310,7 @@ SEARCH_PAGE = {"success": 1, "total_count": 250, "results_html": "\n".join([
 
 
 def test_parse_search_page():
-    from steam_researcher.sources.steam_search import parse_search_page
+    from market_researcher.sources.steam_search import parse_search_page
 
     games, total = parse_search_page(SEARCH_PAGE)
     assert total == 250 and [g.name for g in games] == ["Plain & Simple", "On Sale", "Free Game", "No Reviews Yet"]
@@ -323,7 +323,7 @@ def test_parse_search_page():
 
 
 def test_steam_search_pages_through_a_tag():
-    from steam_researcher.sources import steam_search
+    from market_researcher.sources import steam_search
 
     starts, steps = [], []
 
@@ -382,7 +382,7 @@ def test_run_tag_analyzes_in_parallel_and_keeps_order(monkeypatch):
 
 def test_review_timeout_keeps_the_game(monkeypatch):
     """A slow review API must not drop the game: it is ranked without complaint mining."""
-    from steam_researcher.sources import steam_store, steamspy
+    from market_researcher.sources import steam_store, steamspy
 
     monkeypatch.setattr(steamspy, "game_details", lambda http, appid: game(appid=appid, name="Slow"))
     monkeypatch.setattr(steam_store, "app_details", lambda http, appid: None)

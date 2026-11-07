@@ -1,9 +1,9 @@
 """Score the keyword miner against hand-labeled reviews (tests/fixtures/labeled_reviews.jsonl).
 
-    uv run python -m steam_researcher.mining.evaluate [path ...]
-    uv run python -m steam_researcher.mining.evaluate --miner llm --model qwen3:14b   (local LLM, see llm.py)
-    uv run python -m steam_researcher.mining.evaluate --miner verify   (keywords, then the LLM drops wrong ones)
-    uv run python -m steam_researcher.mining.evaluate --miner fill     (keywords; the LLM only where they find nothing)
+    uv run python -m market_researcher.mining.evaluate [path ...]
+    uv run python -m market_researcher.mining.evaluate --miner llm --model qwen3:14b   (local LLM, see llm.py)
+    uv run python -m market_researcher.mining.evaluate --miner verify   (keywords, then the LLM drops wrong ones)
+    uv run python -m market_researcher.mining.evaluate --miner fill     (keywords; the LLM only where they find nothing)
 
 Tune mining/lexicon.py against labeled_reviews.jsonl only. labeled_reviews_holdout.jsonl (other games)
 is never tuned on: it shows whether a change helps on reviews the lexicon wasn't fitted to.

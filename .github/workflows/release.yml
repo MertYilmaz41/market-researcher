@@ -19,5 +19,5 @@ jobs:
       - name: Check that the tag matches the version in pyproject.toml
         run: test "v$(uv version --short)" = "$GITHUB_REF_NAME"
       - run: uv build
-      - run: uvx --isolated --from dist/*.whl steam-researcher --help
+      - run: uvx --isolated --from dist/*.whl market-researcher --help
       - run: uv publish

@@ -6,7 +6,7 @@ Trains on the Claude-labeled set plus the tuning set, scores on the two human he
 trained on). Each category gets a logistic regression on the review's embedding (from Ollama's
 /api/embed). Its threshold is picked by cross-validation on the training data: the lowest one whose
 precision reaches --precision, so the classifier doesn't over-flag the way the LLMs did.
-Embeddings are cached in ~/.cache/steam-researcher/embed_<model>.json.
+Embeddings are cached in ~/.cache/market-researcher/embed_<model>.json.
 """
 
 import argparse
@@ -22,10 +22,10 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from steam_researcher import config  # noqa: E402
-from steam_researcher.mining import evaluate as ev  # noqa: E402
-from steam_researcher.mining.keywords import clean  # noqa: E402
-from steam_researcher.mining.lexicon import CATEGORIES  # noqa: E402
+from market_researcher import config  # noqa: E402
+from market_researcher.mining import evaluate as ev  # noqa: E402
+from market_researcher.mining.keywords import clean  # noqa: E402
+from market_researcher.mining.lexicon import CATEGORIES  # noqa: E402
 
 TRAIN = [ev.FIXTURES / "claude_labeled_reviews.jsonl", ev.FIXTURE]
 TEST = [ev.HOLDOUT, ev.FIXTURES / "labeled_reviews_holdout2.jsonl"]

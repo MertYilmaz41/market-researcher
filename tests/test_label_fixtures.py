@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from steam_researcher.mining.lexicon import CATEGORIES
+from market_researcher.mining.lexicon import CATEGORIES
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CLAUDE = FIXTURES / "claude_labeled_reviews.jsonl"
@@ -34,7 +34,7 @@ def test_claude_labels_use_known_codes():
 
 
 def test_evaluate_leaves_out_unsure_answers(tmp_path):
-    from steam_researcher.mining import evaluate
+    from market_researcher.mining import evaluate
 
     path = tmp_path / "x.jsonl"
     path.write_text('{"id": 1, "text": "a", "labels": []}\n{"id": 2, "text": "b", "labels": [], "unsure": true}\n',

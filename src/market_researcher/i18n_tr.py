@@ -42,8 +42,8 @@ TR: dict[str, str] = {
     "Audience already well served": "Kitle zaten iyi karşılanıyor",
     "Only {under:,} of the {rated:,} rated games with demand are underserved; {well:,} are {good}%+ positive.":
         "Talep gören {rated:,} oyundan yalnızca {under:,} tanesi karşılanmamış; {well:,} tanesi %{good}+ olumlu.",
-    "Players here already have good games. Compare tags in the Markets view (sr markets).":
-        "Buradaki oyuncuların zaten iyi oyunları var. Etiketleri Pazarlar görünümünde karşılaştırın (sr markets).",
+    "Players here already have good games. Compare tags in the Markets view (mr markets).":
+        "Buradaki oyuncuların zaten iyi oyunları var. Etiketleri Pazarlar görünümünde karşılaştırın (mr markets).",
     "No games with enough reviews": "Yeterli incelemesi olan oyun yok",
     "None of the {n:,} games tagged '{tag}' has {min:,}+ reviews.":
         "'{tag}' etiketli {n:,} oyunun hiçbirinde {min:,}+ inceleme yok.",
@@ -152,8 +152,8 @@ TR: dict[str, str] = {
     "Try again later. If it persists, the data source needs an update.":
         "Daha sonra tekrar deneyin. Sürerse veri kaynağının güncellenmesi gerekir.",
     "Unexpected error": "Beklenmedik hata",
-    "Try again. If it keeps happening, run the CLI with SR_DEBUG=1 for details.":
-        "Tekrar deneyin. Devam ederse ayrıntılar için CLI'ı SR_DEBUG=1 ile çalıştırın.",
+    "Try again. If it keeps happening, run the CLI with MR_DEBUG=1 for details.":
+        "Tekrar deneyin. Devam ederse ayrıntılar için CLI'ı MR_DEBUG=1 ile çalıştırın.",
     "Tag can't be searched": "Etiket aranamıyor",
     "'{tag}' is a Steam tag, but SteamSpy (the data source) can't search it.":
         "'{tag}' bir Steam etiketi, ama veri kaynağı SteamSpy bu etiketi arayamıyor.",
@@ -385,23 +385,23 @@ TR: dict[str, str] = {
         "Kalın inceleme sayıları = 500+ (ideal talep). Brüt gelir indirimsiz fiyatla hesaplanır; "
         "Steam payı, bölgesel fiyatlar ve indirimler düşülmemiştir.",
     "Excluded non-games: {names}": "Oyun olmadığı için çıkarılanlar: {names}",
-    "Next: sr analyze <AppID>, or sr report --tag ...": "Sonraki adım: sr analyze <AppID> ya da sr report --tag ...",
+    "Next: mr analyze <AppID>, or mr report --tag ...": "Sonraki adım: mr analyze <AppID> ya da mr report --tag ...",
     "Fetching SteamSpy, Steam store data and reviews...": "SteamSpy, Steam mağaza verileri ve incelemeler alınıyor...",
-    "Report written to {path} (the run is also saved: sr runs, or Past runs in sr ui)":
-        "Rapor {path} dosyasına yazıldı (tarama da kaydedildi: sr runs ya da sr ui'de Geçmiş taramalar)",
+    "Report written to {path} (the run is also saved: mr runs, or Past runs in mr ui)":
+        "Rapor {path} dosyasına yazıldı (tarama da kaydedildi: mr runs ya da mr ui'de Geçmiş taramalar)",
     "Markets: tags by underserved games (>={min} reviews, {lo:g}-{hi:g}% positive)":
         "Pazarlar: karşılanmamış oyunlarına göre etiketler (>={min} inceleme, %{lo:g}-{hi:g} olumlu)",
     "Unmet share = underserved / (underserved + well served). High share + many underserved games = "
     "an audience that good games don't reach yet.":
         "Karşılanmama oranı = karşılanmamış / (karşılanmamış + iyi karşılanmış). Yüksek oran + çok sayıda karşılanmamış oyun = "
         "iyi oyunların henüz ulaşmadığı bir kitle.",
-    "Skipped {n} tags SteamSpy can't search (search them one by one with sr discover).":
-        "SteamSpy'ın arayamadığı {n} etiket atlandı (onları sr discover ile tek tek arayın).",
+    "Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).":
+        "SteamSpy'ın arayamadığı {n} etiket atlandı (onları mr discover ile tek tek arayın).",
     "Could not read {tag}:": "{tag} okunamadı:",
     "Reading the Steam tag list": "Steam etiket listesi okunuyor",
-    "Next: sr report --tag <Tag>": "Sonraki adım: sr report --tag <Etiket>",
-    "No saved runs yet. Run sr report --tag ..., or search in sr ui.":
-        "Henüz kayıtlı tarama yok. sr report --tag ... çalıştırın ya da sr ui'de arama yapın.",
+    "Next: mr report --tag <Tag>": "Sonraki adım: mr report --tag <Etiket>",
+    "No saved runs yet. Run mr report --tag ..., or search in mr ui.":
+        "Henüz kayıtlı tarama yok. mr report --tag ... çalıştırın ya da mr ui'de arama yapın.",
     "Saved runs": "Kayıtlı taramalar",
     "Date": "Tarih",
     "Kind": "Tür",
@@ -440,7 +440,7 @@ TR: dict[str, str] = {
 
     # ---- the Markdown report (templates/report.md.j2)
     "Underserved Audience Report: {tag}": "Karşılanmamış Kitle Raporu: {tag}",
-    "Generated {date} by steam-researcher.": "steam-researcher tarafından {date} tarihinde oluşturuldu.",
+    "Generated {date} by market-researcher.": "market-researcher tarafından {date} tarihinde oluşturuldu.",
     "Filters: >= {min} reviews, {lo}-{hi}% positive, games only.":
         "Filtreler: >= {min} inceleme, %{lo}-{hi} olumlu, yalnızca oyunlar.",
     "Analyzed the {n} highest-demand of {candidates} candidates (out of {total} games in the tag).":

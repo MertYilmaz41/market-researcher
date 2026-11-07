@@ -1,12 +1,12 @@
 import pytest
 
-from steam_researcher import risk
-from steam_researcher.mining import mine
-from steam_researcher.mining.keywords import clean, core_phrases
+from market_researcher import risk
+from market_researcher.mining import mine
+from market_researcher.mining.keywords import clean, core_phrases
 
 
 def rev(text, up=False, votes=0, i=[0]):
-    from steam_researcher.models import Review
+    from market_researcher.models import Review
 
     i[0] += 1
     return Review(recommendation_id=str(i[0]), text=text, voted_up=up, votes_up=votes)
@@ -85,7 +85,7 @@ def test_liked_capture():
 # --- review sample: playtime weights, recent complaints ----------------------------------------
 
 def timed(text, playtime=0, timestamp=0, i=[1000]):
-    from steam_researcher.models import Review
+    from market_researcher.models import Review
 
     i[0] += 1
     return Review(recommendation_id=str(i[0]), text=text, voted_up=False, playtime_minutes=playtime, timestamp=timestamp)

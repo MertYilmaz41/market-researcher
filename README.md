@@ -1,4 +1,4 @@
-# Steam Researcher
+# Market Researcher
 
 Find underserved Steam audiences: games people clearly wanted, but that disappointed them.
 
@@ -25,18 +25,18 @@ Based on CodeMonkey's Underserved Audience method: look for genres where players
 **Windows** (PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/MertYilmaz41/steam-researcher/main/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/MertYilmaz41/market-researcher/main/install.ps1 | iex"
 ```
 
 **macOS / Linux:**
 
 ```sh
-curl -LsSf https://raw.githubusercontent.com/MertYilmaz41/steam-researcher/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/MertYilmaz41/market-researcher/main/install.sh | sh
 ```
 
-This installs [uv](https://docs.astral.sh/uv/) if you don't have it, then the app with its own Python 3.13 (nothing else on your system changes). On Windows it also puts a **Steam Researcher** shortcut on the desktop. Start the app with the shortcut or by typing `steam-researcher`: it opens in your browser. The same `sr` commands described below work too (`sr report --tag ...`). Run the command again to update. No API keys are needed.
+This installs [uv](https://docs.astral.sh/uv/) if you don't have it, then the app with its own Python 3.13 (nothing else on your system changes). On Windows it also puts a **Market Researcher** shortcut on the desktop. Start the app with the shortcut or by typing `market-researcher`: it opens in your browser. The same `mr` commands described below work too (`mr report --tag ...`). Run the command again to update. No API keys are needed.
 
-To remove it: `uv tool uninstall steam-researcher` (and delete the shortcut). Your saved runs stay in `~/.local/share/steam-researcher`.
+To remove it: `uv tool uninstall market-researcher` (and delete the shortcut). Your saved runs stay in `~/.local/share/market-researcher`.
 
 ### From the source code
 
@@ -47,7 +47,7 @@ For development, or to change the code. You need [uv](https://docs.astral.sh/uv/
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 # 2. Install dependencies, from the project folder
-cd steam-researcher
+cd market-researcher
 uv sync
 
 # 3. Optional: check that everything works
@@ -58,8 +58,8 @@ uv run pytest -q
 
 **Start the web UI.** It opens http://localhost:8501 in your browser. To stop it, close its window or press Ctrl+C in the terminal.
 
-- Installed with the one command: use the **Steam Researcher** desktop shortcut (Windows), or type `steam-researcher`.
-- From the source code: double-click **`Steam Researcher.bat`** (Windows), or run `uv run sr ui` in the project folder.
+- Installed with the one command: use the **Market Researcher** desktop shortcut (Windows), or type `market-researcher`.
+- From the source code: double-click **`Market Researcher.bat`** (Windows), or run `uv run mr ui` in the project folder.
 
 The page has a **top bar** (the Games | Markets | Shortlist views, the search box, How it works, and the language and theme switches), the **main area** (ranking, map, markets or shortlist), and the **details panel** that opens on the right when you pick a game. On a narrow window the details panel fills the screen.
 
@@ -80,18 +80,18 @@ Click the search box at the top and tick one or more Steam tags (up to 5; typing
 - **How it works:** the button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
 - **Language and theme:** **EN | TR** at the top right switches between English and Turkish (the whole interface, including messages and the score card); the moon | sun switch next to it picks the dark or light theme. The page follows your system theme until you pick one, then remembers it.
 
-**Command line.** The examples are written for the source code. If you installed with the one command, leave out `uv run`: type `sr report --tag "Job Simulator"`.
+**Command line.** The examples are written for the source code. If you installed with the one command, leave out `uv run`: type `mr report --tag "Job Simulator"`.
 
 ```powershell
-uv run sr discover --tag "Job Simulator"           # list candidate games
-uv run sr discover -t Crafting -t Survival         # games with all of these tags
-uv run sr analyze 1330660                          # deep dive on one game (Steam AppID)
-uv run sr analyze 1330660 --summary                # plus the game summary (needs Ollama)
-uv run sr report --tag "Job Simulator"             # rank a tag, writes reports/job-simulator.md
-uv run sr markets --top 30                         # rank every tag by underserved games
-uv run sr report --tag "Job Simulator" --summary   # plus the opportunity summary (needs Ollama)
-uv run sr runs                                     # saved runs (also in the web UI's past searches)
-uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report
+uv run mr discover --tag "Job Simulator"           # list candidate games
+uv run mr discover -t Crafting -t Survival         # games with all of these tags
+uv run mr analyze 1330660                          # deep dive on one game (Steam AppID)
+uv run mr analyze 1330660 --summary                # plus the game summary (needs Ollama)
+uv run mr report --tag "Job Simulator"             # rank a tag, writes reports/job-simulator.md
+uv run mr markets --top 30                         # rank every tag by underserved games
+uv run mr report --tag "Job Simulator" --summary   # plus the opportunity summary (needs Ollama)
+uv run mr runs                                     # saved runs (also in the web UI's past searches)
+uv run mr --lang tr report --tag "Job Simulator"   # Turkish output and report
 ```
 
 | Option | Example |
@@ -102,12 +102,12 @@ uv run sr --lang tr report --tag "Job Simulator"   # Turkish output and report
 | Games analyzed in a report | `--max-games 25` |
 | Reviews read per game | `--reviews 300` |
 | Report file | `--out my-report.md` |
-| Language (`en` or `tr`, before the command) | `sr --lang tr ...`, or set `SR_LANG=tr` |
+| Language (`en` or `tr`, before the command) | `mr --lang tr ...`, or set `MR_LANG=tr` |
 | Ignore cached data | `--no-cache` |
-| Clear the cache | `uv run sr cache clear` |
-| Help | `uv run sr --help`, `uv run sr report --help` |
+| Clear the cache | `uv run mr cache clear` |
+| Help | `uv run mr --help`, `uv run mr report --help` |
 
-The first run of a tag takes about 30 seconds because of API rate limits. After that, data comes from the cache in `~/.cache/steam-researcher` (refreshed daily, weekly for store details). Saved runs are kept separately in `~/.local/share/steam-researcher`, so clearing the cache keeps them.
+The first run of a tag takes about 30 seconds because of API rate limits. After that, data comes from the cache in `~/.cache/market-researcher` (refreshed daily, weekly for store details). Saved runs are kept separately in `~/.local/share/market-researcher`, so clearing the cache keeps them.
 
 ### Optional: local AI for the summaries
 
@@ -124,7 +124,7 @@ Treat the summaries as a first draft: check each point against the games and quo
 
 | Layer | Built with |
 |---|---|
-| **Language & tooling** | [Python 3.13](https://www.python.org/), managed with [uv](https://docs.astral.sh/uv/) (dependencies, virtual env, the `sr` and `steam-researcher` commands) |
+| **Language & tooling** | [Python 3.13](https://www.python.org/), managed with [uv](https://docs.astral.sh/uv/) (dependencies, virtual env, the `mr` and `market-researcher` commands) |
 | **Installation** | `install.ps1` / `install.sh` install the app as a [uv tool](https://docs.astral.sh/uv/concepts/tools/) with its own Python; packaged with `uv_build`, released to PyPI by a GitHub Actions workflow on version tags |
 | **Command line** | [Typer](https://typer.tiangolo.com/) for commands and options, [Rich](https://rich.readthedocs.io/) for colored tables and progress |
 | **Web server** | [FastAPI](https://fastapi.tiangolo.com/) on [Uvicorn](https://www.uvicorn.org/), bound to `127.0.0.1`. Long searches run as background jobs that the page polls |
@@ -163,9 +163,13 @@ SteamSpy / Steam APIs ──► HttpClient (rate limit, retry, SQLite cache)
 
 SteamDB isn't used because it has no public API.
 
+The app runs on your own computer and asks these services directly, from your own connection: there is no server in between and no API key. It paces its requests (about one per second per site, slower for the store search) and caches the answers, so a repeated search barely touches them. Please keep it that way if you change the code. Some of these endpoints are undocumented and can change without notice; a weekly test (`tests/test_live.py`) checks that they still answer as expected.
+
+Market Researcher is an independent project. It is not affiliated with or endorsed by Valve or SteamSpy. Steam and the Steam logo are trademarks of Valve Corporation.
+
 ## Is the method proven? A tool for exploring, not a forecast
 
-The method assumes that where many players are unhappy, a better game will do well. The tool was tested against history to see if that holds at the market level (`uv run python -m steam_researcher.backtest --all`, report in `reports/backtest.md`):
+The method assumes that where many players are unhappy, a better game will do well. The tool was tested against history to see if that holds at the market level (`uv run python -m market_researcher.backtest --all`, report in `reports/backtest.md`):
 
 - **How:** for 180 Steam tags, each tag's unmet share (underserved games / (underserved + well-served games)) was rebuilt as it was in January 2019, 2020, 2021 and 2022 from monthly review histories (32,000 games). Then the games released in the next 24 months were followed. A *hit* is a new game with 500+ reviews at 80%+ positive in its first two years; *sold* is 500+ reviews at any rating.
 - **The rule, fixed before the results were seen:** the unmet share counts as a predictor only if tags with a higher share had more hits, beyond chance, also with market size held fixed, and the top fifth's hit rate was at least 1.25× the bottom fifth's.
@@ -190,3 +194,12 @@ So read the Markets view, the market strip and the unmet share as a **filter for
 - **No price history:** only the current price is checked for deep discounts.
 - **SteamSpy tag lists may be incomplete**, and search results use SteamSpy's review counts until a game is analyzed.
 
+## Test data
+
+`tests/fixtures/` holds about 1,750 short excerpts of public Steam reviews, labeled by hand, by the author and by Claude (each row says which), to measure how accurate the complaint detection is. They are kept only for that; the labeling rules are in `tests/fixtures/LABELING.md` (Turkish). If you wrote one of these reviews and want it removed, open an issue.
+
+## Credits and license
+
+The method is CodeMonkey's "Underserved Audience" idea; this project automates it and is not made by CodeMonkey.
+
+Released under the [MIT License](LICENSE).

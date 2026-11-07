@@ -1,8 +1,8 @@
 import calendar
 
-from steam_researcher import backtest as bt
-from steam_researcher.market import market_stats
-from steam_researcher.models import Game, HistPoint
+from market_researcher import backtest as bt
+from market_researcher.market import market_stats
+from market_researcher.models import Game, HistPoint
 
 
 def ts(text: str) -> int:

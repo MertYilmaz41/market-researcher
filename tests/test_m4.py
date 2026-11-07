@@ -1,7 +1,7 @@
 import pytest
 
-from steam_researcher import report, scoring
-from steam_researcher.models import (
+from market_researcher import report, scoring
+from market_researcher.models import (
     Analysis, AppDetails, CategoryResult, Game, MiningResult, Opportunity, RiskFlag,
 )
 
@@ -114,7 +114,7 @@ def test_explain_notes_review_bombs_and_unmined_reviews():
 
 
 def test_explain_tells_unread_reviews_from_reviews_without_complaints():
-    from steam_researcher.models import MiningResult
+    from market_researcher.models import MiningResult
 
     a = _analysis_for(game(), mined=False)
     assert a.mining is None and "couldn't be mined" in scoring.explain(a)["parts"][2]["basis"]
@@ -132,8 +132,8 @@ def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):
     """A failed positive fetch must not throw away the negative sample: complaints and fixability still count."""
     import httpx
 
-    from steam_researcher import pipeline
-    from steam_researcher.models import Review
+    from market_researcher import pipeline
+    from market_researcher.models import Review
 
     def sample(http, appid, kind, limit, on_page=None):
         if kind == "positive":
@@ -160,7 +160,7 @@ def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):
 
 def test_recent_figures_count_back_from_the_analysis_time():
     """A saved run shows the last-12-months figures of the day it was made, not of today."""
-    from steam_researcher.models import HistPoint
+    from market_researcher.models import HistPoint
 
     day = 24 * 3600
     then = 1_700_000_000  # Nov 2023
@@ -185,13 +185,13 @@ def test_why_reads_the_three_parts():
                               "and nearly every complaint is something a developer can fix.")
     assert "couldn't be read for complaints" in scoring.why(_analysis_for(game(), mined=False))
     assert "players mostly like it" in scoring.why(_analysis_for(game(pos=900, neg=100)))
-    from steam_researcher.i18n import use
+    from market_researcher.i18n import use
     with use("tr"):
         assert "1.000" in scoring.why(a)
 
 
 def test_checks_list_every_check_passed_or_flagged():
-    from steam_researcher import config, risk
+    from market_researcher import config, risk
 
     a = _analysis_for(game(), [flag("netcode")])
     out = risk.checks(a)

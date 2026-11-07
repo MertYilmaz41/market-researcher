@@ -3,14 +3,14 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from steam_researcher import notices, pipeline
-from steam_researcher.cache import Cache
-from steam_researcher.http import HttpClient
-from steam_researcher.models import HistPoint
-from steam_researcher.pipeline import TagResult
-from steam_researcher.runs import RunStore
-from steam_researcher.web import server
-from steam_researcher.web.server import app
+from market_researcher import notices, pipeline
+from market_researcher.cache import Cache
+from market_researcher.http import HttpClient
+from market_researcher.models import HistPoint
+from market_researcher.pipeline import TagResult
+from market_researcher.runs import RunStore
+from market_researcher.web import server
+from market_researcher.web.server import app
 
 from test_m4 import analysis, flag
 
@@ -174,7 +174,7 @@ def test_lost_run_message(client):
 
 
 def test_tags_endpoint(client, monkeypatch):
-    from steam_researcher.web import server
+    from market_researcher.web import server
 
     monkeypatch.setattr(server.steam_store, "tag_names", lambda http: ["Colony Sim", "Job Simulator"])
     assert client.get("/api/tags").json() == {"tags": ["Colony Sim", "Job Simulator"]}
@@ -188,7 +188,7 @@ def test_tags_endpoint(client, monkeypatch):
 
 
 def test_market_run(client, monkeypatch):
-    from steam_researcher.market import MarketStats, TagMarket
+    from market_researcher.market import MarketStats, TagMarket
 
     stats = MarketStats(n_games=40, n_demand=10, n_underserved=4, n_well_served=2, median_rating=66,
                         underserved_gross=1e6, gap=4 / 6)
@@ -214,7 +214,7 @@ def test_market_run(client, monkeypatch):
 
 
 def test_tag_run_includes_market_and_recent_reviews(client, monkeypatch):
-    from steam_researcher.market import market_stats
+    from market_researcher.market import market_stats
 
     def fake_run_tag(http, tag, *args):
         r = fake_result()
@@ -342,7 +342,7 @@ def test_page_versions_its_scripts(client):
 
 
 def test_turkish_results_follow_the_request_language(client, monkeypatch):
-    from steam_researcher.i18n import _
+    from market_researcher.i18n import _
 
     seen = []
 

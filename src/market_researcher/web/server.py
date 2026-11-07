@@ -25,7 +25,7 @@ from ..sources import steam_store
 
 STATIC = Path(__file__).parent / "static"
 
-app = FastAPI(title="Steam Researcher")
+app = FastAPI(title="Market Researcher")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 

@@ -1,8 +1,8 @@
 import pytest
 
-from steam_researcher import boxmethod
-from steam_researcher.discover import filter_candidates, parse_rating_range
-from steam_researcher.sources.steamspy import parse_tag_response
+from market_researcher import boxmethod
+from market_researcher.discover import filter_candidates, parse_rating_range
+from market_researcher.sources.steamspy import parse_tag_response
 
 SAMPLE = {
     "1": {"appid": 1, "name": "Great Game", "positive": 900, "negative": 100, "price": "999", "initialprice": "999"},
@@ -49,7 +49,7 @@ def test_parse_rating_range_rejects_bad_input(bad):
 
 
 @pytest.mark.parametrize("args, opens_ui", [
-    ([], True),                          # `steam-researcher` alone opens the web UI
+    ([], True),                          # `market-researcher` alone opens the web UI
     (["--lang", "tr"], True),            # options without a command too
     (["--help"], False),
     (["discover", "--tag", "Job Simulator"], False),
@@ -60,9 +60,9 @@ def test_start_opens_ui_without_a_command(monkeypatch, args, opens_ui):
 
     import typer
 
-    from steam_researcher import cli
+    from market_researcher import cli
 
-    monkeypatch.setattr("sys.argv", ["steam-researcher", *args])
+    monkeypatch.setattr("sys.argv", ["market-researcher", *args])
     seen = []
     monkeypatch.setattr(typer.Typer, "__call__", lambda self: seen.append(sys.argv[1:]))
     cli.start()

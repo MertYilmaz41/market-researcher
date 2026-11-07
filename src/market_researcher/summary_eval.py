@@ -1,6 +1,6 @@
 """Compare local models on the opportunity summary, the same way for each.
 
-    uv run python -m steam_researcher.summary_eval --models gemma3:12b qwen3.5:9b gemma4:12b
+    uv run python -m market_researcher.summary_eval --models gemma3:12b qwen3.5:9b gemma4:12b
 
 Each model writes the Turkish summary of the same saved runs (the latest few tag runs with 5+ games,
 or --runs IDS), with the app's own prompt and settings. Counted per model:

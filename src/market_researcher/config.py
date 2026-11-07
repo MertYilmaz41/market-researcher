@@ -49,10 +49,10 @@ BOX_MID = 45
 BOX_HIGH = 100
 
 # Cache
-CACHE_DIR = Path.home() / ".cache" / "steam-researcher"
-CACHE_DB = CACHE_DIR / "steam_researcher.sqlite"
-# Saved runs live apart from the cache, so `sr cache clear` keeps them.
-DATA_DIR = Path.home() / ".local" / "share" / "steam-researcher"
+CACHE_DIR = Path.home() / ".cache" / "market-researcher"
+CACHE_DB = CACHE_DIR / "market_researcher.sqlite"
+# Saved runs live apart from the cache, so `mr cache clear` keeps them.
+DATA_DIR = Path.home() / ".local" / "share" / "market-researcher"
 RUNS_DB = DATA_DIR / "runs.sqlite"
 TTL_TAG_LIST = 24 * 3600
 TTL_TAG_NAMES = 7 * 24 * 3600  # the Steam tag catalog rarely changes
@@ -74,7 +74,7 @@ RECENT_MIN_NEGATIVE = 10  # negative reviews from the last 12 months needed to s
 # Local LLM via Ollama. It writes the opportunity summary of a tag run (summary.py). Complaint
 # detection with it (mining/llm.py) is measurement only: on the held-out reviews it stayed at
 # 48-71% precision (keywords: 86%), so the keyword miner is used.
-#   python -m steam_researcher.mining.evaluate --miner llm --model <name>
+#   python -m market_researcher.mining.evaluate --miner llm --model <name>
 LLM_URL = "http://localhost:11434"
 LLM_MODEL = "gemma4:12b"  # best of the models measured for the summaries (Nov 2026: summary_eval and a blind read)
 LLM_BATCH = 8  # reviews per request (complaint detection)
@@ -137,7 +137,7 @@ RISK_LABELS = {  # how flags are named in the UI (English; i18n_tr has the Turki
 }
 EXCLUDE_FLAGS = {"not_game"}
 
-USER_AGENT = "steam-researcher/0.1 (hobby market research CLI)"
+USER_AGENT = "market-researcher/0.1 (hobby market research CLI)"
 
 # Games analyzed in parallel. Each host is still rate-limited (http.HOST_INTERVAL); parallel games
 # keep every host busy and stop one slow request from holding up the whole run.

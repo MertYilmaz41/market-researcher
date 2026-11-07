@@ -13,3 +13,7 @@ requirements-summary.txt
 
 # Screenshots dropped in the repo root while testing
 /*.png
+
+# Design mockups (Claude Design exports) and unlabeled review samples waiting for labels
+/*UI.html
+tests/fixtures/*.unlabeled.jsonl

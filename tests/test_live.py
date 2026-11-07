@@ -1,8 +1,8 @@
 """Live checks of every outside endpoint the app reads: do they still answer, in the shape we parse?
 
-    SR_LIVE=1 uv run pytest tests/test_live.py -v
+    MR_LIVE=1 uv run pytest tests/test_live.py -v
 
-Skipped unless SR_LIVE=1, so the normal test run never touches the network. CI runs them weekly
+Skipped unless MR_LIVE=1, so the normal test run never touches the network. CI runs them weekly
 (.github/workflows/live.yml), so a Steam or SteamSpy change shows up as a failed run (and an email)
 before users see empty or wrong results. Each test checks one endpoint, so a failure names it.
 Uses a throwaway cache: nothing comes from, or goes into, the user's cache.
@@ -13,12 +13,12 @@ import time
 
 import pytest
 
-from steam_researcher.cache import Cache
-from steam_researcher.http import HttpClient
-from steam_researcher.models import Game
-from steam_researcher.sources import steam_search, steam_store, steamspy
+from market_researcher.cache import Cache
+from market_researcher.http import HttpClient
+from market_researcher.models import Game
+from market_researcher.sources import steam_search, steam_store, steamspy
 
-pytestmark = pytest.mark.skipif(os.environ.get("SR_LIVE") != "1", reason="live network checks: set SR_LIVE=1")
+pytestmark = pytest.mark.skipif(os.environ.get("MR_LIVE") != "1", reason="live network checks: set MR_LIVE=1")
 
 STARDEW = 413150  # big, priced, steadily reviewed: its numbers barely move
 DAY = 24 * 3600

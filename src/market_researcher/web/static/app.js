@@ -127,9 +127,9 @@ function runStarted(kind, id) {
 function notifyError(err, fallbackTitle = t("Something went wrong")) {
   if (err instanceof ApiError) return notify(err.notice);
   if (err instanceof TypeError) {
-    return toast("error", t("Can't reach the Steam Researcher server"),
+    return toast("error", t("Can't reach the Market Researcher server"),
       t("The page lost its connection to the local server."),
-      t("Is the Steam Researcher window still open? Start it again with Steam Researcher.bat, then reload this page."));
+      t("Is the Market Researcher window still open? Start it again with Market Researcher.bat, then reload this page."));
   }
   toast("error", fallbackTitle, err.message || String(err));
 }

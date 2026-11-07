@@ -4,12 +4,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-from steam_researcher import risk
-from steam_researcher.cache import Cache
-from steam_researcher.http import HttpClient
-from steam_researcher.models import AppDetails, Game, HistPoint
-from steam_researcher.sources import steam_store
-from steam_researcher.sources.steamspy import parse_game
+from market_researcher import risk
+from market_researcher.cache import Cache
+from market_researcher.http import HttpClient
+from market_researcher.models import AppDetails, Game, HistPoint
+from market_researcher.sources import steam_store
+from market_researcher.sources.steamspy import parse_game
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -110,7 +110,7 @@ def test_listing_checks():
 # --- review paging ---
 
 def test_reviews_paging_stops_at_limit(tmp_path, monkeypatch):
-    monkeypatch.setattr("steam_researcher.http.time.sleep", lambda s: None)
+    monkeypatch.setattr("market_researcher.http.time.sleep", lambda s: None)
     pages = {"*": "c1", "c1": "c2", "c2": "c2"}
     seen = []
 
@@ -134,7 +134,7 @@ def test_reviews_paging_stops_at_limit(tmp_path, monkeypatch):
 
 
 def test_reviews_redirect_is_clear_error(tmp_path, monkeypatch):
-    monkeypatch.setattr("steam_researcher.http.time.sleep", lambda s: None)
+    monkeypatch.setattr("market_researcher.http.time.sleep", lambda s: None)
     handler = lambda r: httpx.Response(302, headers={"location": "https://store.steampowered.com/"})
     http = HttpClient(cache=Cache(tmp_path / "c.sqlite"), transport=httpx.MockTransport(handler))
     with pytest.raises(RuntimeError, match="redirected"):
@@ -173,7 +173,7 @@ def test_young_or_active_game_is_not_fading():
 
 
 def test_fading_demand_costs_points():
-    from steam_researcher import scoring
+    from market_researcher import scoring
     g = Game(appid=1, name="x", positive=4000, negative=4000, price_cents=999)
     flag = risk.check_fading(_months([500] * 36 + [1] * 12), NOW)
     assert scoring.score(g, flag, None).penalty == 10
@@ -188,8 +188,8 @@ def test_reviews_use_playtime_at_review():
 
 
 def test_review_sample_mixes_helpful_and_newest(monkeypatch):
-    from steam_researcher import pipeline
-    from steam_researcher.models import Review
+    from market_researcher import pipeline
+    from market_researcher.models import Review
 
     calls = []
 
@@ -214,7 +214,7 @@ def test_parse_review_summary():
 
 
 def test_review_summary_asks_for_all_languages(tmp_path, monkeypatch):
-    monkeypatch.setattr("steam_researcher.http.time.sleep", lambda s: None)
+    monkeypatch.setattr("market_researcher.http.time.sleep", lambda s: None)
     seen = []
 
     def handler(request):
@@ -231,13 +231,13 @@ def test_review_summary_asks_for_all_languages(tmp_path, monkeypatch):
 
 
 def _game(**kw):
-    from steam_researcher.models import Game
+    from market_researcher.models import Game
 
     return Game(appid=1, name="G", positive=kw.pop("positive", 300), negative=kw.pop("negative", 700), **kw)
 
 
 def test_official_reviews_replace_steamspy(monkeypatch):
-    from steam_researcher import pipeline
+    from market_researcher import pipeline
 
     monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (928, 1460, 1460))
     g = pipeline.official_reviews(None, _game(), [])
@@ -246,7 +246,7 @@ def test_official_reviews_replace_steamspy(monkeypatch):
 
 
 def test_review_bomb_reviews_count_for_demand_not_rating(monkeypatch):
-    from steam_researcher import pipeline, scoring
+    from market_researcher import pipeline, scoring
 
     # Feed the Cups (Nov 2026): 3,527 of 4,855 rated, 11,224 with the review-bomb periods
     monkeypatch.setattr(steam_store, "review_summary", lambda http, appid: (3527, 4855, 11224))
@@ -257,8 +257,8 @@ def test_review_bomb_reviews_count_for_demand_not_rating(monkeypatch):
 
 
 def test_official_reviews_fall_back(monkeypatch):
-    from steam_researcher import pipeline
-    from steam_researcher.models import HistPoint
+    from market_researcher import pipeline
+    from market_researcher.models import HistPoint
 
     def down(http, appid):
         raise RuntimeError("redirected")
@@ -272,7 +272,7 @@ def test_official_reviews_fall_back(monkeypatch):
 
 
 def test_rating_source_text():
-    from steam_researcher.report import rating_source_text
+    from market_researcher.report import rating_source_text
 
     assert rating_source_text(_game()) == "SteamSpy estimate"
     assert rating_source_text(_game(rating_source="steam", steamspy_rating=31)) == "Steam's own numbers"
@@ -296,7 +296,7 @@ def test_recent_rating():
 
 
 def test_much_better_lately_is_flagged_and_costs_points():
-    from steam_researcher import scoring
+    from market_researcher import scoring
 
     flags = risk.check_recovered(_rated((40, 60), (8, 2)), NOW)  # 40% all along, 80% lately
     assert [f.code for f in flags] == ["recovered"]

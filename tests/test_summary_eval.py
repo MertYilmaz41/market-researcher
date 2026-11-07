@@ -2,9 +2,9 @@
 
 import json
 
-from steam_researcher import summary, summary_eval
-from steam_researcher.mining import llm
-from steam_researcher.models import CategoryResult, MiningResult
+from market_researcher import summary, summary_eval
+from market_researcher.mining import llm
+from market_researcher.models import CategoryResult, MiningResult
 
 from test_m4 import analysis
 

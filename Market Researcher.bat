@@ -1,6 +1,6 @@
 @echo off
-title Steam Researcher
-rem Double-click to start the Steam Researcher web UI in your browser.
+title Market Researcher
+rem Double-click to start the Market Researcher web UI in your browser.
 cd /d "%~dp0"
 
 rem uv's default install folder, in case it isn't on PATH yet
@@ -24,8 +24,8 @@ if errorlevel 1 (
     echo.
 )
 
-echo Starting Steam Researcher... your browser will open in a few seconds.
+echo Starting Market Researcher... your browser will open in a few seconds.
 echo To stop it, close this window.
 echo.
-uv run sr ui %*
+uv run mr ui %*
 if errorlevel 1 pause

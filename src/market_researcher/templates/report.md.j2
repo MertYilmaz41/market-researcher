@@ -1,6 +1,6 @@
 # {{ _("Underserved Audience Report: {tag}", tag=tag) }}
 
-*{{ _("Generated {date} by steam-researcher.", date=date) }}* {{ _("Filters: >= {min} reviews, {lo}-{hi}% positive, games only.", min=min_reviews, lo=lo, hi=hi) }}
+*{{ _("Generated {date} by market-researcher.", date=date) }}* {{ _("Filters: >= {min} reviews, {lo}-{hi}% positive, games only.", min=min_reviews, lo=lo, hi=hi) }}
 {{ _("Analyzed the {n} highest-demand of {candidates} candidates (out of {total} games in the tag).", n=analyses|length, candidates=n_candidates, total=n_tag_games) }}
 {% if market %}
 **{{ _("Market:") }}** {{ market }}. {{ _('"Well served" = {pct}%+ positive; the gap is the share of underserved among those two groups.', pct=well_served) }}

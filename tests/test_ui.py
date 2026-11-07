@@ -13,13 +13,13 @@ import pytest
 playwright = pytest.importorskip("playwright.sync_api")
 uvicorn = pytest.importorskip("uvicorn")
 
-from steam_researcher.cache import Cache  # noqa: E402
-from steam_researcher.http import HttpClient  # noqa: E402
-from steam_researcher import pipeline  # noqa: E402
-from steam_researcher.market import TagMarket, market_stats  # noqa: E402
-from steam_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, SummaryPoint  # noqa: E402
-from steam_researcher.runs import RunStore  # noqa: E402
-from steam_researcher.web import server  # noqa: E402
+from market_researcher.cache import Cache  # noqa: E402
+from market_researcher.http import HttpClient  # noqa: E402
+from market_researcher import pipeline  # noqa: E402
+from market_researcher.market import TagMarket, market_stats  # noqa: E402
+from market_researcher.models import GameSummary, OpportunitySummary, OtherComplaint, SummaryPoint  # noqa: E402
+from market_researcher.runs import RunStore  # noqa: E402
+from market_researcher.web import server  # noqa: E402
 
 from test_m4 import analysis, game  # noqa: E402
 from test_web import fake_result  # noqa: E402

@@ -1,6 +1,6 @@
 """Saved runs: every finished tag search or market ranking, so results survive a restart.
 
-Kept in its own SQLite file under DATA_DIR, apart from the cache, so `sr cache clear` keeps them.
+Kept in its own SQLite file under DATA_DIR, apart from the cache, so `mr cache clear` keeps them.
 A run is stored as its request params plus the pipeline result (TagResult / MarketsResult) as JSON;
 `load` rebuilds the result, so reports and CSVs work for old runs too.
 
