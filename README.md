@@ -4,6 +4,8 @@
 
 Find underserved Steam audiences: games people clearly wanted, but that disappointed them.
 
+![Market Researcher: a Colony Sim search, with the ranking and one game's details](docs/screenshot.png)
+
 > **Proven Demand + Poor Execution = High Opportunity**
 
 Based on [Code Monkey](https://www.youtube.com/@CodeMonkeyUnity)'s Underserved Audience method: look for genres where players bought a game in large numbers but were let down by how it was made, then build the better version.

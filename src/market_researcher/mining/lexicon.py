@@ -125,7 +125,7 @@ CATEGORIES: tuple[Category, ...] = (
     ),
 )
 
-NEGATION = r"\b(?:no|not|never|without|zero|isn'?t|wasn'?t|aren'?t|didn'?t|haven'?t|hasn'?t)\b(?:\W+\w+){0,2}\W+$"
+NEGATION = r"\b(?:no|not|never|without|zero|(?:hardly|barely|scarcely)\W+(?:any|ever)|isn'?t|wasn'?t|aren'?t|didn'?t|haven'?t|hasn'?t)\b(?:\W+\w+){0,2}\W+$"
 
 # Players praising the idea while panning the game: the "great idea, bad execution" signal.
 IDEA_PRAISE = (

@@ -36,6 +36,14 @@ def test_negated_bugs_not_counted():
     assert "bugs" not in got and got["content"] == 1
 
 
+def test_hardly_any_bugs_not_counted():
+    # a real quote that was shown as a bug complaint
+    text = "to start of positive... the game ran fine and hardly any bugs. But the story is boring."
+    assert "bugs" not in codes(mine([rev(text)], []))
+    # "barely" alone stays a complaint word: "barely playable, so many bugs"
+    assert codes(mine([rev("barely playable, so many bugs")], []))["bugs"] == 1
+
+
 def test_negation_does_not_hide_content_complaint():
     # "not enough content" IS a complaint even though it contains "not"
     assert codes(mine([rev("There is not enough content here.")], []))["content"] == 1
