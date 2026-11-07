@@ -238,6 +238,8 @@ TR: dict[str, str] = {
     "(unmet share {gap:.0%}), {gross} underserved revenue":
         "{games:,} oyun, {demand:,} talep gören, {under:,} karşılanmamış, {well:,} iyi karşılanmış "
         "(karşılanmama oranı {gap:.0%}), karşılanmamışların geliri {gross}",
+    ", median price {median} (middle half {lo}-{hi}": ", medyan fiyat {median} (ortadaki yarı {lo}-{hi}",
+    "; well served {price}": "; iyi karşılanmışlar {price}",
 
     # ---- complaints (mining/lexicon.py) and trends
     "Bad controls / clunky feel": "Kötü kontroller / hantal his",

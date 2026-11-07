@@ -263,7 +263,9 @@ def test_ui_opportunity_summary(base_url, browser):
     assert page.is_visible("#opp-summary") and "not written yet" in page.text_content("#opp-summary summary")
 
     page.click("#opp-summary summary")
-    page.click("#opp-summary .opp-body button")
+    # The market's price range is there before the summary is written (worked out from the data).
+    assert "Price range in this market: median $9.99" in page.inner_text("#opp-summary .opp-price")
+    page.click("#opp-summary .opp-empty button")
     page.wait_for_selector("#opp-summary .opp-pitch")
     body = page.inner_text("#opp-summary .opp-body")
     assert "A bus sim that works." in body and "WHAT PLAYERS LOVE" in body.upper()

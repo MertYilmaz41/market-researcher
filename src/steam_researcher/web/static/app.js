@@ -765,12 +765,13 @@ function renderSummary() {
   box.hidden = !r || !state.games.length;
   if (box.hidden) return;
   const s = r.summary;
+  const price = priceLine(r.market);
   box.querySelector(".opp-state").textContent = s ? "" : state.summarizing ? t("Writing... (about a minute)") : t("not written yet");
   const body = box.querySelector(".opp-body");
   if (!s) {
     const button = el("button", { type: "button", class: "ghost", onclick: writeSummary });
     setButtonBusy(button, !!state.summarizing, state.summarizing ? t("Writing...") : t("Write summary"));
-    body.replaceChildren(el("div", { class: "opp-empty" },
+    body.replaceChildren(price || "", el("div", { class: "opp-empty" },
       el("p", {}, t("What players love, the complaints these games share, and what a better game would do. Written by the local model {model} (Ollama) from this ranking, in about a minute.", { model: r.llm_model })),
       button));
     return;
@@ -785,6 +786,7 @@ function renderSummary() {
     el("ul", {}, points.map((p) => el("li", {}, p.text, p.games.length ? chips(p.games) : null))));
   body.replaceChildren(
     s.pitch ? el("p", { class: "opp-pitch" }, s.pitch) : null,
+    price,
     el("p", { class: "opp-note muted" }, t("Written by the local model {model}. It can be wrong: check each point against the games it names.", { model: s.model })),
     el("div", { class: "opp-sections" },
       section(t("What players love"), s.loved),
@@ -792,6 +794,16 @@ function renderSummary() {
       section(t("A better game would"), s.build),
       section(t("Caveats"), s.caveats)),
   );
+}
+
+// The price range of the market, worked out from the data (never by the model): shown with the summary.
+function priceLine(m) {
+  if (m?.price_median == null) return null;
+  const usd = (x) => "$" + decimal(x, 2);
+  let text = t("Price range in this market: median {median}, middle half {lo}–{hi}",
+    { median: usd(m.price_median), lo: usd(m.price_p25), hi: usd(m.price_p75) });
+  if (m.well_served_price_median != null) text += t(" · well-served games {price}", { price: usd(m.well_served_price_median) });
+  return el("p", { class: "opp-price" }, text, info("price_range"));
 }
 
 async function writeSummary() {
@@ -1317,6 +1329,7 @@ function terms() {
     risk_penalty: [t("Risk penalty"), t("Points taken off the score for something that makes a game a weaker opportunity than it looks, e.g. online multiplayer, fading interest, or recent reviews showing it's already fixed. The Risks column lists them with their points.")],
     risks: [t("Risks"), t("The risks that cost this game points, with how many. Other notes, such as review bombs, are in the game's Risks tab.")],
     revenue: [t("Estimated revenue"), t("Box Method: each review stands for about 30 to 100 copies sold (45 in the middle), times the full price. A rough figure before Steam's cut, discounts, refunds and taxes. Checked against games that published their sales, x45 was right on average, but for a single game it was off by up to about 3 times either way. What the developer keeps is often half of this or less.")],
+    price_range: [t("Price range"), t("The undiscounted prices of the paid games with demand in this market: the median, and the range the middle half sits in. Well-served games are the ones at 85%+ positive. Worked out from the data, not by the model. These are today's list prices: older games are often cheaper now than at launch, so a new game can usually ask a little more.")],
     recent: [t("Last 12 months"), t("Reviews written in the last 12 months, their share of all reviews, and how positive they are. Few recent reviews mean fading interest; much better recent reviews mean the problems may already be fixed.")],
     loved: [t("What players love"), t("Phrases that come up most often in the positive reviews: what people enjoy, and what a new game should keep.")],
     idea_praise: [t("Great idea, bad execution?"), t("Negative reviews that still praise the idea or its potential. A high share means players want this game, just made better.")],

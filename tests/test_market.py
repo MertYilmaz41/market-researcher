@@ -85,3 +85,27 @@ def test_market_rank_puts_specific_underserved_tags_first():
     rows = [row("Indie", 50_000, 3000, 6000), row("Rugby", 20, 1, 0), row("Job Sim", 130, 10, 24),
             row("Colony Sim", 400, 30, 10)]
     assert [r.tag for r in sorted(rows, key=pipeline.market_rank)] == ["Colony Sim", "Job Sim", "Indie", "Rugby"]
+
+
+def priced(price, pct=40, n=1000, appid=1):
+    from steam_researcher.models import Game
+    pos = round(n * pct / 100)
+    return Game(appid=appid, name="G", positive=pos, negative=n - pos, price_cents=price, initial_price_cents=price)
+
+
+def test_price_range_of_the_paid_games_with_demand():
+    games = [priced(999, appid=1), priced(1499, appid=2), priced(1999, appid=3), priced(2499, pct=90, appid=4),
+             priced(0, appid=5), priced(9999, n=10, appid=6)]  # free, and too few reviews: left out
+    m = market_stats(games, 100, 5, 70)
+    assert m.n_priced == 4 and m.price_median == pytest.approx(17.49)
+    assert (m.price_p25, m.price_p75) == (pytest.approx(13.74), pytest.approx(21.24))
+    assert m.well_served_price_median is None  # one well-served game: too few
+    text = market.summary(m)
+    assert text.isascii() and "median price $17.49 (middle half $13.74-$21.24)" in text
+
+
+def test_no_price_range_with_too_few_paid_games_or_in_old_runs():
+    assert market_stats([priced(999), priced(1999, appid=2)], 100, 5, 70).price_median is None
+    old = MarketStats.model_validate({"n_games": 5, "n_demand": 4, "n_underserved": 2, "n_well_served": 1,
+                                      "median_rating": 60, "underserved_gross": 1, "gap": 0.5})
+    assert old.price_median is None and market.price_text(old) == ""

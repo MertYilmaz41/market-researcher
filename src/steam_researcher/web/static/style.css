@@ -525,6 +525,7 @@ body.drawer-open .shell { grid-template-columns: 290px minmax(0, 1fr) minmax(380
 .opp-body { max-height: 45vh; overflow-y: auto; padding-top: var(--s2); font-size: var(--fs-sm); color: var(--text-2); }
 .opp-body .opp-pitch { color: var(--text); font-weight: 500; margin: 0 0 var(--s2); }
 .opp-body .opp-note { font-size: var(--fs-xs); margin: 0 0 var(--s2); }
+.opp-body .opp-price { font-size: var(--fs-sm); margin: 0 0 var(--s2); }
 .opp-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s2) var(--s4); }
 .opp-sections h4 { margin: 0 0 var(--s1); font-size: var(--fs-xs); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 .opp-sections ul { margin: 0; padding-left: 1.1em; }
