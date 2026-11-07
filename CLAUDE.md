@@ -86,6 +86,7 @@ uv run mr report --tag "Job Simulator" --summary   # plus an opportunity summary
 uv run python -m market_researcher.summary_eval --models gemma3:12b gemma4:12b   # compare models on the opportunity summary (saved runs only; --lang en, --recheck)
 uv run python -m market_researcher.mining.evaluate --games   # plus per game: top complaints and fixability, as the app shows them
 uv run python -m market_researcher.backtest --all            # does the unmet share predict later success? (~13 h first time; reports/backtest.md)
+uv run python -m market_researcher.boxcheck                 # how far off is reviews x45 from disclosed sales? (reports/box-check.md)
 uv run mr markets --top 30                  # rank every tag by well-served games (~7 min first time)
 uv run mr runs                              # saved runs (from mr report and the web UI)
 uv run mr ui                                # web UI on http://localhost:8501
@@ -225,8 +226,11 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 
 ## Box Method check (Nov 2026)
 
-`tests/fixtures/sales_disclosures.jsonl` holds developer-reported unit sales with sources. Each row has the review count at the time of the figure: from the source, or from the histogram (`backtest.as_of`). Add rows as more disclosures turn up.
-- **Copies per review in the 6 games:** 16x, 30x, 38x, 54x, 100x, 165x. The median is ~46x, so x45 sits in the middle. Four of six fall inside x30-x100. For a single game, x45 was off by 1.2-3.7x either way.
+`tests/fixtures/sales_disclosures.jsonl` holds developer- or publisher-reported unit sales with sources and the date each figure refers to (`as_of`). `uv run python -m market_researcher.boxcheck` reads the review count at that date from the histogram (interpolated within the period) and writes `reports/box-check.md`. Add rows as more disclosures turn up (units, not revenue; the date known to the month; `steam_only: false` when other stores are counted).
+- **First 23 figures, 19 scored (Nov 2026; 20+ reviews then, Steam or PC-only):** median 44x, middle half 34x-80x, 10th-90th 16x-121x; 74% inside x30-x100. x45 is within 1.5x of the real figure for 58% of games, within 2x for 63%. Most rows are hits announcing milestones (Valheim, PEAK, Brotato...), few are small games, and none was released before 2019.
+- **Rules fixed in advance** (in `boxcheck.py`: split by `(appid // 10) % 2`, since AppIDs are multiples of 10; B one median, C per era before 2019, D per price under $10; adopted only if 10%+ lower median error both ways without fewer within 2x): **none adopted**, x45 stays. C equals B because the sample has no pre-2019 game, so the era effect from the literature is untested here. Seen after the fact: the three smallest games (51-234 reviews) sold only 14-30x, the biggest hits up to 121-178x.
+- **Small-games test** (rule written in `boxcheck.py` before more small games were collected; rows marked `added`): small = under 500 reviews at the figure's date; holds if 8+ new small games have a median below x45 and below the large games', and rule E (median per size) is adopted. Small-game postmortems with unit figures are rare and most have under 20 reviews: 6 found, 3 scored (Prickle 9x, The Fall of Lazarus 32x, TAURONOS 128x; median 32x, large games 53x); rule E not adopted. **Too few to tell**, and the three disagree; x45 stays. With all 29 rows (23 scored): median 44x, 70% inside x30-x100, x45 within 2x for 61%.
+- **Earlier, with the first 6 games:** 16x, 30x, 38x, 54x, 100x, 165x; x45 was off by 1.2-3.7x for a single game.
 - **Literature:** GameDiscoverCo and Gamalytic (2023) give ~93 sales per review in 2013 and ~32 in 2023. Steam's review prompt from 2019 halved the ratio. Heavy discounting raises it (40-57). Their figures are mostly Gamalytic's own estimates, so they are no independent check.
 - **What the 6 games say:** x45 is a fair center, but no single estimate is precise.
 - **Gross is not income:** gross = units x undiscounted price. Escape Simulator took ~$10 a unit against a $14.99 list price, before Steam's cut, refunds and taxes.

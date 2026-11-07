@@ -181,7 +181,6 @@ SteamSpy / Steam APIs ──► HttpClient (rate limit, retry, SQLite cache)
 - Steam Store: game details, the monthly review histogram, the tag list, and its search for the few tags SteamSpy can't search.
 - Steam `IUserReviewsService/GetAppReviews`: review texts and the official review totals.
 
-SteamDB isn't used because it has no public API.
 
 The app runs on your own computer and asks these services directly, from your own connection: there is no server in between and no API key. It paces its requests (about one per second per site, slower for the store search) and caches the answers, so a repeated search barely touches them. Please keep it that way if you change the code. Some of these endpoints are undocumented and can change without notice; a weekly test (`tests/test_live.py`) checks that they still answer as expected.
 
@@ -209,7 +208,7 @@ So read the unmet share as a **filter for exploring**: it narrows thousands of t
 ## Limitations
 
 - **The unmet share is not a proven predictor:** see [above](#is-the-method-proven-a-tool-for-exploring-not-a-forecast).
-- **Revenue is a rough estimate:** full price, before Steam's cut, discounts and regional pricing.
+- **Revenue is a rough estimate:** full price, before Steam's cut, discounts and regional pricing. Against 23 games whose developers disclosed their sales, reviews × 45 was within 1.5× of the real figure for 57% of them and within 2× for 61% (`python -m market_researcher.boxcheck`).
 - **Review mining is keyword-based and English-only.** On hand-labeled reviews from games it was never tuned on, it finds 64% of complaints, and 80% of what it reports is right. Read the quotes, not just the percentages.
 - **No price history:** only the current price is checked for deep discounts.
 - **SteamSpy tag lists may be incomplete**, and search results use SteamSpy's review counts until a game is analyzed.
