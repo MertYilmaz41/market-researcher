@@ -123,8 +123,14 @@ CATEGORIES: tuple[Category, ...] = (
         "price", "Not worth the price / pay-to-win",
         "Fair price, no pay-to-win", False, True,  # not fixable: price is a business choice (see the fixability term)
         (r"over-?priced", r"(?:not|isn'?t|wasn'?t|ain'?t) worth (?:the |its |it'?s |the full |full )?(?:price|money|\$ ?\d+|cost|asking price|price tag)",
-         r"wait (?:for|until|till) (?:a |it'?s |it to be |its )?(?:\w+ )?(?:sale|discount|\$ ?\d+)", r"buy (?:it )?(?:on|during|in) (?:a )?(?:\w+ ){0,2}sale",
-         r"pay[- ]?(?:2|to)[- ]?win", r"p2w", r"micro-?transactions?", r"mtx", r"predatory"),
+         r"wait (?:for|until|till) (?:a |it'?s |it to be |its )?(?:\w+ )?(?:sale|discount|\$ ?\d+)",
+         r"(?:get|grab|buy|pick)(?: it| this)?(?: up)? (?:on|during|in|at) (?:a |an )?(?:\w+ ){0,2}(?:sale|discount)",
+         r"worth (?:it )?(?:on|at|during) (?:a |an )?(?:\w+ ){0,2}(?:sale|discount)",
+         r"pay[- ]?(?:2|to)[- ]?win", r"p2w", r"micro-?transactions?", r"mtx", r"predatory",
+         r"pay ?wall(?:ed|s)?", r"locked (?:\w+ )?behind (?:a |the |an )?(?:\w+ )?(?:dlc|paywall|premium|purchase|expansion)",
+         r"(?:real|irl|real[- ]life|real[- ]world) (?:\$|money|cash|currency)", r"pay (?:real money|more|for every|to (?:play|progress|unlock))",
+         r"subscription", r"battle ?pass", r"(?:paid|cosmetic|overpriced|expensive) (?:\w+ )?dlcs?", r"monetiz\w+|monetis\w+",
+         r"premium (?:currency|vehicles?|tanks?|mods?|planes?)", r"gacha", r"money[- ](?:hungry|grubb\w*)"),
     ),
     Category(
         "cheaters", "Cheaters / hackers",

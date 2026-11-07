@@ -132,6 +132,12 @@ def test_price_and_cheater_complaints():
     assert got["price"] == 1 and got["cheaters"] == 1
     # a single-player cheat menu, or a complaint about anti-cheat software, is not about cheaters
     assert "cheaters" not in codes(mine([rev("Added kernel-level anti-cheat and the cheat menu is gone.")], []))
+    # paywalls, DLC and real-money purchases; a game merely bought on sale or a cash-grab is not
+    for text in ("Half the classes are locked behind a DLC.", "You have to pay real money for every gun.",
+                 "Only get it on a big sale.", "A monthly subscription for an old game."):
+        assert "price" in codes(mine([rev(text)], [])), text
+    for text in ("I bought it on sale and the controls are awful.", "Just a money grab by lazy devs."):
+        assert "price" not in codes(mine([rev(text)], [])), text
 
 
 def test_price_and_cheaters_are_scored_only_on_schema_2_rows():
