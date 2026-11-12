@@ -33,8 +33,6 @@ Based on [Code Monkey](https://www.youtube.com/@CodeMonkeyUnity)'s Underserved A
 - **A current web browser:** the interface opens in your browser and needs import maps: Chrome or Edge 89+, Firefox 108+, Safari 16.4+.
 - **Disk space:** about 250 MB for the app and its Python, plus the data cache, which grows with use (often a few hundred MB; the cache button at the top right shows its size and cleans it).
 
-**Only to build from the source code:** [uv](https://docs.astral.sh/uv/), and [Git](https://git-scm.com/) to download the code (or download it as a ZIP from GitHub instead).
-
 **Optional, for the AI summaries:** [Ollama](https://ollama.com) and about 8 GB of disk for its model; see [below](#optional-local-ai-for-the-summaries).
 
 ### One command
@@ -81,8 +79,6 @@ uv run pytest -q
 - Installed with the one command: use the **Market Researcher** desktop shortcut (Windows), or type `market-researcher`.
 - From the source code: double-click **`Market Researcher.bat`** (Windows), or run `uv run mr ui` in the project folder.
 
-The page has a **top bar** (the Games | Markets | Shortlist views, the search box, How it works, and the language and theme switches), the **main area** (ranking, map, markets or shortlist), and the **details panel** that opens on the right when you pick a game. On a narrow window the details panel fills the screen.
-
 Click the search box at the top and tick one or more Steam tags (up to 5; typing only filters the list). Games must have all the ticked tags. The button under the title shows the current **filters**; click it to change them (or pick a preset: Default, Proven demand, Quick look). Press **Search**. The page remembers your tags and filters for next time. While a search runs, each game appears as it is checked and scored; the first run of a tag takes about 30 seconds, and you can cancel it at any time.
 
 - **List | Map:** the switch above the results shows the ranking as a list or as the opportunity map. The page remembers your choice.
@@ -90,14 +86,14 @@ Click the search box at the top and tick one or more Steam tags (up to 5; typing
 - **Market sentence:** under the title, how many of the tag's games with demand leave players disappointed, how many please them (85%+ positive), and the unmet share. A second line shows the tag's track record once it is measured (a few minutes the first time).
 - **AI summary (optional):** the AI button under the title opens the summary; press **Write summary** and a local AI model reads the ranking and writes what players love, the complaints the games share, what a better game would do, and the caveats. Each point names the games it rests on; click one to open it. It takes about a minute, is saved with the run, and needs [Ollama](#optional-local-ai-for-the-summaries).
 - **Ranking:** rank, game, score, biggest complaint and estimated revenue; a ⚠ −N badge marks games that lost points to risks. The first 8 show; **Show N more** lists the rest. ▲/▼ shows score changes since your previous run with the same tags and filters. Download the **Report (.md)** or the **CSV** above the list.
-- **Details panel:** opens on the right when you click a row or a bubble, and closes with × or Esc. **Overview** has the score with a one-line why, the rating, reviews, last 12 months and estimated revenue, the top complaints with a quote, the risks that cost points, what players love and the game's tags (click one to search that tag). **Complaints** has every complaint category with trends, design pillars and quotes. **Summary** (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the categories (e.g. the story, server problems), each with a quote. **History** has the monthly review chart and every risk check, passed or not.
-- **What a term means:** every project-specific word (Fixability, Unmet share, Est. revenue, ...) has a small **i** next to it; hover or tap it for a one- or two-sentence explanation. **How it works** lists them all, plus every risk.
+- **Details panel:** opens on the right when you click a row or a bubble (on a narrow window it fills the screen), and closes with × or Esc. **Overview** has the score with a one-line why, the rating, reviews, last 12 months and estimated revenue, the top complaints with a quote, the risks that cost points, what players love and the game's tags (click one to search that tag). **Complaints** has every complaint category with trends, design pillars and quotes. **Summary** (optional, needs Ollama) has the local AI model read one game in about 20 seconds: why players are unhappy, what a better game would do, and complaints that fit none of the categories (e.g. the story, server problems), each with a quote. **History** has the monthly review chart and every risk check, passed or not.
+- **What a term means:** every project-specific word (Fixability, Unmet share, Est. revenue, ...) has a small **i** next to it; hover or tap it for a one- or two-sentence explanation.
+- **How it works:** the button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is, and lists every term and risk.
 - **Score card:** hover or focus any score to see its two parts (demand and dissatisfaction), their weights, each risk penalty and why. Fixability is shown there too, but not counted: it is close to 100% for almost every game.
 - **Markets:** pick **Markets** in the top bar and press **Build market ranking** to rank every tag (about 7 minutes the first time, then from the cache). Find a tag by name, or show the small ones too. Click a tag to search it.
 - **Shortlist:** press **Shortlist** in the details panel to keep a game. The **Shortlist** view shows the starred games with the score they had when you starred them; add a note to each, or download the list as CSV. It stays after a restart and a cache clear.
 - **Past searches:** click the empty search box to reopen any earlier search or market ranking, even after a restart.
 - **One game:** paste an AppID or a Steam store link into the search box and press Enter; the game opens in the details panel.
-- **How it works:** the button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is.
 - **Language and theme:** **EN | TR** at the top right switches between English and Turkish (the whole interface, including messages and the score card); the moon | sun switch next to it picks the dark or light theme. The page follows your system theme until you pick one, then remembers it.
 
 **Command line.** The examples are written for the source code. If you installed with the one command, leave out `uv run`: type `mr report --tag "Job Simulator"`.
@@ -127,7 +123,7 @@ uv run mr --lang tr report --tag "Job Simulator"   # Turkish output and report
 | Clear the cache | `uv run mr cache clear` |
 | Help | `uv run mr --help`, `uv run mr report --help` |
 
-The first run of a tag takes about 30 seconds because of API rate limits. After that, data comes from the cache in `~/.cache/market-researcher` (refreshed daily; SteamSpy's game details and the tag list weekly). Saved runs are kept separately in `~/.local/share/market-researcher`, so clearing the cache keeps them.
+After the first run of a tag, data comes from the cache in `~/.cache/market-researcher` (refreshed daily; SteamSpy's game details and the tag list weekly). Saved runs are kept separately in `~/.local/share/market-researcher`, so clearing the cache keeps them.
 
 ### Optional: local AI for the summaries
 
@@ -180,7 +176,6 @@ SteamSpy / Steam APIs ──► HttpClient (rate limit, retry, SQLite cache)
 - [SteamSpy](https://steamspy.com/api.php): games by tag, review counts, prices, tags.
 - Steam Store: game details, the monthly review histogram, the tag list, and its search for the few tags SteamSpy can't search.
 - Steam `IUserReviewsService/GetAppReviews`: review texts and the official review totals.
-
 
 The app runs on your own computer and asks these services directly, from your own connection: there is no server in between and no API key. It paces its requests (about one per second per site, slower for the store search) and caches the answers, so a repeated search barely touches them. Please keep it that way if you change the code. Some of these endpoints are undocumented and can change without notice; a weekly test (`tests/test_live.py`) checks that they still answer as expected.
 
