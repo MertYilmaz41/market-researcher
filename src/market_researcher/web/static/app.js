@@ -190,6 +190,7 @@ function closeDrawer() {
   state.panelGame = null;
   map.select(null);
   highlightRow();
+  syncRoute();
 }
 $("#drawer-close").addEventListener("click", closeDrawer);
 $("#sheet-back").addEventListener("click", closeDrawer);
@@ -795,6 +796,7 @@ async function analyzeGame(appid) {
     map.select(null);
     highlightRow();
     renderPanel(g);
+    syncRoute();
     if (state.games.length) {
       toast("info", t("Shown in the details panel"), t("{name} isn't part of the current ranking.", { name: g.game.name }));
     }
@@ -815,6 +817,48 @@ async function fetchGame(appid) {
   return res.json();
 }
 
+// ---------- the address bar: what is shown, so Back/Forward, reloading and bookmarks work ----------
+// #/run/<id>[/<appid>] a saved search (and its open game), #/game/<appid> a game opened by AppID,
+// #/markets, #/shortlist. The run's id, not its tags: reloading must not search again.
+const route = { hold: 0 };
+
+function routeOf() {
+  if (tableView !== "games") return `#/${tableView}`;
+  const open = state.panelGame?.game.appid;
+  if (open && !state.games.some((g) => g.game.appid === open)) return `#/game/${open}`;
+  if (!state.runId) return "";
+  return `#/run/${state.runId}${open ? `/${open}` : ""}`;
+}
+
+function syncRoute(replace = false) {
+  if (route.hold) return;
+  const hash = routeOf();
+  if (hash === location.hash) return;
+  history[replace ? "replaceState" : "pushState"](null, "", hash || location.pathname + location.search);
+}
+
+async function applyRoute() {
+  const m = location.hash.match(/^#\/(?:run\/(\w+)(?:\/(\d+))?|game\/(\d+)|(markets|shortlist))$/);
+  route.hold++;
+  try {
+    if (m?.[4]) return setTableView(m[4]);
+    setTableView("games");
+    if (m?.[3]) {
+      if (state.panelGame?.game.appid !== +m[3]) await analyzeGame(m[3]);
+    } else if (m?.[1]) {
+      if (m[1] !== state.runId) await openRun({ kind: "tag", id: m[1] });
+      if (!m[2]) closeDrawer();
+      else if (state.panelGame?.game.appid !== +m[2]) selectGame(+m[2], false);
+    } else if (state.panelGame) {
+      closeDrawer();
+    }
+  } finally {
+    route.hold--;
+  }
+  syncRoute(true); // what could be shown (a deleted run, an unknown game) replaces the address
+}
+window.addEventListener("popstate", applyRoute);
+
 // ---------- results ----------
 // The title area of the Games view: the search's tags, or (while one runs) the tags being searched.
 function renderTitle(searching = null) {
@@ -831,6 +875,16 @@ function renderTitle(searching = null) {
 
 // quiet: the same result again in another language, so no toasts and the selection stays.
 function showResult(result, id, quiet = false) {
+  route.hold++; // one history entry for the result and the game it opens
+  try {
+    fillResult(result, id, quiet);
+  } finally {
+    route.hold--;
+  }
+  syncRoute();
+}
+
+function fillResult(result, id, quiet) {
   state.games = result.games.map((g, i) => ({ ...g, rank: i + 1 }));
   state.result = result;
   state.runId = id;
@@ -1063,6 +1117,7 @@ function setTableView(view) {
   if (view === "markets") $("#markets-filter-slot").append(filters);
   else if (view === "games") $("#games-view .chip-row").prepend(filters);
   if (view === "shortlist") renderShortlist();
+  syncRoute();
 }
 $("#table-view").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-view]");
@@ -1482,6 +1537,7 @@ function selectGame(appid, focus = true, tab = 0) {
   map.select(appid); // also while the list is shown, so the map is in sync when you switch
   highlightRow();
   renderPanel(g, tab, focus);
+  syncRoute();
   document.querySelector(`#ranking tr[data-appid="${appid}"]`)?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
 }
 
@@ -2005,4 +2061,5 @@ let savedMode = "table";
 try { savedMode = localStorage.getItem("gamesMode") || "table"; } catch { /* storage blocked */ }
 setGamesMode(savedMode);
 setLanguage(getLang());
+if (location.hash) applyRoute();
 loadCache(true); // warns once if the cache has grown large

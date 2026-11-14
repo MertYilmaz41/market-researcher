@@ -525,6 +525,37 @@ def test_ui_tab_title_progress(base_url, browser):
     assert page.errors == []
 
 
+def test_ui_address_bar(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
+    hash_ = lambda: page.evaluate("location.hash")
+    run, first = hash_().split("/")[2], page.get_attribute("#ranking tr.selected", "data-appid")
+    assert hash_() == f"#/run/{run}/{first}"
+    page.click('#panel [data-nav="next"]')
+    second = page.get_attribute("#ranking tr.selected", "data-appid")
+    assert hash_() == f"#/run/{run}/{second}"
+    # Back returns to the first game; Forward to the second.
+    page.go_back()
+    page.wait_for_function(f"document.querySelector('#ranking tr.selected')?.dataset.appid === '{first}'")
+    page.go_forward()
+    page.wait_for_function(f"document.querySelector('#ranking tr.selected')?.dataset.appid === '{second}'")
+    page.click('#table-view button[data-view="shortlist"]')
+    assert hash_() == "#/shortlist"
+    page.go_back()
+    page.wait_for_function("!document.querySelector('#games-view').hidden")
+    # Reloading shows the same saved run and game, without searching again.
+    page.reload()
+    page.wait_for_function(f"document.querySelector('#ranking tr.selected')?.dataset.appid === '{second}'")
+    assert page.text_content("#table-title") == "Job Simulator" and hash_() == f"#/run/{run}/{second}"
+    # Closing the game drops it from the address.
+    page.click("#drawer-close")
+    assert hash_() == f"#/run/{run}"
+    # A link straight to a view.
+    page.goto(base_url + "/#/shortlist")
+    page.wait_for_function("!document.querySelector('#shortlist-view').hidden")
+    assert page.errors == []
+
+
 def test_ui_help_dialog(base_url, browser):
     page = _open(browser, base_url)
     page.click("#help-toggle")
