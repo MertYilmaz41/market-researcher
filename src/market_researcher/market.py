@@ -77,6 +77,19 @@ def price_text(m: MarketStats) -> str:
     return text + ")"
 
 
+def related_tags(games: list[Game], tags: list[str], limit: int = 6) -> list[dict]:
+    """The other tags most of these games share, for narrowing the search: [{"tag", "n"}], n >= 2."""
+    searched = {t.lower() for t in tags}
+    counts: dict[str, int] = {}
+    for g in games:
+        for tag in g.tags:
+            if tag.lower() not in searched:
+                counts[tag] = counts.get(tag, 0) + 1
+    ranked = sorted((n, tag) for tag, n in counts.items() if n >= 2)
+    ranked.sort(key=lambda x: -x[0])  # most shared first, ties by name
+    return [{"tag": tag, "n": n} for n, tag in ranked[:limit]]
+
+
 class TagMarket(BaseModel):
     tag: str
     stats: MarketStats

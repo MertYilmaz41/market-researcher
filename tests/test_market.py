@@ -147,3 +147,15 @@ def test_no_price_range_with_too_few_paid_games_or_in_old_runs():
     old = MarketStats.model_validate({"n_games": 5, "n_demand": 4, "n_underserved": 2, "n_well_served": 1,
                                       "median_rating": 60, "underserved_gross": 1, "gap": 0.5})
     assert old.price_median is None and market.price_text(old) == ""
+
+
+def test_related_tags_offers_shared_tags_for_narrowing():
+    games = [game(appid=i) for i in range(4)]
+    for x, tags in zip(games, [["Crafting", "Survival", "Co-op"], ["crafting", "Survival", "Co-op"],
+                               ["Survival", "Open World"], ["Survival", "Co-op", "Base Building"]]):
+        x.tags = {t: 10 for t in tags}
+    got = market.related_tags(games, ["Crafting"])
+    # the searched tag is left out in any case; tags on a single game too; most shared first, ties by name
+    assert got == [{"tag": "Survival", "n": 4}, {"tag": "Co-op", "n": 3}]
+    assert market.related_tags(games, ["Crafting"], limit=1) == [{"tag": "Survival", "n": 4}]
+    assert market.related_tags([], ["Crafting"]) == []
