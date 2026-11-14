@@ -440,6 +440,31 @@ def test_shortlist_star_note_csv_and_remove(client, monkeypatch, run_store):
     assert client.put("/api/shortlist/1", json={"run_id": "nope"}).status_code == 404
 
 
+def test_shortlist_compare(client, monkeypatch, run_store):
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    monkeypatch.setattr(server, "_single", {})
+    run_id = client.post("/api/tag-runs", json={"tags": ["Job Simulator"]}).json()["id"]
+    wait(client, run_id)
+    client.put("/api/shortlist/1", json={"run_id": run_id})
+    client.put("/api/shortlist/2", json={"run_id": run_id})
+    monkeypatch.setattr(pipeline, "analyze_game", lambda http, appid, n: analysis(45, "Lone Game", appid=appid))
+    client.get("/api/games/777")
+    client.put("/api/shortlist/777", json={})
+
+    # Each game as it was in its run (or its analysis by AppID), in the order asked, with full details.
+    games = client.get("/api/shortlist/compare?appid=2&appid=1&appid=777").json()["games"]
+    assert [(g["game"]["name"], g["source"]) for g in games] == [
+        ("Other", "Job Simulator"), ("Best Sim", "Job Simulator"), ("Lone Game", "AppID")]
+    assert games[1]["opportunity"]["score"] == 60 and games[1]["box"]["gross_mid"] > 0
+    assert games[1]["mining"]["categories"] and "penalties" in games[1]["score_explained"]
+
+    # The run is gone: the game is analyzed again.
+    client.delete(f"/api/runs/{run_id}")
+    monkeypatch.setattr(server, "_jobs", {})
+    assert client.get("/api/shortlist/compare?appid=1").json()["games"][0]["game"]["name"] == "Lone Game"
+    assert client.get("/api/shortlist/compare?appid=1&appid=5").status_code == 404  # not starred
+
+
 def test_one_http_client_for_the_whole_server(monkeypatch, client):
     """A search and a lookup share one client, so one per-host rate limit covers both."""
     seen = []

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -479,6 +479,46 @@ def clean_cache(action: Literal["prune", "clear"]):
     cache = _http().cache
     removed = cache.prune() if action == "prune" else cache.clear()
     return {"removed": removed, **_cache_json()}
+
+
+@app.get("/api/shortlist/compare")
+def compare_shortlist(appid: Annotated[list[int], Query()]) -> dict:
+    """Starred games side by side, each as it was in the run it was starred from."""
+    starred = {s["appid"]: s for s in _runs.shortlist()}
+    games = []
+    for i in dict.fromkeys(appid):
+        s = starred.get(i)
+        if s is None:
+            raise HTTPException(404, _("This game isn't on the shortlist."))
+        try:
+            a = _starred_analysis(s)
+        except HTTPException:
+            raise
+        except Exception as e:
+            notice = notices.friendly_error(e)
+            return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
+        games.append({**game_json(a), "source": s["source"]})
+    return {"games": games}
+
+
+def _starred_analysis(s: dict) -> Analysis:
+    """The analysis a shortlist snapshot came from: its run's, else the latest by AppID, else a new one."""
+    if s.get("run_id"):
+        try:
+            job = _job(s["run_id"])
+        except HTTPException:  # the run was deleted
+            job = None
+        found = job and job.result and next((a for a in job.result.analyses if a.game.appid == s["appid"]), None)
+        if found:
+            return found
+    with _lock:
+        a = _single.get(s["appid"])
+    if a is None:
+        a = pipeline.analyze_game(_http(), s["appid"], 300)
+        if a is None:
+            raise HTTPException(404, _("SteamSpy has no data for AppID {appid}.", appid=s["appid"]))
+        _remember_single(a)
+    return a
 
 
 @app.get("/api/shortlist.csv")

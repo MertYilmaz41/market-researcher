@@ -154,7 +154,7 @@ Ollama at `config.LLM_URL`, model `config.LLM_MODEL` (gemma4:12b, chosen for bot
 ### Saved runs and shortlist (`runs.py`)
 
 - Every finished web job and `mr report` run is saved to `config.RUNS_DB` (`~/.local/share/market-researcher/runs.sqlite`, apart from the cache so `mr cache clear` keeps it), as JSON via pydantic `TypeAdapter`. A tag run is compared with the last earlier run with the same tags (any order), filters and reviews per game: `score_change`/`new`, shown as ▲/▼/new.
-- Shortlist: the `shortlist` table in the same DB (`RunStore.star`/`unstar`/`set_note`/`shortlist`). `PUT /api/shortlist/{appid}` with `run_id` stars a game with a snapshot from that run (`server._snapshot`); starring again refreshes the snapshot but keeps the note and time. With `note` it sets the note; with neither it stars a game analyzed by AppID (`server._single`, latest `SINGLE_KEEP` analyses). Also `GET`, `DELETE`, `GET /api/shortlist.csv`.
+- Shortlist: the `shortlist` table in the same DB (`RunStore.star`/`unstar`/`set_note`/`shortlist`). `PUT /api/shortlist/{appid}` with `run_id` stars a game with a snapshot from that run (`server._snapshot`); starring again refreshes the snapshot but keeps the note and time. With `note` it sets the note; with neither it stars a game analyzed by AppID (`server._single`, latest `SINGLE_KEEP` analyses). Also `GET`, `DELETE`, `GET /api/shortlist.csv`. `GET /api/shortlist/compare?appid=..` returns `game_json` of each starred game as in the run it was starred from (`_starred_analysis`; a deleted run's game is analyzed again); the Shortlist view's "Compare" checkboxes (2 to `COMPARE_MAX` 4) show them side by side in `<dialog id="compare">`.
 
 ### Web server (`web/server.py`)
 

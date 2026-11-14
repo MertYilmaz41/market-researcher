@@ -739,6 +739,19 @@ button.chip[aria-pressed="true"] { color: var(--accent-ink); border-color: var(-
 .sl-head .from b { color: var(--text-2); font-weight: 400; }
 .sl-head .remove { width: 36px; height: 36px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--accent); font-size: 18px; }
 .sl-head .remove:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.sl-actions { display: flex; gap: 10px; align-items: center; }
+.sl-actions [hidden] { display: none; }
+.compare-pick { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-3); cursor: pointer; }
+.compare-pick input { accent-color: var(--accent); }
+.help.compare { width: min(1100px, calc(100vw - 32px)); }
+.compare-body { padding: var(--s4) var(--s5) var(--s5); overflow-x: auto; }
+.compare-body table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-body th, .compare-body td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.compare-body thead th { font-size: 15px; }
+.compare-body thead th button { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-align: left; }
+.compare-body thead th button:hover { color: var(--accent-ink); }
+.compare-body tbody th { width: 11em; font-weight: 500; color: var(--text-3); }
+.compare-body td div + div { margin-top: 4px; }
 .sl-card .stats3 .stat b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-card label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
 .sl-card textarea { resize: vertical; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--card); color: var(--text); font: inherit; font-size: 13px; line-height: 1.5; }
