@@ -549,6 +549,8 @@ def test_ui_address_bar(base_url, browser):
     page.reload()
     page.wait_for_function(f"document.querySelector('#ranking tr.selected')?.dataset.appid === '{second}'")
     assert page.text_content("#table-title") == "Job Simulator" and hash_() == f"#/run/{run}/{second}"
+    # Its notices aren't toasted again (they stay above the ranking).
+    assert page.locator("#toasts .toast").count() == 0 and page.is_visible("#result-notices")
     # Closing the game drops it from the address.
     page.click("#drawer-close")
     assert hash_() == f"#/run/{run}"
