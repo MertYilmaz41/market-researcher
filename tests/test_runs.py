@@ -20,6 +20,22 @@ def test_tag_run_round_trip(tmp_path):
     assert store.delete(run_id) and store.load(run_id) is None and not store.delete(run_id)
 
 
+def test_searches_shows_each_search_once(tmp_path):
+    store = RunStore(tmp_path / "runs.sqlite")
+    result = TagResult(n_tag_games=9, candidates=[game()], analyses=[analysis(40, "A")])
+    old = store.save("tag", "Crafting + Survival", PARAMS, result)
+    other = store.save("tag", "Crafting + Survival", PARAMS | {"lo": 10}, result)  # other filters: its own row
+    new = store.save("tag", "Survival + Crafting", PARAMS | {"tags": ["Survival", "Crafting"]}, result)  # same search
+    markets = MarketsResult(rows=[], skipped=[])
+    store.save("market", "All tags", {"min_reviews": 100, "lo": 5, "hi": 70}, markets)
+    last_market = store.save("market", "All tags", {"min_reviews": 50, "lo": 5, "hi": 70}, markets)
+    rows = store.searches()
+    assert [(r["id"], r["times"]) for r in rows] == [(last_market, 2), (new, 2), (other, 1)]
+    assert rows[2]["params"]["lo"] == 10  # its filters, to tell it apart from the same tags
+    assert store.load(old) is not None  # nothing is deleted
+    assert [r["id"] for r in store.searches(limit=2)] == [last_market, new]
+
+
 def test_market_run_round_trip(tmp_path):
     store = RunStore(tmp_path / "runs.sqlite")
     result = MarketsResult(rows=[TagMarket(tag="Hot", stats=market_stats([game()], 100, 5, 70))], skipped=["Zoo"])

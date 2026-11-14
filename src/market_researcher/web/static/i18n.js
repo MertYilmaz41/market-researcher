@@ -25,6 +25,8 @@ const TR = {
   "Previous game": "Önceki oyun",
   "Next game": "Sonraki oyun",
   "Analyze {n} more →": "{n} oyun daha analiz et →",
+  "run {n} times": "{n} kez çalıştırıldı",
+  "No games found ({n})": "Oyun bulunamayanlar ({n})",
   "Compare": "Karşılaştır",
   "Compare ({n})": "Karşılaştır ({n})",
   "Compare games": "Oyunları karşılaştır",

@@ -257,6 +257,7 @@ li[aria-selected="true"] .check { background: var(--accent); border-color: var(-
 .run-del { flex: none; padding: 2px 8px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font-size: 16px; }
 .run-del:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .run-empty { color: var(--muted); cursor: default !important; }
+.run-group { margin-top: 6px; border-top: 1px solid var(--line); font-size: var(--fs-xs); }
 .run-empty:hover { background: none !important; }
 
 /* top bar: How it works, language and theme */
