@@ -83,6 +83,14 @@
       </div>
     </div>
   </header>
+  <dialog id="compare" class="help compare" aria-labelledby="compare-title">
+    <form method="dialog" class="help-head">
+      <h2 id="compare-title" data-i18n>Compare games</h2>
+      <button class="ghost" aria-label="Close" data-i18n-attr="aria-label">×</button>
+    </form>
+    <div id="compare-body" class="compare-body"></div>
+  </dialog>
+
   <dialog id="help" class="help" aria-labelledby="help-title">
     <form method="dialog" class="help-head">
       <h2 id="help-title" data-i18n>How it works</h2>
@@ -305,7 +313,10 @@
             <span class="kicker" data-i18n>Shortlist · kept after restarts and cache clears</span>
             <h1 id="shortlist-title" data-i18n>Shortlist</h1>
           </div>
-          <a id="shortlist-csv" class="ghost button" href="/api/shortlist.csv" data-i18n>Download CSV</a>
+          <div class="sl-actions">
+            <button type="button" id="compare-open" class="primary" hidden></button>
+            <a id="shortlist-csv" class="ghost button" href="/api/shortlist.csv" data-i18n>Download CSV</a>
+          </div>
         </div>
         <p id="shortlist-note" class="muted"></p>
         <div id="shortlist" class="sl-grid"></div>

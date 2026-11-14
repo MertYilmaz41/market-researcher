@@ -457,6 +457,36 @@ def test_ui_shortlist(base_url, browser):
     assert page.errors == []
 
 
+def test_ui_shortlist_compare(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
+    for _ in range(2):  # star both games of the ranking
+        page.click("#panel .star")
+        page.wait_for_selector("#panel .star.on")
+        page.keyboard.press("j")
+    page.click('#table-view button[data-view="shortlist"]')
+    page.wait_for_selector("#shortlist .sl-card >> nth=1")
+    assert page.is_hidden("#compare-open")
+    boxes = page.locator("#shortlist .compare-pick input")
+    boxes.nth(0).check()
+    assert page.is_hidden("#compare-open")  # two are needed
+    boxes.nth(1).check()
+    assert page.text_content("#compare-open") == "Compare (2)"
+    page.click("#compare-open")
+    page.wait_for_selector("#compare-body table")
+    heads = page.eval_on_selector_all("#compare-body thead th button", "bs => bs.map(b => b.textContent)")
+    assert sorted(heads) == ["Best Sim", "Other"]
+    rows = page.eval_on_selector_all("#compare-body tbody th", "ths => ths.map(t => t.textContent)")
+    assert rows[:3] == ["Score", "Verdict", "Rating"] and "Top complaints" in rows
+    # A game's name opens it in the panel.
+    page.click("#compare-body thead th button >> text=Best Sim")
+    assert page.is_hidden("#compare")
+    page.wait_for_function("document.querySelector('#panel .game-title')?.textContent === 'Best Sim'")
+    for appid in ("1", "2"):  # leave the shortlist empty for the other tests
+        page.evaluate(f"fetch('/api/shortlist/{appid}', {{ method: 'DELETE' }})")
+    assert page.errors == []
+
+
 def test_ui_tag_chips_fill_search(base_url, browser):
     page = _open(browser, base_url)
     _search(page)

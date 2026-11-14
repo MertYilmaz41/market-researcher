@@ -1481,6 +1481,7 @@ function ago(seconds) {
 
 function renderShortlist() {
   const list = state.shortlist;
+  for (const appid of compare.picked) if (!list.some((s) => s.appid === appid)) compare.picked.delete(appid);
   $("#shortlist-title").textContent = list.length ? t("{n} games worth a second look", { n: list.length }) : t("Shortlist");
   $("#shortlist-note").textContent = list.length ? "" : t("No games yet. Open a game and press Shortlist to keep it here.");
   $("#shortlist-note").hidden = !!list.length;
@@ -1510,8 +1511,67 @@ function renderShortlist() {
         stat(t("Rating"), percent(s.rating)),
         stat(t("Reviews"), fmt(s.reviews)),
         stat(t("Top complaint"), s.complaint ? `${s.complaint} ${pct(s.complaint_share)}` : "-")),
-      el("label", {}, t("Note"), note));
+      el("label", {}, t("Note"), note),
+      el("label", { class: "compare-pick" }, el("input", { type: "checkbox", "data-appid": s.appid,
+        checked: compare.picked.has(s.appid), onchange: (e) => pickCompare(s.appid, e.target.checked) }), t("Compare")));
   }));
+  refreshCompare();
+}
+
+// ---------- comparing starred games side by side (2 to 4, each as in the run it was starred from) ----------
+const COMPARE_MAX = 4;
+const compare = { picked: new Set() };
+
+function pickCompare(appid, on) {
+  if (on) compare.picked.add(appid);
+  else compare.picked.delete(appid);
+  refreshCompare();
+}
+
+function refreshCompare() {
+  const n = compare.picked.size;
+  $("#compare-open").hidden = n < 2;
+  $("#compare-open").textContent = t("Compare ({n})", { n });
+  document.querySelectorAll("#shortlist .compare-pick input").forEach((box) => {
+    box.disabled = !box.checked && n >= COMPARE_MAX;
+  });
+}
+
+$("#compare-open").addEventListener("click", async () => {
+  const body = $("#compare-body");
+  body.replaceChildren(el("p", { class: "muted" }, t("Loading...")));
+  $("#compare").showModal();
+  try {
+    const q = [...compare.picked].map((a) => `appid=${a}`).join("&");
+    const res = await api(`/api/shortlist/compare?${q}`);
+    if (!res.ok) throw await apiError(res);
+    renderCompare((await res.json()).games);
+  } catch (err) {
+    $("#compare").close();
+    notifyError(err, t("Couldn't compare the games"));
+  }
+});
+$("#compare").addEventListener("click", (e) => { if (e.target === $("#compare")) $("#compare").close(); });
+
+function renderCompare(games) {
+  const lines = (items) => (items.length ? items.map((x) => el("div", {}, x)) : "-");
+  const rows = [
+    [t("Score"), (g) => pill(g.opportunity.score)],
+    [t("Verdict"), (g) => g.verdict],
+    [t("Rating"), (g) => percent(g.rating)],
+    [t("Reviews"), (g) => fmt(g.reviews)],
+    [t("Last 12 mo"), (g) => (g.recent_reviews == null ? "-" : fmt(g.recent_reviews))],
+    [t("Price"), (g) => (g.price ? `$${decimal(g.price, 2)}` : t("Free to play"))],
+    [t("Est. revenue"), (g) => (g.price ? money(g.box.gross_mid) : "F2P")],
+    [t("Top complaints"), (g) => lines((g.mining?.categories || []).slice(0, 3).map((c) => `${c.label} ${pct(c.share)}`))],
+    [t("Risk penalties"), (g) => lines(penalties(g).map((p) => `${p.label} −${p.points}`))],
+    [t("From"), (g) => g.source],
+  ];
+  $("#compare-body").replaceChildren(el("table", {},
+    el("thead", {}, el("tr", {}, el("td"), games.map((g) => el("th", { scope: "col" },
+      el("button", { type: "button", onclick: () => { $("#compare").close(); openGame(g.game.appid); } }, g.game.name))))),
+    el("tbody", {}, rows.map(([label, cell]) => el("tr", {}, el("th", { scope: "row" }, label),
+      games.map((g) => el("td", {}, cell(g))))))));
 }
 
 // A shortlisted game: selected if it is in the current ranking, else analyzed into the panel.
