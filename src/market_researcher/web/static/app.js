@@ -846,7 +846,8 @@ async function applyRoute() {
     if (m?.[3]) {
       if (state.panelGame?.game.appid !== +m[3]) await analyzeGame(m[3]);
     } else if (m?.[1]) {
-      if (m[1] !== state.runId) await openRun({ kind: "tag", id: m[1] });
+      // its notices stay above the ranking; toasts would repeat on every reload
+      if (m[1] !== state.runId) await openRun({ kind: "tag", id: m[1] }, false);
       if (!m[2]) closeDrawer();
       else if (state.panelGame?.game.appid !== +m[2]) selectGame(+m[2], false);
     } else if (state.panelGame) {
@@ -874,17 +875,18 @@ function renderTitle(searching = null) {
 }
 
 // quiet: the same result again in another language, so no toasts and the selection stays.
-function showResult(result, id, quiet = false) {
+// toasts false: a saved run opened from the address, whose notices were seen when it ran.
+function showResult(result, id, quiet = false, toasts = true) {
   route.hold++; // one history entry for the result and the game it opens
   try {
-    fillResult(result, id, quiet);
+    fillResult(result, id, quiet, toasts);
   } finally {
     route.hold--;
   }
   syncRoute();
 }
 
-function fillResult(result, id, quiet) {
+function fillResult(result, id, quiet, toasts) {
   state.games = result.games.map((g, i) => ({ ...g, rank: i + 1 }));
   state.result = result;
   state.runId = id;
@@ -915,7 +917,7 @@ function fillResult(result, id, quiet) {
     if (g) renderPanel(g, panelTab(), false);
     return;
   }
-  notifyAll(result.notices);
+  if (toasts) notifyAll(result.notices);
   titleDone(result.tag);
   if (state.keepPanel) {
     // the panel shows a game the user analyzed during the search: leave it there
@@ -1336,7 +1338,7 @@ async function deleteRun(r, item) {
   }
 }
 
-async function openRun(r) {
+async function openRun(r, toasts = true) {
   if (r.kind === "tag" && state.searching) return stillRunning(t("A search is still running."));
   tagInput.blur();
   closeTagList();
@@ -1359,7 +1361,7 @@ async function openRun(r) {
     $("#hi").value = res2.hi;
     saveFilters();
     state.keepPanel = false;
-    showResult(res2, r.id);
+    showResult(res2, r.id, false, toasts);
   } catch (err) {
     notifyError(err, t("Couldn't open the run"));
   }
