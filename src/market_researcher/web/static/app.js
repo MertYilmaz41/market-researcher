@@ -1424,16 +1424,32 @@ function highlightRow() {
   }
 }
 
-function selectGame(appid, focus = true) {
+function selectGame(appid, focus = true, tab = 0) {
   const g = state.games.find((x) => x.game.appid === appid);
   if (!g) return;
   state.selected = appid;
   if (!state.showAll && g.rank > SHOWN) { state.showAll = true; renderTable(); }
   map.select(appid); // also while the list is shown, so the map is in sync when you switch
   highlightRow();
-  renderPanel(g, 0, focus);
+  renderPanel(g, tab, focus);
   document.querySelector(`#ranking tr[data-appid="${appid}"]`)?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
 }
+
+// The panel's ‹ › buttons and J/K: the next or previous game of the ranking, on the same tab.
+function stepGame(by) {
+  const i = state.games.findIndex((x) => x.game.appid === state.panelGame?.game.appid);
+  const next = i >= 0 && state.games[i + by];
+  if (!next) return;
+  const nav = document.activeElement?.dataset?.nav; // keep keyboard focus on the button that was pressed
+  selectGame(next.game.appid, false, panelTab());
+  if (nav) $(`#panel [data-nav="${nav}"]:not(:disabled)`)?.focus();
+}
+document.addEventListener("keydown", (e) => {
+  if (!["j", "k"].includes(e.key.toLowerCase()) || e.ctrlKey || e.metaKey || e.altKey || $("#drawer").hidden) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]") || document.querySelector("dialog[open]")) return;
+  e.preventDefault();
+  stepGame(e.key.toLowerCase() === "j" ? 1 : -1);
+});
 
 // ---------- score card: how a score was reached (hover or focus any score) ----------
 // All numbers and wording come from the server (scoring.explain); this only lays them out.
@@ -1636,9 +1652,15 @@ function renderPanel(g, tab = 0, focus = true) {
   const game = g.game;
   const year = (g.details?.release_date || "").match(/\d{4}/)?.[0];
   const sub = [g.price ? `$${decimal(g.price, 2)}` : t("Free to play"), year, `AppID ${game.appid}`].filter(Boolean).join(" · ");
+  const i = state.games.findIndex((x) => x.game.appid === game.appid);
+  const navButton = (by, label, key, symbol) => el("button", { type: "button", class: "icon-btn", "data-nav": by > 0 ? "next" : "prev",
+    "aria-label": label, title: `${label} (${key})`, disabled: !state.games[i + by], onclick: () => stepGame(by) }, symbol);
   const head = el("div", { class: "panel-head" },
     el("h3", { class: "game-title" }, game.name),
-    el("span", { class: "sub" }, sub, " · ", el("a", { href: g.store_url, target: "_blank", rel: "noopener" }, "Steam ↗")));
+    el("span", { class: "sub" }, sub, " · ", el("a", { href: g.store_url, target: "_blank", rel: "noopener" }, "Steam ↗")),
+    i >= 0 ? el("div", { class: "panel-nav" }, navButton(-1, t("Previous game"), "K", "‹"),
+      el("span", { class: "muted" }, t("{i} of {n}", { i: i + 1, n: state.games.length })),
+      navButton(1, t("Next game"), "J", "›")) : null);
 
   const tabs = [
     [t("Overview"), () => overviewTab(g)],
@@ -1678,7 +1700,6 @@ function renderPanel(g, tab = 0, focus = true) {
     el("a", { class: "steam", href: g.store_url, target: "_blank", rel: "noopener" }, t("Open on Steam")));
   $("#panel").replaceChildren(head, tabBar, body, actions);
   $("#panel").scrollTop = 0;
-  const i = state.games.findIndex((x) => x.game.appid === game.appid);
   $("#sheet-pos").textContent = i >= 0 ? t("{i} of {n}", { i: i + 1, n: state.games.length }) : "";
   openDrawer(focus);
 }

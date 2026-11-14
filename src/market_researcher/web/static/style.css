@@ -539,6 +539,8 @@ td { padding: 0 16px; vertical-align: middle; }
 .sheet-bar { display: none; }
 .panel { flex: 1; min-height: 0; overflow: auto; padding: 24px 24px 28px; display: flex; flex-direction: column; gap: 18px; }
 .panel-head { display: flex; flex-direction: column; gap: 4px; padding-right: 44px; }
+.panel-nav { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; }
+.panel-nav .icon-btn { width: 28px; height: 28px; font-size: 16px; }
 .panel h3.game-title { font-size: var(--fs-lg); }
 .panel .sub { color: var(--muted); font-size: 13px; }
 .tabs {

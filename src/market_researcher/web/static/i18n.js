@@ -22,6 +22,8 @@ const TR = {
   "Language": "Dil",
   "Theme": "Tema",
   "Remove {tag}": "{tag} etiketini kaldır",
+  "Previous game": "Önceki oyun",
+  "Next game": "Sonraki oyun",
   "Add {tag} to the search": "{tag} etiketini aramaya ekle",
   "{n} selected (the maximum)": "{n} seçildi (en fazla)",
   "{n} selected · games must have all of them": "{n} seçildi · oyunlarda hepsi olmalı",
