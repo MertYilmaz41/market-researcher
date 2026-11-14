@@ -1320,15 +1320,27 @@ async function loadRuns() {
     }
     const count = (r) => (r.kind === "market" ? t("{n} tags", { n: r.n })
       : r.n === 1 ? t("{n} game", { n: r.n }) : t("{n} games", { n: r.n }));
-    list.replaceChildren(...runs.map((r) => {
+    // One row per search (the server keeps the newest of repeats); searches that found no games go last.
+    const empty = runs.filter((r) => r.kind === "tag" && r.n === 0);
+    const found = runs.filter((r) => !empty.includes(r));
+    // The same tags with other filters are other searches: their filters tell them apart.
+    const repeated = (r) => runs.filter((x) => x.kind === "tag" && x.label === r.label).length > 1;
+    const row = (r) => {
+      const times = r.times > 1 ? ` · ${t("run {n} times", { n: r.times })}` : "";
+      const p = r.params;
+      const filters = r.kind === "tag" && repeated(r) && p
+        ? el("span", {}, t("{min}+ reviews · {range} positive · top {n}", { min: fmt(p.min_reviews), range: range(p.lo, p.hi), n: p.max_games }))
+        : null;
       const item = clickable(el("li", { class: r.id === state.runId ? "current" : "" },
         el("div", { class: "run-main" },
           el("b", {}, r.kind === "market" ? t("Markets: all tags") : r.label),
-          el("span", {}, `${dateTime(r.created)} · ${count(r)}`)),
+          el("span", {}, `${dateTime(r.created)} · ${count(r)}${times}`), filters),
         el("button", { type: "button", class: "run-del", tabindex: "-1", title: t("Delete this run"), "aria-label": t("Delete run {label}", { label: r.label }),
           onclick: (e) => { e.stopPropagation(); deleteRun(r, item); } }, "×")), () => openRun(r));
       return item;
-    }));
+    };
+    list.replaceChildren(...found.map(row),
+      ...(empty.length ? [el("li", { class: "run-empty run-group" }, t("No games found ({n})", { n: empty.length })), ...empty.map(row)] : []));
   } catch (err) {
     list.replaceChildren();
     notifyError(err, t("Couldn't load past runs"));

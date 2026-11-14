@@ -232,7 +232,8 @@ def test_ui_smoke(base_url, browser):
     page.click("#tag")
     page.wait_for_selector("#runs-list li .run-main")
     labels = page.eval_on_selector_all("#runs-list .run-main b", "bs => bs.map(b => b.textContent)")
-    assert labels == ["Survival", "Markets: all tags", "Survival", "Crafting + Colony Sim"]
+    assert labels == ["Survival", "Markets: all tags", "Crafting + Colony Sim"]  # the same search once
+    assert "run 2 times" in page.text_content("#runs-list li:first-child")
     page.click("#runs-list li:last-child .run-main")
     page.wait_for_function("document.querySelector('#table-title').textContent === 'Crafting + Colony Sim'")
     assert sorted(_chips(page)) == ["Colony Sim", "Crafting"]

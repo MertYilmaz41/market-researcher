@@ -88,6 +88,21 @@ class RunStore:
             ).fetchall()
         return [dict(id=r[0], created=r[1], kind=r[2], label=r[3], n=r[4]) for r in rows]
 
+    def searches(self, limit: int = 50) -> "list[dict]":  # quoted: list() shadows the builtin here
+        """Like list(), but one row per search: runs with the same tags and filters (or every market
+        ranking) count as one, shown by the newest, with "times" saying how many there are."""
+        with self._lock:
+            rows = self._db().execute(
+                "SELECT id, created, kind, label, n, compare_key, params FROM runs ORDER BY created DESC").fetchall()
+        out: dict[str, dict] = {}
+        for r in rows:
+            key = "market" if r[2] == "market" else (r[5] or r[0])
+            if key in out:
+                out[key]["times"] += 1
+            elif len(out) < limit:
+                out[key] = dict(id=r[0], created=r[1], kind=r[2], label=r[3], n=r[4], times=1, params=json.loads(r[6]))
+        return list(out.values())
+
     def load(self, run_id: str) -> dict[str, Any] | None:
         """{id, created, kind, label, params, result} with the result rebuilt, or None."""
         with self._lock:

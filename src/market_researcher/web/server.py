@@ -629,7 +629,7 @@ def cancel_market_run(job_id: str) -> dict:
 
 @app.get("/api/runs")
 def list_runs() -> dict:
-    return {"runs": _runs.list()}
+    return {"runs": _runs.searches()}
 
 
 @app.delete("/api/runs/{run_id}")
