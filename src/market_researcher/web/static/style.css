@@ -705,6 +705,9 @@ button.chip[aria-pressed="true"] { color: var(--accent-ink); border-color: var(-
 #markets tbody tr { cursor: pointer; }
 #markets tbody tr:hover td { background: color-mix(in srgb, var(--text) 3%, transparent); }
 #markets tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#markets tbody tr.picked td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+#markets tbody tr.picked td.tag { color: var(--accent-ink); }
+#markets tbody tr.picked td.tag::before { content: "✓ "; }
 #markets td.rank { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
 #markets td.tag { font-weight: 500; }
 #markets td.under { color: var(--accent-ink); }

@@ -124,7 +124,6 @@ const TR = {
   "{n} tags SteamSpy can't search are left out (search them one by one).": "SteamSpy'ın arayamadığı {n} etiket dışarıda kaldı (onları tek tek arayın).",
   "{n} tags couldn't be read": "{n} etiket okunamadı",
   "They are missing from the ranking. Rebuild later to retry them.": "Bunlar sıralamada yok. Tekrar denemek için daha sonra yeniden oluşturun.",
-  "Search {tag}": "{tag} ara",
   "Tag": "Etiket",
 
   // past runs
@@ -362,7 +361,7 @@ const TR = {
   "Mixed": "Karışık",
   "Too few to tell": "Söylemek için çok az",
   "Underserved ({range})": "Karşılanmamış ({range})",
-  "{n} of {total} tags shown · click a tag to search it": "{total} etiketten {n} tanesi gösteriliyor · aramak için bir etikete tıklayın",
+  "{n} of {total} tags shown · click tags to add them to the search": "{total} etiketten {n} tanesi gösteriliyor · aramaya eklemek için etiketlere tıklayın",
   "Search this tag →": "Bu etiketi ara →",
   "Shortlist · kept after restarts and cache clears": "Kısa liste · yeniden başlatma ve önbellek temizliğinden sonra da kalır",
   "{n} games worth a second look": "İkinci kez bakmaya değer {n} oyun",

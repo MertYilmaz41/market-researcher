@@ -394,15 +394,23 @@ function renderChips() {
       el("button", { type: "button", "aria-label": t("Remove {tag}", { tag }),
         onmousedown: (e) => e.preventDefault(), // don't steal focus from the filter box
         onclick: (e) => { e.stopPropagation(); togglePick(tag); } }, "×"))));
-  syncGameChips();
+  syncPickedTags();
   if (tagPicker.freeText) return;
   const open = !tagPop.hidden;
   tagInput.placeholder = open ? t("Filter tags, or paste an AppID...") : tagPicker.picked.length ? "" : t("Add a tag, or paste an AppID");
 }
 
-// The panel's tag chips show which of them are in the search box.
-function syncGameChips() {
+// The panel's tag chips and the Markets rows show which tags are in the search box.
+function syncPickedTags() {
   document.querySelectorAll("#panel .chips button.chip[data-tag], #narrow-line button.chip[data-tag]").forEach(markGameChip);
+  document.querySelectorAll("#markets tbody tr[data-tag]").forEach(markMarketRow);
+}
+
+function markMarketRow(tr) {
+  const tag = tr.dataset.tag, on = (tagPicker.freeText ? freeTextTags() : tagPicker.picked).includes(tag);
+  tr.classList.toggle("picked", on);
+  tr.title = on ? t("Remove {tag}", { tag }) : t("Add {tag} to the search", { tag });
+  return tr;
 }
 
 function markGameChip(b) {
@@ -591,6 +599,7 @@ $("#tag-form").addEventListener("submit", async (e) => {
   const appid = !tagPicker.freeText && parseAppid(tagInput.value);
   if (appid) return analyzeGame(appid);
   if (state.searching) return stillRunning(t("A search is still running."));
+  tagPicker.fromGame = null; // the next tag picked from a panel or Markets starts a new search
   const body = {
     // picks come only from ticks; in the free-text fallback, from the comma-separated box
     tags: !tagPicker.freeText ? [...tagPicker.picked]
@@ -967,7 +976,7 @@ function narrowWith(tag) {
     let tags = freeTextTags();
     if (!base.every((x) => tags.includes(x))) tags = [...base];
     tagInput.value = (tags.includes(tag) ? tags.filter((x) => x !== tag) : [...tags, tag]).join(", ");
-    return syncGameChips();
+    return syncPickedTags();
   }
   if (!base.every(isPicked)) tagPicker.picked = [...base];
   if (!isPicked(tag) && tagPicker.picked.length >= MAX_TAGS) {
@@ -1226,7 +1235,7 @@ function renderMarkets() {
   const n = fmt;
   $("#markets tbody").replaceChildren(...rows.map((r) => {
     const [verdict, cls] = marketVerdict(r);
-    return clickable(el("tr", { title: t("Search {tag}", { tag: r.tag }) },
+    return markMarketRow(clickable(el("tr", { "data-tag": r.tag },
       el("td", { class: "rank" }, r.rank),
       el("td", { class: "tag" }, r.tag),
       el("td", { class: "num dim" }, n(r.n_games)),
@@ -1237,9 +1246,9 @@ function renderMarkets() {
         el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(r.gap * 100)}%` })),
         el("span", {}, pct(r.gap)))),
       el("td", {}, el("span", { class: `verdict-tag ${cls}` }, verdict)),
-    ), () => searchTag(r.tag));
+    ), () => pickTag(r.tag, "markets")));
   }));
-  $("#markets-shown").textContent = t("{n} of {total} tags shown · click a tag to search it", { n: rows.length, total: markets.rows.length });
+  $("#markets-shown").textContent = t("{n} of {total} tags shown · click tags to add them to the search", { n: rows.length, total: markets.rows.length });
   // The top three by the server's order (well-served games, then games with demand; broad tags last), among the shown ones.
   const top = [...shown].sort((a, b) => a.rank - b.rank).slice(0, 3);
   $("#market-cards").hidden = !top.length;
@@ -1274,15 +1283,16 @@ const help = $("#help");
 $("#help-toggle").addEventListener("click", () => help.showModal());
 help.addEventListener("click", (e) => { if (e.target === help) help.close(); }); // a click on the backdrop
 
-// From a tag chip in the panel: add the tag to the search box or take it out; Search runs it.
-// The first click in another game's panel clears the box, so an old search's tags don't mix in.
-function pickFromGame(tag, appid) {
-  const fresh = tagPicker.fromGame !== appid;
-  tagPicker.fromGame = appid;
+// From a tag chip in the panel or a Markets row: add the tag to the search box or take it out; Search
+// runs it. The first click from another place (another game's panel, Markets, or after a search) clears
+// the box, so an old search's tags don't mix in.
+function pickTag(tag, from) {
+  const fresh = tagPicker.fromGame !== from;
+  tagPicker.fromGame = from;
   if (tagPicker.freeText) {
     const tags = fresh ? [] : freeTextTags();
     tagInput.value = (tags.includes(tag) ? tags.filter((x) => x !== tag) : [...tags, tag]).join(", ");
-    return syncGameChips();
+    return syncPickedTags();
   }
   if (fresh) tagPicker.picked = [];
   if (!isPicked(tag) && tagPicker.picked.length >= MAX_TAGS) {
@@ -1845,7 +1855,7 @@ function overviewTab(g) {
       : null,
     loved.length ? el("section", {}, el("h4", {}, t("What players love"), info("loved")), el("p", { class: "loved" }, loved.join(", ") + ".")) : null,
     tags.length ? el("div", { class: "chips" }, tags.map((tag) => markGameChip(el("button", {
-      type: "button", class: "chip", "data-tag": tag, onclick: () => pickFromGame(tag, g.game.appid) }, tag)))) : null,
+      type: "button", class: "chip", "data-tag": tag, onclick: () => pickTag(tag, g.game.appid) }, tag)))) : null,
     el("div", { class: "links" },
       el("button", { type: "button", class: "link-btn go", onclick: () => goTab(TABS.complaints) }, t("All complaints and quotes →")),
       el("button", { type: "button", class: "link-btn go", onclick: () => goTab(TABS.history) }, t("Review history →")),
