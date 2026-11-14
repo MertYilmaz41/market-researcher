@@ -516,6 +516,8 @@ def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -
         "axes": {"demand_log": [config.DEMAND_LOG_MIN, config.DEMAND_LOG_MAX],
                  "rating": [config.MAX_RATING, config.MIN_RATING]},
         "compared": bool(changes),
+        # Other tags the ranked games share, offered for narrowing the search.
+        "narrow": {"tags": market.related_tags([a.game for a in ranked], r.tags), "total": len(ranked)},
         "track": _track_json(result.track),
         "notices": [n.model_dump() for n in post],
     }

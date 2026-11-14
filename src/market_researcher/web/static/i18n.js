@@ -24,6 +24,8 @@ const TR = {
   "Remove {tag}": "{tag} etiketini kaldır",
   "Previous game": "Önceki oyun",
   "Next game": "Sonraki oyun",
+  "Narrow down:": "Daralt:",
+  "{tag}: {n} of {total} games here also have it": "{tag}: buradaki {total} oyunun {n} tanesinde de var",
   "Add {tag} to the search": "{tag} etiketini aramaya ekle",
   "{n} selected (the maximum)": "{n} seçildi (en fazla)",
   "{n} selected · games must have all of them": "{n} seçildi · oyunlarda hepsi olmalı",

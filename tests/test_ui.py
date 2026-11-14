@@ -59,6 +59,7 @@ def base_url(tmp_path_factory):
         else:
             r.analyses[0].opportunity.penalty = 20  # "Other" is a risky game
             r.analyses[1].game.tags = {"Crafting": 90, "Building": 40}  # Best Sim's tag chips
+            r.analyses[0].game.tags = {"Crafting": 50, "Survival": 20}  # both have Crafting: offered for narrowing
         r.market = market_stats([a.game for a in r.analyses], 100, 5, 70)
         return r
 
@@ -488,6 +489,25 @@ def test_ui_panel_prev_next(base_url, browser):
     assert page.text_content("#panel .game-title") == first
     assert page.text_content("#panel .tabs button.active") == "Complaints"
     assert page.get_attribute("#ranking tr.selected", "data-appid") == page.get_attribute("#ranking tbody tr", "data-appid")
+    assert page.errors == []
+
+
+def test_ui_narrow_down(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
+    chip = page.locator('#narrow-line button.chip[data-tag="Crafting"]')
+    assert chip.text_content() == "+ Crafting · 2/2" and page.locator("#narrow-line button.chip").count() == 1
+    # A click adds it to the search's tags in the box; Search runs it.
+    chip.click()
+    assert _chips(page) == ["Job Simulator", "Crafting"] and chip.get_attribute("aria-pressed") == "true"
+    assert "searching" not in page.eval_on_selector("body", "b => b.className")
+    chip.click()
+    assert _chips(page) == ["Job Simulator"]
+    chip.click()
+    page.click("#run")
+    page.wait_for_function("document.querySelector('#table-title').textContent === 'Job Simulator + Crafting' && "
+                           "!document.body.classList.contains('searching')")
+    assert page.is_hidden("#narrow-line button.chip[data-tag=\"Crafting\"]")  # now searched: not offered
     assert page.errors == []
 
 

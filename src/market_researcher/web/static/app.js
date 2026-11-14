@@ -401,7 +401,7 @@ function renderChips() {
 
 // The panel's tag chips show which of them are in the search box.
 function syncGameChips() {
-  document.querySelectorAll("#panel .chips button.chip[data-tag]").forEach(markGameChip);
+  document.querySelectorAll("#panel .chips button.chip[data-tag], #narrow-line button.chip[data-tag]").forEach(markGameChip);
 }
 
 function markGameChip(b) {
@@ -804,6 +804,7 @@ function renderTitle(searching = null) {
   $("#table-title").textContent = searching || r?.tag || t("Find underserved audiences");
   renderMarketLine(searching ? null : r);
   renderTrackLine();
+  renderNarrowLine(searching ? null : r);
   if (!searching && !r) $("#market-line").textContent = t("Steam games that many people bought but rate poorly, ranked as chances for a better game.");
   renderSummary();
 }
@@ -871,6 +872,33 @@ function renderMarketLine(r) {
       under: fmt(m.n_underserved), demand: fmt(m.n_demand), range: range(r.lo, r.hi), well: fmt(m.n_well_served),
       pct: percent(r.well_served) }),
     " ", el("b", {}, t("Unmet share {pct}", { pct: pct(m.gap) })), info("unmet_share"));
+}
+
+// Under the title: the other tags most ranked games share. A click adds one to the search's tags in the
+// box (or takes it out); Search runs it, as with the panel's tag chips.
+function renderNarrowLine(r) {
+  const line = $("#narrow-line");
+  const list = r?.narrow?.tags || [];
+  if (!list.length || r.tags.length >= MAX_TAGS) return line.replaceChildren();
+  line.replaceChildren(el("span", {}, t("Narrow down:")), ...list.map(({ tag, n }) => markGameChip(el("button", {
+    type: "button", class: "chip", "data-tag": tag, "aria-label": t("{tag}: {n} of {total} games here also have it", { tag, n, total: r.narrow.total }),
+    onclick: () => narrowWith(tag) }, `+ ${tag} · ${n}/${r.narrow.total}`))));
+}
+
+function narrowWith(tag) {
+  const base = state.result.tags;
+  tagPicker.fromGame = null;
+  if (tagPicker.freeText) {
+    let tags = freeTextTags();
+    if (!base.every((x) => tags.includes(x))) tags = [...base];
+    tagInput.value = (tags.includes(tag) ? tags.filter((x) => x !== tag) : [...tags, tag]).join(", ");
+    return syncGameChips();
+  }
+  if (!base.every(isPicked)) tagPicker.picked = [...base];
+  if (!isPicked(tag) && tagPicker.picked.length >= MAX_TAGS) {
+    return toast("info", t("{n} selected (the maximum)", { n: MAX_TAGS }));
+  }
+  togglePick(tag);
 }
 
 // ---------- the tag's track record: measured in the background after a search, saved with the run ----------
