@@ -652,9 +652,29 @@ function rangeError(body) {
 // "~3 min left": the server estimates the time left from the pace so far (null: no estimate yet).
 const etaText = (eta) => (eta == null ? "" : eta < 60 ? t("under a minute left") : t("~{n} min left", { n: Math.round(eta / 60) }));
 
+// The tab's title shows a running search's progress, and "✓" when one finished while the tab was hidden
+// (until you come back), so a long search can run in the background.
+const BASE_TITLE = document.title;
+const tabTitle = { games: null, markets: null, done: null };
+function renderTabTitle() {
+  const p = tabTitle.games ?? tabTitle.markets;
+  document.title = p != null ? `${p}% · ${BASE_TITLE}` : tabTitle.done ? `✓ ${tabTitle.done} · ${BASE_TITLE}` : BASE_TITLE;
+}
+function titleDone(label) {
+  if (document.hidden) tabTitle.done = label;
+  renderTabTitle();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !tabTitle.done) return;
+  tabTitle.done = null;
+  renderTabTitle();
+});
+
 // A progress card; job null hides it.
 function statusBox(box, title, job, count) {
   box.hidden = job == null;
+  tabTitle[box.id === "search-status" ? "games" : "markets"] = job == null ? null : Math.round((job.total ? job.done / job.total : 0) * 100);
+  renderTabTitle();
   if (job == null) return;
   box.querySelector(".search-status-title").textContent = title;
   box.querySelector(".search-status-count").textContent = count;
@@ -842,6 +862,7 @@ function showResult(result, id, quiet = false) {
     return;
   }
   notifyAll(result.notices);
+  titleDone(result.tag);
   if (state.keepPanel) {
     // the panel shows a game the user analyzed during the search: leave it there
   } else if (state.games.length) {
@@ -1122,6 +1143,7 @@ function showMarkets(result, quiet = false) {
   if (!quiet) markets.sort = { key: "rank", asc: true };
   marketsText();
   marketsButton();
+  if (!quiet) titleDone(t("Markets"));
   if (result.failed.length && !quiet) {
     toast("warning", t("{n} tags couldn't be read", { n: result.failed.length }), result.failed.slice(0, 5).map((f) => f.tag).join(", "),
       t("They are missing from the ranking. Rebuild later to retry them."));
