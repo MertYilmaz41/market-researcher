@@ -72,7 +72,7 @@ class MarketRunRequest(BaseModel):
 
 class TagRunRequest(MarketRunRequest):
     tags: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(min_length=1, max_length=config.MAX_TAGS)
-    max_games: int = Field(15, ge=1, le=50)
+    max_games: int = Field(15, ge=1, le=notices.MAX_ANALYZE)
     reviews: int = Field(200, ge=10, le=1000)
 
 
@@ -541,7 +541,7 @@ def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -
             g["new"] = changes[a.game.appid] is None
         games.append(g)
     return {
-        "tag": label, "tags": r.tags, "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
+        "tag": label, "tags": r.tags, "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi, "max_games": r.max_games,
         "n_tag_games": result.n_tag_games,
         "n_candidates": len(result.candidates),
         "not_games": result.not_games,

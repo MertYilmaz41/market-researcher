@@ -24,6 +24,7 @@ const TR = {
   "Remove {tag}": "{tag} etiketini kaldır",
   "Previous game": "Önceki oyun",
   "Next game": "Sonraki oyun",
+  "Analyze {n} more →": "{n} oyun daha analiz et →",
   "Compare": "Karşılaştır",
   "Compare ({n})": "Karşılaştır ({n})",
   "Compare games": "Oyunları karşılaştır",
