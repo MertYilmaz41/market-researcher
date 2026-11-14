@@ -208,7 +208,7 @@ def test_ui_smoke(base_url, browser):
     page.wait_for_function("!document.body.classList.contains('searching')", timeout=10_000)
     assert page.text_content("#panel h3") == "Lone Game"  # the finished search keeps it
 
-    # Markets view: build, then click a tag to search it.
+    # Markets view: build, then pick tags (the box is cleared on the first) and search them.
     page.click('#table-view button[data-view="markets"]')
     page.click("#markets-run")
     page.wait_for_selector("#market-tools")
@@ -217,6 +217,12 @@ def test_ui_smoke(base_url, browser):
     assert page.locator("#markets tbody tr").count() == 2 and page.locator("#market-cards .market-card").count() == 2
     assert "Incremental" not in page.text_content("#markets tbody")
     page.click("#markets tbody tr:first-child")
+    assert _chips(page) == ["Survival"] and "picked" in page.get_attribute("#markets tbody tr:first-child", "class")
+    page.click("#markets tbody tr:nth-child(2)")
+    assert _chips(page) == ["Survival", "Crafting"] and "searching" not in page.get_attribute("body", "class")
+    page.click("#markets tbody tr:nth-child(2)")  # a second click takes it out
+    assert _chips(page) == ["Survival"] and "picked" not in page.get_attribute("#markets tbody tr:nth-child(2)", "class")
+    page.click("#run")
     page.wait_for_function("!document.body.classList.contains('searching') && "
                            "document.querySelector('#table-title').textContent === 'Survival'",
                            timeout=10_000)
