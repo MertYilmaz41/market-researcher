@@ -277,6 +277,8 @@ def test_ui_turkish(base_url, browser):
     # Switch to Turkish with results on screen: everything is redrawn, nothing is lost.
     _setting(page, '#lang button[data-lang="tr"]')
     page.wait_for_function("document.querySelector('#run').textContent === 'Ara'")
+    # The panel and the server's text come with the result fetched again in Turkish: wait for it.
+    page.wait_for_function("document.querySelector('#panel .tabs')?.innerText.includes('Şikayetler')")
     assert page.get_attribute("html", "lang") == "tr"
     assert page.get_attribute('#lang button[data-lang="tr"]', "aria-pressed") == "true"
     assert page.inner_text("#help-toggle").strip() == "Nasıl çalışır?"
