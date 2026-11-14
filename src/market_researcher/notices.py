@@ -26,11 +26,15 @@ FEW_CANDIDATES = 3
 WEAK_SCORE = 12  # was 20 while fixability was in the score (the same games score lower without it)
 
 
+MAX_ANALYZE = 50  # the web's upper limit for 'Games to analyze'
+
+
 class Notice(BaseModel):
     level: Level
     title: str
     message: str
     hint: str = ""
+    action: str = ""  # a button the web shows with the notice: "analyze_more"
 
 
 # ---------- before a run ----------
@@ -145,6 +149,7 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
             level="info", title=_("Not every candidate analyzed"),
             message=_("Analyzed the top {n} of {total} candidates (by review count).", n=max_games, total=n_cand),
             hint=_("Raise 'Games to analyze' in Filters to include more."),
+            action="analyze_more" if max_games < MAX_ANALYZE else "",
         ))
 
     if result.failed:

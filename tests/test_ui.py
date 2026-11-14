@@ -50,6 +50,8 @@ def base_url(tmp_path_factory):
                 args[-2]("Analyzing games", i, 3000)
                 time.sleep(0.01)
         r = fake_result()
+        if args[3] == 2:  # "Games to analyze" 2: more candidates than that
+            r.candidates = r.candidates * 20
         if tags == ["Building"]:  # games show one by one; one waits on its reviews; ten games in the end
             on_game = args[-1]
             on_game(1, "Best Sim", "done", 0, 0, analysis(60, "Best Sim", appid=1))
@@ -490,6 +492,25 @@ def test_ui_shortlist_compare(base_url, browser):
     page.wait_for_function("document.querySelector('#panel .game-title')?.textContent === 'Best Sim'")
     for appid in ("1", "2"):  # leave the shortlist empty for the other tests
         page.evaluate(f"fetch('/api/shortlist/{appid}', {{ method: 'DELETE' }})")
+    assert page.errors == []
+
+
+def test_ui_analyze_more(base_url, browser):
+    page = _open(browser, base_url)
+    page.click("#filters-toggle")
+    page.fill("#max-games", "2")
+    page.keyboard.press("Escape")
+    _search(page)
+    more = page.locator("#result-notices .analyze-more")
+    assert more.text_content() == "Analyze 15 more →"  # 2 + 15 of 20 candidates
+    page.click("#result-notices .analyze-more")
+    page.wait_for_function("!document.body.classList.contains('searching') && "
+                           "!document.querySelector('#result-notices .analyze-more')")
+    assert page.input_value("#max-games") == "17" and page.text_content("#table-title") == "Job Simulator"
+    page.click("#filters-toggle")
+    page.fill("#max-games", "15")  # back to the default for the other tests
+    page.keyboard.press("Escape")
+    page.evaluate("document.querySelector('#tag-form').dispatchEvent(new Event('change'))")
     assert page.errors == []
 
 

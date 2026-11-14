@@ -482,6 +482,7 @@ td { padding: 0 16px; vertical-align: middle; }
 
 .result-notices { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s1); }
 .result-notices[hidden] { display: none; }
+.result-notice .analyze-more { margin-left: 8px; color: var(--accent-ink); font-weight: 600; }
 .result-notice { position: relative; padding: 6px 32px 6px 10px; border-radius: 6px; font-size: var(--fs-sm);
   border-left: 3px solid var(--info); background: color-mix(in srgb, var(--info) 10%, transparent); }
 .result-notice.warning { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }

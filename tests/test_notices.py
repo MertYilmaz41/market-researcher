@@ -72,6 +72,10 @@ def test_few_and_capped_candidates():
     many = tag_result(candidates=[game(appid=i) for i in range(30)])
     out = titles(post(many, max_games=15))
     assert "Not every candidate analyzed" in out and "Few candidates" not in out
+    # the web offers a button for more, unless the limit is reached
+    capped = lambda out: [n.action for n in out if n.title == "Not every candidate analyzed"]
+    assert capped(post(many, max_games=15)) == ["analyze_more"]
+    assert capped(post(tag_result(candidates=[game(appid=i) for i in range(60)]), max_games=50)) == [""]
 
 
 def test_no_game_has_all_tags():

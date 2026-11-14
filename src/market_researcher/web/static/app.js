@@ -714,7 +714,8 @@ function searchStatus(job) {
 function renderResultNotices(list) {
   const items = (list || []).filter((n) => n.level === "warning" || n.level === "info").map((n) => {
     const item = el("li", { class: `result-notice ${n.level}` },
-      el("b", {}, n.title), " ", n.message, n.hint ? el("span", { class: "muted" }, ` ${n.hint}`) : null);
+      el("b", {}, n.title), " ", n.message, n.hint ? el("span", { class: "muted" }, ` ${n.hint}`) : null,
+      n.action === "analyze_more" ? analyzeMoreButton() : null);
     item.append(el("button", { type: "button", class: "close", "aria-label": t("Dismiss"), onclick: () => {
       item.remove();
       $("#result-notices").hidden = !$("#result-notices").children.length;
@@ -723,6 +724,27 @@ function renderResultNotices(list) {
   });
   $("#result-notices").replaceChildren(...items);
   $("#result-notices").hidden = !items.length;
+}
+
+// "Analyze N more": the same search again with more games (the ones read before come from the cache).
+const ANALYZE_STEP = 15;
+const MAX_ANALYZE = 50;
+function analyzeMoreButton() {
+  const r = state.result;
+  if (!r?.max_games) return null; // a run saved before max_games was kept
+  const next = Math.min(MAX_ANALYZE, r.max_games + ANALYZE_STEP, r.n_candidates);
+  return el("button", { type: "button", class: "link-btn go analyze-more", onclick: () => {
+    if (state.searching) return stillRunning(t("A search is still running."));
+    if (tagPicker.freeText) tagInput.value = r.tags.join(", ");
+    else { tagPicker.picked = [...r.tags]; renderChips(); }
+    $("#min-reviews").value = r.min_reviews;
+    $("#lo").value = r.lo;
+    $("#hi").value = r.hi;
+    $("#max-games").value = next;
+    saveFilters();
+    filtersSummary();
+    $("#tag-form").requestSubmit();
+  } }, t("Analyze {n} more →", { n: next - r.max_games }));
 }
 
 // While a search runs: each game as it goes, finished ones ranked by score.

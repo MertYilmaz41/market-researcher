@@ -78,6 +78,7 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
     assert res["not_games"] == ["Soundtrack (music)"] and res["n_tag_games"] == 50
     assert any(n["level"] == "success" and "Best Sim" in n["message"] for n in res["notices"])
     assert calls[0][0] == ["Job Simulator"] and calls[0][1][1:3] == (10, 60)
+    assert res["max_games"] == 15
     assert res["narrow"] == {"tags": [], "total": 2}  # the fake games have no tags
 
     md = client.get(f"/api/tag-runs/{run_id}/report.md")
