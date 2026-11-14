@@ -354,7 +354,7 @@ const tagPop = $("#tag-pop");
 const tagList = $("#tag-list");
 // tags: Steam's catalog. shown: options in list order. freeText: the catalog failed to load, so the
 // box takes comma-separated tags typed by hand.
-const tagPicker = { tags: [], picked: [], shown: [], active: -1, freeText: false };
+const tagPicker = { tags: [], picked: [], shown: [], active: -1, freeText: false, fromGame: null };
 
 { // the last filters and tags used in this browser
   const saved = loadSaved();
@@ -393,9 +393,26 @@ function renderChips() {
       el("button", { type: "button", "aria-label": t("Remove {tag}", { tag }),
         onmousedown: (e) => e.preventDefault(), // don't steal focus from the filter box
         onclick: (e) => { e.stopPropagation(); togglePick(tag); } }, "×"))));
+  syncGameChips();
   if (tagPicker.freeText) return;
   const open = !tagPop.hidden;
   tagInput.placeholder = open ? t("Filter tags, or paste an AppID...") : tagPicker.picked.length ? "" : t("Add a tag, or paste an AppID");
+}
+
+// The panel's tag chips show which of them are in the search box.
+function syncGameChips() {
+  document.querySelectorAll("#panel .chips button.chip[data-tag]").forEach(markGameChip);
+}
+
+function markGameChip(b) {
+  const tag = b.dataset.tag, on = (tagPicker.freeText ? freeTextTags() : tagPicker.picked).includes(tag);
+  b.setAttribute("aria-pressed", String(on));
+  b.title = on ? t("Remove {tag}", { tag }) : t("Add {tag} to the search", { tag });
+  return b;
+}
+
+function freeTextTags() {
+  return tagInput.value.split(",").map((x) => x.trim()).filter(Boolean);
 }
 
 // Update checkboxes, limits and the footer in place: rows never move while you tick.
@@ -1142,6 +1159,7 @@ function searchTag(tag) {
   if (state.searching) return stillRunning(t("A search is still running."));
   if (tagPicker.freeText) tagInput.value = tag;
   else { tagPicker.picked = [tag]; renderChips(); }
+  tagPicker.fromGame = null;
   setTableView("games");
   $("#tag-form").requestSubmit();
 }
@@ -1151,10 +1169,21 @@ const help = $("#help");
 $("#help-toggle").addEventListener("click", () => help.showModal());
 help.addEventListener("click", (e) => { if (e.target === help) help.close(); }); // a click on the backdrop
 
-// From a tag chip in the panel: the same, and say that the picked tags were replaced.
-function searchOneTag(tag) {
-  if (!state.searching) toast("info", t("Searching {tag}", { tag }), t("Only this tag; your other tags were set aside."));
-  searchTag(tag);
+// From a tag chip in the panel: add the tag to the search box or take it out; Search runs it.
+// The first click in another game's panel clears the box, so an old search's tags don't mix in.
+function pickFromGame(tag, appid) {
+  const fresh = tagPicker.fromGame !== appid;
+  tagPicker.fromGame = appid;
+  if (tagPicker.freeText) {
+    const tags = fresh ? [] : freeTextTags();
+    tagInput.value = (tags.includes(tag) ? tags.filter((x) => x !== tag) : [...tags, tag]).join(", ");
+    return syncGameChips();
+  }
+  if (fresh) tagPicker.picked = [];
+  if (!isPicked(tag) && tagPicker.picked.length >= MAX_TAGS) {
+    return toast("info", t("{n} selected (the maximum)", { n: MAX_TAGS }));
+  }
+  togglePick(tag);
 }
 
 // ---------- Past searches: every finished search and market ranking is saved on the server ----------
@@ -1688,8 +1717,8 @@ function overviewTab(g) {
       el("div", {}, risks.map((p) => [el("b", {}, t("{label} · −{points} points", { label: p.label, points: p.points })), el("p", {}, p.reason)])))
       : null,
     loved.length ? el("section", {}, el("h4", {}, t("What players love"), info("loved")), el("p", { class: "loved" }, loved.join(", ") + ".")) : null,
-    tags.length ? el("div", { class: "chips" }, tags.map((tag) => el("button", {
-      type: "button", class: "chip", title: t("Search {tag}", { tag }), onclick: () => searchOneTag(tag) }, tag))) : null,
+    tags.length ? el("div", { class: "chips" }, tags.map((tag) => markGameChip(el("button", {
+      type: "button", class: "chip", "data-tag": tag, onclick: () => pickFromGame(tag, g.game.appid) }, tag)))) : null,
     el("div", { class: "links" },
       el("button", { type: "button", class: "link-btn go", onclick: () => goTab(TABS.complaints) }, t("All complaints and quotes →")),
       el("button", { type: "button", class: "link-btn go", onclick: () => goTab(TABS.history) }, t("Review history →")),

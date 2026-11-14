@@ -454,15 +454,24 @@ def test_ui_shortlist(base_url, browser):
     assert page.errors == []
 
 
-def test_ui_tag_chips_search_one_tag(base_url, browser):
+def test_ui_tag_chips_fill_search(base_url, browser):
     page = _open(browser, base_url)
     _search(page)
-    # A tag chip in the panel searches that one tag.
-    page.locator("#panel .chips button.chip").first.click()
-    page.wait_for_selector("text=Only this tag")
-    page.wait_for_function("document.querySelector('#table-title').textContent === 'Crafting' && "
+    title = page.text_content("#table-title")
+    chip = lambda tag: page.locator(f'#panel .chips button.chip[data-tag="{tag}"]')
+    # The first chip clicked in a game clears the box (Job Simulator goes) and adds its tag; no search starts.
+    chip("Crafting").click()
+    assert _chips(page) == ["Crafting"] and chip("Crafting").get_attribute("aria-pressed") == "true"
+    chip("Building").click()
+    assert _chips(page) == ["Crafting", "Building"]
+    chip("Building").click()  # a second click takes it out
+    assert _chips(page) == ["Crafting"] and chip("Building").get_attribute("aria-pressed") == "false"
+    chip("Building").click()
+    assert page.text_content("#table-title") == title and "searching" not in page.eval_on_selector("body", "b => b.className")
+    # Search runs the picked tags.
+    page.click("#run")
+    page.wait_for_function("document.querySelector('#table-title').textContent === 'Crafting + Building' && "
                            "!document.body.classList.contains('searching')")
-    assert _chips(page) == ["Crafting"]
     assert page.errors == []
 
 

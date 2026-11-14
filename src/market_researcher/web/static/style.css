@@ -582,6 +582,7 @@ blockquote.quote { margin: 0; padding: 12px 14px; border-radius: var(--r-md); ba
 .chip { padding: 3px 10px; border-radius: 99px; background: var(--card); border: 1px solid var(--line); font-size: 12px; font-weight: 500; color: var(--text-3); }
 button.chip { cursor: pointer; }
 button.chip:hover { color: var(--text); border-color: var(--accent); }
+button.chip[aria-pressed="true"] { color: var(--accent-ink); border-color: var(--accent); }
 .links { display: flex; flex-wrap: wrap; gap: 16px; padding-top: 18px; border-top: 1px solid var(--line); }
 .links button.link-btn { font-size: 14px; }
 .links .go { color: var(--accent-ink); font-weight: 500; }
