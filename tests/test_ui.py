@@ -511,6 +511,20 @@ def test_ui_narrow_down(base_url, browser):
     assert page.errors == []
 
 
+def test_ui_tab_title_progress(base_url, browser):
+    page = _open(browser, base_url)
+    _tick(page, "Job Simulator", "Survival")  # Survival's fake search takes 2 s
+    page.evaluate("Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })")
+    page.click("#run")
+    page.wait_for_function("document.title.endsWith('% · Market Researcher')")
+    # Finished while the tab was hidden: a check mark until the tab is seen again.
+    page.wait_for_function("document.title === '✓ Survival · Market Researcher'", timeout=10_000)
+    page.evaluate("Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });"
+                  "document.dispatchEvent(new Event('visibilitychange'))")
+    assert page.title() == "Market Researcher"
+    assert page.errors == []
+
+
 def test_ui_help_dialog(base_url, browser):
     page = _open(browser, base_url)
     page.click("#help-toggle")
