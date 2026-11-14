@@ -475,6 +475,22 @@ def test_ui_tag_chips_fill_search(base_url, browser):
     assert page.errors == []
 
 
+def test_ui_panel_prev_next(base_url, browser):
+    page = _open(browser, base_url)
+    _search(page)
+    first = page.text_content("#panel .game-title")
+    assert page.is_disabled('#panel [data-nav="prev"]') and page.text_content("#panel .panel-nav") == "‹1 of 2›"
+    page.click('#panel [data-nav="next"]')
+    assert page.text_content("#panel .game-title") != first and page.is_disabled('#panel [data-nav="next"]')
+    # J/K move through the ranking and keep the open tab.
+    page.click("#panel .tabs button >> text=Complaints")
+    page.keyboard.press("k")
+    assert page.text_content("#panel .game-title") == first
+    assert page.text_content("#panel .tabs button.active") == "Complaints"
+    assert page.get_attribute("#ranking tr.selected", "data-appid") == page.get_attribute("#ranking tbody tr", "data-appid")
+    assert page.errors == []
+
+
 def test_ui_help_dialog(base_url, browser):
     page = _open(browser, base_url)
     page.click("#help-toggle")
