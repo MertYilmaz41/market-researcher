@@ -74,10 +74,10 @@ TR: dict[str, str] = {
     "Run again later; games that loaded are cached.": "Daha sonra tekrar çalıştırın; yüklenen oyunlar önbellekte.",
     "{name} ({rating:.0f}%)": "{name} (%{rating:.0f})",
     "Steam rates some games differently": "Steam bazı oyunları farklı puanlıyor",
-    "SteamSpy put {n} game(s) in {lo:g}-{hi:g}% positive, but Steam's own numbers don't: {names}. "
-    "They stay in the ranking, scored on Steam's numbers.":
-        "SteamSpy {n} oyunu %{lo:g}-{hi:g} olumlu aralığına koydu ama Steam'in kendi rakamları koymuyor: {names}. "
-        "Bu oyunlar sıralamada kalır ve Steam'in rakamlarıyla puanlanır.",
+    "The search's English reviews put {n} game(s) in {lo:g}-{hi:g}% positive, but all languages don't: {names}. "
+    "They stay in the ranking, scored on all languages.":
+        "Aramadaki İngilizce incelemeler {n} oyunu %{lo:g}-{hi:g} olumlu aralığına koydu ama bütün diller koymuyor: "
+        "{names}. Bu oyunlar sıralamada kalır ve bütün dillerin rakamlarıyla puanlanır.",
     "Review texts unavailable": "İnceleme metinleri alınamadı",
     "Couldn't load review texts for {n} game(s), so their complaints weren't mined.":
         "{n} oyunun inceleme metinleri yüklenemedi; bu yüzden şikayetleri çıkarılamadı.",
