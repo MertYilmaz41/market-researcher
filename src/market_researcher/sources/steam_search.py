@@ -10,6 +10,7 @@ SteamSpy's tag lists were far smaller than Steam's (Colony Sim: 34 of 472 games 
 docs/measurements.md).
 """
 
+import datetime as dt
 import html
 import re
 from collections.abc import Callable
@@ -27,6 +28,17 @@ _TITLE = re.compile(r'<span class="title">(.*?)</span>', re.S)
 _REVIEWS = re.compile(r"(\d+)% of the ([\d,]+) user reviews")
 _FINAL = re.compile(r'data-price-final="(\d+)"')
 _ORIGINAL = re.compile(r'class="discount_original_price">[^\d<]*([\d,]+)\.(\d\d)')
+_RELEASED = re.compile(r'search_released[^>]*>\s*([^<]*?)\s*<')
+
+
+def parse_date(text: str) -> dt.date | None:
+    """"Aug 17, 2026", "17 Aug, 2026" or "Aug 2026" (the 1st); None for "Coming soon" and the like."""
+    for fmt in ("%b %d, %Y", "%d %b, %Y", "%b %Y"):
+        try:
+            return dt.datetime.strptime(text.strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def parse_search_page(data: dict) -> tuple[list[Game], int]:
@@ -40,7 +52,7 @@ def parse_search_page(data: dict) -> tuple[list[Game], int]:
         reviews = _REVIEWS.search(html.unescape(row))
         pct, n = (int(reviews[1]), int(reviews[2].replace(",", ""))) if reviews else (0, 0)
         positive = round(pct * n / 100)
-        final, original = _FINAL.search(row), _ORIGINAL.search(row)
+        final, original, released = _FINAL.search(row), _ORIGINAL.search(row), _RELEASED.search(row)
         price = int(final[1]) if final else 0
         games.append(Game(
             appid=int(appid[1]),
@@ -49,6 +61,7 @@ def parse_search_page(data: dict) -> tuple[list[Game], int]:
             negative=n - positive,
             price_cents=price,
             initial_price_cents=int(original[1].replace(",", "") + original[2]) if original else price,
+            release_date=parse_date(released[1]) if released else None,
         ))
     return games, int(data.get("total_count") or 0)
 

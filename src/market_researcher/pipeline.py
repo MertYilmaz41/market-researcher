@@ -327,7 +327,9 @@ def track_record(http: HttpClient, tags: list[str], on_step: Callable[[str, int,
     review histogram per game (cached 30 days). The backtest's definitions, measured at today's month."""
     now = time.time() if now is None else now
     start = backtest.month(int(now)) - backtest.HORIZON - backtest.OUTCOME
-    games = [g for g in tag_games(http, tags) if g.positive + g.negative >= backtest.MIN_HIST_REVIEWS]
+    first = start - config.TRACK_RELEASE_MARGIN  # older games can't be entrants (config.TRACK_RELEASE_MARGIN)
+    games = [g for g in tag_games(http, tags) if g.positive + g.negative >= backtest.MIN_HIST_REVIEWS
+             and not (g.release_date and g.release_date.year * 12 + g.release_date.month - 1 < first)]
     if len(games) > config.TRACK_MAX_GAMES:
         return TrackRecord(start=start, measured_at=now, too_broad=len(games))
     hists = []

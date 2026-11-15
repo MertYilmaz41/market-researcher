@@ -1,3 +1,5 @@
+import datetime as dt
+
 from pydantic import BaseModel, computed_field
 
 from . import config
@@ -16,6 +18,7 @@ class Game(BaseModel):
     owners: str = ""
     ccu: int = 0
     tags: dict[str, int] = {}  # only filled by SteamSpy appdetails
+    release_date: dt.date | None = None  # the store's (1.0 date for left-Early-Access games); search rows only
     # Where positive/negative come from: "steamspy" (search results), or for analyzed games "steam"
     # (Steam's own All Reviews number) or "histogram" (Steam's monthly review counts, a fallback).
     rating_source: str = "steamspy"

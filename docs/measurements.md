@@ -96,3 +96,14 @@ SteamSpy's `request=tag` lists missed most of a tag's games (fresh fetch, 2026-1
 - Several tags in one query return the games with all of them: Deckbuilding + Roguelike + Pinball + Replay Value gave 7 rated games, Peglin among them; SteamSpy's lists had none (Peglin was missing from all four).
 - **Bias:** the rows' review numbers are English reviews only ("calculated from reviews written in your language"; `l`, `reviews_lang`, `ndl` don't change it). Peglin: 10,372 at 88% in the search, 16,738 at 83% in Steam's all-language summary. The demand and rating filters and the market stats use these; analyzed games get the all-language numbers (`pipeline.official_reviews`).
 - Each row also carries the game's first 7 tag ids (`data-ds-tagids`), not all of them.
+
+## Track record: skipping games released before the window (Nov 2026)
+
+The store date in search rows is the release date (for games that left Early Access, the 1.0 date, after their first review), so a game the store dates before the track window can't have its first review inside it. Window 2022-11 to 2024-10, histograms read for the games dated in the 24 months before it and for 60 older ones:
+
+| Tag | Rated games | Dated window start or later | Dated in the 24 months before: entrants | Older sample: entrants |
+|---|---|---|---|---|
+| Colony Sim | 872 | 574 | 0 of 155 | 0 of 60 |
+| Deckbuilding | 1,827 | 1,465 | 1 of 218 (dated 1 month before) | 0 of 60 |
+
+So `track_record` skips games dated more than `TRACK_RELEASE_MARGIN` (3) months before the window. Games dated after the window can't be skipped: Early Access games are dated by their 1.0 release. Colony Sim falls under `TRACK_MAX_GAMES` (800) again; Deckbuilding stays too broad.
