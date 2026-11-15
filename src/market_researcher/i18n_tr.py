@@ -151,10 +151,6 @@ TR: dict[str, str] = {
     "Unexpected error": "Beklenmedik hata",
     "Try again. If it keeps happening, run the CLI with MR_DEBUG=1 for details.":
         "Tekrar deneyin. Devam ederse ayrıntılar için CLI'ı MR_DEBUG=1 ile çalıştırın.",
-    "Tag can't be searched": "Etiket aranamıyor",
-    "'{tag}' is a Steam tag, but SteamSpy (the data source) can't search it.":
-        "'{tag}' bir Steam etiketi, ama veri kaynağı SteamSpy bu etiketi arayamıyor.",
-    "Pick a related tag instead, e.g. {examples}.": "Bunun yerine ilgili bir etiket seçin, örneğin {examples}.",
     " or ": " ya da ",
     "Did you mean {names}?": "Şunu mu demek istediniz: {names}?",
     "Check the spelling. Examples: {examples}.": "Yazımı kontrol edin. Örnekler: {examples}.",

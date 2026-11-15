@@ -1,11 +1,10 @@
-"""SteamSpy API: games by tag, and per-game details with tags."""
+"""SteamSpy API: per-game details with tags. (Its tag lists missed most games: docs/measurements.md.)"""
 
 from .. import config
 from ..http import HttpClient
 from ..models import Game
 
 API = "https://steamspy.com/api.php"
-_SPY_NAMES = {steam.casefold(): spy for steam, spy in config.STEAMSPY_TAG_NAMES.items()}
 
 
 def _int(v) -> int:
@@ -31,28 +30,6 @@ def parse_game(row: dict) -> Game:
         ccu=_int(row.get("ccu")),
         tags=tags if isinstance(tags, dict) else {},  # SteamSpy sends [] when there are none
     )
-
-
-def parse_tag_response(data: dict) -> list[Game]:
-    return [parse_game(row) for row in data.values()]
-
-
-def _tag_data(http: HttpClient, tag: str) -> dict:
-    return http.get_json(API, {"request": "tag", "tag": tag}, ttl=config.TTL_TAG_LIST)
-
-
-def games_by_tag(http: HttpClient, tag: str) -> list[Game]:
-    """Games with this tag, or [] if SteamSpy doesn't know the tag.
-
-    SteamSpy answers an unknown tag with the same fallback list it returns for an empty tag,
-    so a result identical to the empty-tag result means "no such tag".
-    """
-    if not tag.strip():
-        return []
-    data = _tag_data(http, _SPY_NAMES.get(tag.strip().casefold(), tag))  # Steam name -> SteamSpy name
-    if data and set(data) == set(_tag_data(http, "") or {}):
-        return []
-    return parse_tag_response(data)
 
 
 def game_details(http: HttpClient, appid: int) -> Game | None:

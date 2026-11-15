@@ -333,12 +333,6 @@ def llm_unavailable(missing_model: str | None) -> Notice:
 
 def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
     fold = tag.strip().casefold()
-    # A real Steam tag that SteamSpy can't search (known: Steam's catalog, which may gain new tags).
-    # Spelling suggestions would mislead here (Incremental -> Instrumental Music), so none are given.
-    if fold in {k.casefold() for k in [*known, *config.STEAMSPY_UNSEARCHABLE_TAGS]}:
-        return Notice(level="error", title=_("Tag can't be searched"),
-                      message=_("'{tag}' is a Steam tag, but SteamSpy (the data source) can't search it.", tag=tag),
-                      hint=_("Pick a related tag instead, e.g. {examples}.", examples=TAG_EXAMPLES))
     by_fold = {k.casefold(): k for k in known}
     close = difflib.get_close_matches(fold, list(by_fold), n=3, cutoff=0.6)
     names = [by_fold[c] for c in close]

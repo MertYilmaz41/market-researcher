@@ -248,21 +248,6 @@ def test_cli_game_not_found_is_not_unexpected(monkeypatch):
     assert res.exit_code == 1 and "Game not found" in res.output and "Unexpected error" not in res.output
 
 
-def test_unknown_tag_detected_by_steamspy_fallback():
-    from market_researcher.sources import steamspy
-
-    fallback = {"10": {"appid": 10, "name": "Fallback"}}
-    real = {"20": {"appid": 20, "name": "Real"}}
-
-    class FakeHttp:
-        def get_json(self, url, params, ttl):
-            return real if params["tag"] == "Job Simulator" else fallback
-
-    assert steamspy.games_by_tag(FakeHttp(), "Qwzzqxnope") == []
-    assert [g.name for g in steamspy.games_by_tag(FakeHttp(), "Job Simulator")] == ["Real"]
-    assert steamspy.games_by_tag(FakeHttp(), "  ") == []
-
-
 # ---------- tag catalog ----------
 
 def test_parse_tag_list():
@@ -279,30 +264,6 @@ def test_unknown_tag_suggests_close_tags():
     assert notices.unknown_tag("Colny Sim", known).hint.startswith("Did you mean Colony Sim")
     assert "Examples:" in notices.unknown_tag("Colny Sim").hint
     assert "Examples:" in notices.unknown_tag("Qwzzqxnope", known).hint
-
-
-def test_unsearchable_steam_tag_is_explained_not_suggested_back():
-    n = notices.unknown_tag("Incremental", ["Incremental", "Idler", "Clicker", "Instrumental Music"])
-    assert n.title == "Tag can't be searched" and "SteamSpy (the data source) can't search it" in n.message
-    assert "Incremental" not in n.hint
-    # also when Steam's catalog (known) already hides it
-    assert notices.unknown_tag("incremental", []).title == "Tag can't be searched"
-
-
-def test_renamed_tags_use_the_steamspy_name():
-    from market_researcher.sources import steamspy
-
-    asked = []
-
-    class FakeHttp:
-        def get_json(self, url, params, ttl):
-            asked.append(params["tag"])
-            return {"1": {"appid": 1, "name": "Real"}} if params["tag"] else {"9": {"appid": 9, "name": "Fallback"}}
-
-    assert [g.name for g in steamspy.games_by_tag(FakeHttp(), "Roguelite")] == ["Real"]
-    steamspy.games_by_tag(FakeHttp(), "roguelike")
-    steamspy.games_by_tag(FakeHttp(), "Idler")
-    assert [a for a in asked if a] == ["Rogue-lite", "Rogue-like", "Idler"]
 
 
 def test_tag_list_keeps_every_steam_tag():

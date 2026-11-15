@@ -29,17 +29,6 @@ def http(tmp_path_factory):
     return HttpClient(cache=Cache(tmp_path_factory.mktemp("live") / "cache.sqlite"), use_cache=False)
 
 
-def test_steamspy_tag_list(http):
-    games = steamspy.games_by_tag(http, "Colony Sim")
-    assert len(games) >= 100
-    assert sum(g.positive + g.negative >= 1000 for g in games) >= 20
-    assert any(g.initial_price_cents > 0 for g in games)
-
-
-def test_steamspy_unknown_tag_is_detected(http):
-    assert steamspy.games_by_tag(http, "Surely Not A Real Tag 7") == []
-
-
 def test_steamspy_game_details(http):
     game = steamspy.game_details(http, STARDEW)
     assert game is not None and game.positive > 100_000

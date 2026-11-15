@@ -6,9 +6,8 @@ from pathlib import Path
 # about 3 tags rarely leaves any games.
 MAX_TAGS = 5
 
-# The tag picker lists Steam's tag catalog, but games come from SteamSpy, whose tag names are older.
-# Found by querying every Steam tag on SteamSpy (Nov 2026): 404 of 446 work as-is.
-# Renamed on SteamSpy: the request uses the SteamSpy name, the user only ever sees Steam's.
+# SteamSpy's names for renamed Steam tags. Game panels show SteamSpy's tag names (steamspy.game_details);
+# a click on one searches Steam's name (pipeline.tag_games). Found by querying every Steam tag (Nov 2026).
 STEAMSPY_TAG_NAMES = {
     "Roguelike": "Rogue-like",
     "Roguelite": "Rogue-lite",
@@ -17,19 +16,6 @@ STEAMSPY_TAG_NAMES = {
     "eSports": "e-sports",
     "Cult": "Cult Classic",
 }
-# SteamSpy can't search these, so their games are listed via Steam's store search instead
-# (sources/steam_search.py: slower, it reads every page). Tags with & or ' fail in SteamSpy's tag
-# API with every encoding; the plurals are Steam duplicates of SteamSpy tags (Dogs -> Dog); the
-# rest don't exist on SteamSpy.
-STEAMSPY_UNSEARCHABLE_TAGS = frozenset({
-    "1990's", "Animation & Modeling", "Beat 'em up", "Design & Illustration", "Point & Click", "Shoot 'Em Up",
-    "Assassins", "Billiards", "Dogs", "Dwarves", "Elves", "Foxes", "Vampires",
-    "Animals", "Bowling", "Bullet Heaven", "Capybaras", "Cleaning", "Combat Flight Simulator", "Decorating",
-    "Desktop Companion", "Dialogue Heavy", "Espionage", "Falling Blocks", "Incremental", "Kids",
-    "Language Learning", "Organizing", "Poker", "Rail Shooter", "Samurai", "Sexual Themes", "Wolves", "Wuxia",
-    "Xianxia", "Zoo",
-})
-
 # Demand filter (step 2)
 MIN_REVIEWS = 100
 IDEAL_REVIEWS = 500
@@ -60,7 +46,6 @@ CACHE_WARN_BYTES = 500 * 10**6  # the web page warns once the cache file is bigg
 # Saved runs live apart from the cache, so `mr cache clear` keeps them.
 DATA_DIR = Path.home() / ".local" / "share" / "market-researcher"
 RUNS_DB = DATA_DIR / "runs.sqlite"
-TTL_TAG_LIST = 24 * 3600
 TTL_TAG_SEARCH = 7 * 24 * 3600  # a search's game list (steam_search); analysis re-reads each game's reviews
 TTL_TAG_NAMES = 7 * 24 * 3600  # the Steam tag catalog rarely changes
 TTL_HISTOGRAM = 24 * 3600
