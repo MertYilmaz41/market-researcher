@@ -166,8 +166,8 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
         names = ", ".join(_("{name} ({rating:.0f}%)", name=a.game.name, rating=a.game.rating) for a in outside[:5])
         out.append(Notice(
             level="info", title=_("Steam rates some games differently"),
-            message=_("SteamSpy put {n} game(s) in {lo:g}-{hi:g}% positive, but Steam's own numbers "
-                      "don't: {names}. They stay in the ranking, scored on Steam's numbers.",
+            message=_("The search's English reviews put {n} game(s) in {lo:g}-{hi:g}% positive, but all "
+                      "languages don't: {names}. They stay in the ranking, scored on all languages.",
                       n=len(outside), lo=lo, hi=hi, names=names),
         ))
 

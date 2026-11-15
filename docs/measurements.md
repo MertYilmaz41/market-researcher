@@ -121,3 +121,15 @@ So `track_record` skips games dated more than `TRACK_RELEASE_MARGIN` (3) months 
 | Pinball | 49 | 31 | 26% / 28% |
 
 Chosen by the user over one full search per tag (~9-10 h first time, estimated, not measured). Markets shows a note saying a tag counts its main-tag games.
+
+## English-only search counts vs all languages (Nov 2026)
+
+Random games with 30+ English reviews in the search, against Steam's all-language summary (`review_summary`), 2026-11-15:
+
+| Tag | Sampled | All / English reviews: median (p10-p90) | All - English % positive: median (p10-p90) | Filter decision changed (>= 100 reviews, 5-70%) |
+|---|---|---|---|---|
+| Colony Sim | 139 | 1.00 (0.99-2.31) | +0.3 (-0.1 to +1.7) | 4 |
+| Survival | 125 | 1.00 (0.99-1.81) | +0.4 (0.0 to +2.1) | 7 |
+
+- Of the 11 changes, 5 are the summary being far too low (Romans: Age of Caesar, 1 review vs 466 in the search; analysis falls back to the histogram then), 5 sit at 70% where rounding decides, and 1 is real: Eastern Era, 72% in English, 67% over 3,258 reviews in all languages, left out of the search.
+- Re-checking the games near the cutoffs (100+ reviews at 70-80%, or 50-99 reviews at 5-80%) before filtering would cost 191 games for Colony Sim, 316 for Deckbuilding and 1,116 for Survival (~3 s each: 10-56 min). Not adopted: about 1 game in 260 would change.
