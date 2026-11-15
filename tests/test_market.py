@@ -44,29 +44,38 @@ def test_well_served_market_gets_a_notice():
     assert "Audience already well served" not in [n.title for n in post(tag_result(market=few))]
 
 
-def test_run_markets_ranks_tags_and_skips_slow_ones(monkeypatch):
-    monkeypatch.setattr(pipeline.steam_store, "tag_names", lambda http: ["Calm", "Broken", "Hot", "Incremental", "Empty"])
+def tagged(pct, appid, *tag_ids):
+    return g(pct, appid=appid).model_copy(update={"tag_ids": list(tag_ids)})
 
-    def games_by_tag(http, tag):
-        if tag == "Broken":
-            raise RuntimeError("boom")
-        return {"Calm": [g(90), g(40, appid=2)], "Hot": [g(40), g(50, appid=2), g(95, appid=3)]}.get(tag, [])
 
-    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", games_by_tag)
+def fake_all_games(monkeypatch, games, tags):
+    monkeypatch.setattr(pipeline.steam_store, "tag_ids", lambda http: tags)
+
+    def search(http, tag_ids, on_page):
+        assert tag_ids == []  # one read of every rated game, not one query per tag
+        on_page(1, 2)
+        on_page(2, 2)
+        return games
+
+    monkeypatch.setattr(pipeline.steam_search, "games_by_tags", search)
+
+
+def test_run_markets_builds_every_tag_from_one_read(monkeypatch):
+    games = [tagged(90, 1, 10), tagged(40, 2, 10, 20), tagged(50, 3, 20), tagged(95, 4, 20)]
+    fake_all_games(monkeypatch, games, {"Calm": 10, "Hot": 20, "Empty": 30})
     steps = []
     r = pipeline.run_markets(None, 100, 5, 70, lambda msg, done, total: steps.append((done, total)))
-    assert sorted(row.tag for row in r.rows) == ["Calm", "Hot"]  # "Empty" has no games
-    assert r.skipped == ["Incremental"]
-    assert [t for t, _ in r.failed] == ["Broken"]
-    assert steps[0] == (0, 4)
+    rows = {row.tag: row.stats for row in r.rows}
+    assert sorted(rows) == ["Calm", "Hot"]  # "Empty" is no game's main tag
+    assert (rows["Hot"].n_games, rows["Hot"].n_underserved, rows["Hot"].n_well_served) == (3, 2, 1)
+    assert rows["Calm"].n_games == 2 and steps == [(1, 2), (2, 2)] and not r.skipped and not r.failed
 
 
 def test_cli_markets(monkeypatch):
-    monkeypatch.setattr(pipeline.steam_store, "tag_names", lambda http: ["Hot"])
-    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: [g(40), g(95, appid=2)])
+    fake_all_games(monkeypatch, [tagged(40, 1, 20), tagged(95, 2, 20)], {"Hot": 20})
     res = CliRunner().invoke(app, ["markets"])
     assert res.exit_code == 0, res.output
-    assert "Hot" in res.output and "50%" in res.output
+    assert "Hot" in res.output and "50%" in res.output and "first 7 tags" in res.output
 
 
 def test_discover_prints_market_line(monkeypatch):

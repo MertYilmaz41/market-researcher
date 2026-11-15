@@ -153,8 +153,6 @@ def tag_label(tags: list[str]) -> str:
     return " + ".join(tags)
 
 
-_UNSEARCHABLE = {t.casefold() for t in config.STEAMSPY_UNSEARCHABLE_TAGS}  # run_markets still uses SteamSpy
-
 # Game panels show SteamSpy's tag names (steamspy.game_details); a click on one searches Steam's name.
 _STEAM_NAMES = {spy.casefold(): steam.casefold() for steam, spy in config.STEAMSPY_TAG_NAMES.items()}
 
@@ -280,8 +278,8 @@ def run_tag(
 @dataclass
 class MarketsResult:
     rows: list[TagMarket]  # most underserved first
-    failed: list[tuple[str, str]] = field(default_factory=list)  # (tag, friendly reason)
-    skipped: list[str] = field(default_factory=list)  # tags SteamSpy can't search (too slow to sweep)
+    failed: list[tuple[str, str]] = field(default_factory=list)  # (tag, friendly reason); only in old saved runs
+    skipped: list[str] = field(default_factory=list)  # tags SteamSpy couldn't search; only in old saved runs
 
 
 def run_markets(
@@ -291,23 +289,21 @@ def run_markets(
     hi: float,
     on_step: Callable[[str, int, int], None] | None = None,
 ) -> MarketsResult:
-    """Market stats for every Steam tag SteamSpy can search: one request per tag (~1/s, cached 24 h).
-
-    Tags only Steam's store search can list take minutes each, so they are skipped here.
+    """Market stats for every Steam tag from one read of every rated game on Steam's store search (~730 pages,
+    ~36 min the first time, then cached a week). A search row carries only a game's first 7 tags, so a tag's
+    market counts the games it is a main tag of: fewer than its search finds (docs/measurements.md).
     """
-    names = steam_store.tag_names(http)
-    tags = [t for t in names if t.casefold() not in _UNSEARCHABLE]
-    result = MarketsResult(rows=[], skipped=[t for t in names if t.casefold() in _UNSEARCHABLE])
-    for i, tag in enumerate(tags):
+    def page(done: int, total: int) -> None:
         if on_step:
-            on_step(_("Reading tag {tag}", tag=tag), i, len(tags))
-        try:
-            games = steamspy.games_by_tag(http, tag)
-        except Exception as e:  # one broken tag must not sink the whole sweep
-            result.failed.append((tag, friendly_error(e).message))
-            continue
-        if games:
-            result.rows.append(TagMarket(tag=tag, stats=market_stats(games, min_reviews, lo, hi)))
+            on_step(_("Reading every rated game from the Steam store"), done, total)
+
+    games = steam_search.games_by_tags(http, [], page)
+    by_tag: dict[int, list[Game]] = {}
+    for g in games:
+        for tag_id in g.tag_ids:
+            by_tag.setdefault(tag_id, []).append(g)
+    result = MarketsResult(rows=[TagMarket(tag=name, stats=market_stats(by_tag[i], min_reviews, lo, hi))
+                                 for name, i in steam_store.tag_ids(http).items() if by_tag.get(i)])
     result.rows.sort(key=market_rank)
     return result
 

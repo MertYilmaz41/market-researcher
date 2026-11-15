@@ -312,7 +312,9 @@ TR: dict[str, str] = {
     "Checking store type: {name}": "Mağaza türü kontrol ediliyor: {name}",
     "Analyzing games": "Oyunlar analiz ediliyor",
     "Analyzed {name}": "Analiz edildi: {name}",
-    "Reading tag {tag}": "Etiket okunuyor: {tag}",
+    "Reading every rated game from the Steam store": "Steam mağazasından puanlı bütün oyunlar okunuyor",
+    "A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.":
+        "Bir etiket, onu ilk 7 etiketi arasında taşıyan oyunları sayar; bu yüzden aramasının bulduğundan daha az oyunu olur.",
     "Cancelled": "İptal edildi",
 
     # ---- web server

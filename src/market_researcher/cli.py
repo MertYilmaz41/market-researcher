@@ -294,7 +294,7 @@ def markets(
     top: int = typer.Option(30, min=1, help="Max rows to show"),
     no_cache: bool = NO_CACHE_OPT,
 ):
-    """Rank every Steam tag by its well-served games and market size (first run ~7 min, then cached)."""
+    """Rank every Steam tag by its well-served games and market size (first run ~36 min, then cached a week)."""
     lo, hi = _rating_range(rating)
     _print_notices(notices.for_filters(min_reviews, lo, hi, 0, 0))
     http = HttpClient(use_cache=not no_cache)
@@ -315,7 +315,7 @@ def markets(
     console.print(table)
     console.print("[dim]" + _("Ranked by well-served games, then games with demand: in a backtest, new games did better "
                               "in such tags. Unmet share = underserved / (underserved + well served); it did not "
-                              "predict success.") + "[/]")
+                              "predict success.") + " " + _("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.") + "[/]")
     if result.skipped:
         console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).",
                                   n=len(result.skipped)) + "[/]")

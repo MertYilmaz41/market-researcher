@@ -90,7 +90,7 @@ Click the search box at the top and tick one or more Steam tags (up to 5; typing
 - **What a term means:** every project-specific word (Fixability, Unmet share, Est. revenue, ...) has a small **i** next to it; hover or tap it for a one- or two-sentence explanation.
 - **How it works:** the button at the top right explains the method, the filters, the score, the map and how accurate the complaint detection is, and lists every term and risk.
 - **Score card:** hover or focus any score to see its two parts (demand and dissatisfaction), their weights, each risk penalty and why. Fixability is shown there too, but not counted: it is close to 100% for almost every game.
-- **Markets:** pick **Markets** in the top bar and press **Build market ranking** to rank every tag (about 7 minutes the first time, then from the cache). Find a tag by name, or show the small ones too. Click a tag to search it.
+- **Markets:** pick **Markets** in the top bar and press **Build market ranking** to rank every tag (about 36 minutes the first time, since it reads every rated game on Steam; then a week from the cache). A tag there counts the games that have it among their first 7 tags, so it shows fewer games than searching it. Find a tag by name, or show the small ones too. Click a tag to search it.
 - **Shortlist:** press **Shortlist** in the details panel to keep a game. The **Shortlist** view shows the starred games with the score they had when you starred them; add a note to each, or download the list as CSV. It stays after a restart and a cache clear.
 - **Past searches:** click the empty search box to reopen any earlier search or market ranking, even after a restart.
 - **One game:** paste an AppID or a Steam store link into the search box and press Enter; the game opens in the details panel.
@@ -123,7 +123,7 @@ uv run mr --lang tr report --tag "Job Simulator"   # Turkish output and report
 | Clear the cache | `uv run mr cache clear` |
 | Help | `uv run mr --help`, `uv run mr report --help` |
 
-After the first run of a tag, data comes from the cache in `~/.cache/market-researcher` (refreshed daily; SteamSpy's game details and the tag list weekly). Saved runs are kept separately in `~/.local/share/market-researcher`, so clearing the cache keeps them.
+After the first run of a tag, data comes from the cache in `~/.cache/market-researcher` (refreshed daily; a tag's game list, SteamSpy's game details and the tag list weekly). Saved runs are kept separately in `~/.local/share/market-researcher`, so clearing the cache keeps them.
 
 ### Optional: local AI for the summaries
 
@@ -173,8 +173,8 @@ SteamSpy / Steam APIs ──► HttpClient (rate limit, retry, SQLite cache)
 
 ## Data sources
 
-- [SteamSpy](https://steamspy.com/api.php): games by tag, review counts, prices, tags.
-- Steam Store: game details, the monthly review histogram, the tag list, and its search for the few tags SteamSpy can't search.
+- [SteamSpy](https://steamspy.com/api.php): per-game details (tags, owners). Its tag lists miss most games, so the app no longer uses them for searches or Markets.
+- Steam Store: its search (every tag's games, and every rated game for Markets), game details, the monthly review histogram, the tag list.
 - Steam `IUserReviewsService/GetAppReviews`: review texts and the official review totals.
 
 The app runs on your own computer and asks these services directly, from your own connection: there is no server in between and no API key. It paces its requests (about one per second per site, slower for the store search) and caches the answers, so a repeated search barely touches them. Please keep it that way if you change the code. Some of these endpoints are undocumented and can change without notice; a weekly test (`tests/test_live.py`) checks that they still answer as expected.
@@ -206,7 +206,7 @@ So read the unmet share as a **filter for exploring**: it narrows thousands of t
 - **Revenue is a rough estimate:** full price, before Steam's cut, discounts and regional pricing. Against 23 games whose developers disclosed their sales, reviews × 45 was within 1.5× of the real figure for 57% of them and within 2× for 61% (`python -m market_researcher.boxcheck`).
 - **Review mining is keyword-based and English-only.** On hand-labeled reviews from games it was never tuned on, it finds 64% of complaints, and 80% of what it reports is right. Read the quotes, not just the percentages.
 - **No price history:** only the current price is checked for deep discounts.
-- **SteamSpy tag lists may be incomplete**, and search results use SteamSpy's review counts until a game is analyzed.
+- **Search results count English reviews only** (Steam's store search shows those) until a game is analyzed; analyzed games use all languages.
 
 ## Test data
 
