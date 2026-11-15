@@ -141,7 +141,7 @@ class Cancelled(Exception):
 
 
 class UnknownTag(Exception):
-    """SteamSpy has no games for this tag."""
+    """Steam's tag catalog has no such tag."""
 
     def __init__(self, tag: str):
         super().__init__(f"Unknown tag: {tag}")
@@ -153,37 +153,31 @@ def tag_label(tags: list[str]) -> str:
     return " + ".join(tags)
 
 
-_UNSEARCHABLE = {t.casefold() for t in config.STEAMSPY_UNSEARCHABLE_TAGS}
+_UNSEARCHABLE = {t.casefold() for t in config.STEAMSPY_UNSEARCHABLE_TAGS}  # run_markets still uses SteamSpy
 
-
-def _games_for_tag(http: HttpClient, tag: str, on_step: Callable[[str, int, int], None] | None) -> list[Game]:
-    """SteamSpy for most tags; Steam's store search for the ones SteamSpy can't search."""
-    if tag.strip().casefold() not in _UNSEARCHABLE:
-        return steamspy.games_by_tag(http, tag)
-    ids = {name.casefold(): i for name, i in steam_store.tag_ids(http).items()}
-    tag_id = ids.get(tag.strip().casefold())
-    if tag_id is None:
-        return []
-
-    def page(done: int, total: int) -> None:
-        if on_step:
-            on_step(_("Listing games tagged {tag} from the Steam store", tag=tag), done, total)  # done/total: pages
-
-    return steam_search.games_by_tag(http, tag_id, page)
+# Game panels show SteamSpy's tag names (steamspy.game_details); a click on one searches Steam's name.
+_STEAM_NAMES = {spy.casefold(): steam.casefold() for steam, spy in config.STEAMSPY_TAG_NAMES.items()}
 
 
 def tag_games(
     http: HttpClient, tags: list[str], on_step: Callable[[str, int, int], None] | None = None
 ) -> list[Game]:
-    """Games that have every one of the tags. Raises UnknownTag for the first tag with no games."""
-    per_tag = []
+    """Games with every one of the tags and a review score, from Steam's store search in one query.
+    Raises UnknownTag for the first tag Steam's catalog doesn't have."""
+    ids = {name.casefold(): i for name, i in steam_store.tag_ids(http).items()}
+    tag_ids = []
     for tag in tags:
-        games = _games_for_tag(http, tag, on_step)
-        if not games:
+        key = tag.strip().casefold()
+        tag_id = ids.get(_STEAM_NAMES.get(key, key))
+        if tag_id is None:
             raise UnknownTag(tag)
-        per_tag.append(games)
-    shared = set.intersection(*({g.appid for g in games} for games in per_tag))
-    return [g for g in per_tag[0] if g.appid in shared]
+        tag_ids.append(tag_id)
+
+    def page(done: int, total: int) -> None:
+        if on_step:
+            on_step(_("Listing games tagged {tag} from the Steam store", tag=tag_label(tags)), done, total)  # pages
+
+    return steam_search.games_by_tags(http, list(dict.fromkeys(tag_ids)), page)
 
 
 @dataclass
@@ -212,7 +206,7 @@ def run_tag(
     on_step: Callable[[str, int, int], None] | None = None,
     on_game: Callable[[int, str, str, int, int, Analysis | None], None] | None = None,
 ) -> TagResult:
-    """Steps 1-4 for the games that have all `tags`. Raises UnknownTag if SteamSpy doesn't know a tag.
+    """Steps 1-4 for the games that have all `tags`. Raises UnknownTag if Steam doesn't know a tag.
 
     Games are analyzed in parallel (config.ANALYZE_WORKERS), starting as soon as each one passes
     the store-type check; the shared HttpClient keeps every host within its rate limit.

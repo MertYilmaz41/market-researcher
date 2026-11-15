@@ -148,6 +148,19 @@ def test_friendly_error(exc, title):
 
 # ---------- pipeline resilience ----------
 
+def fake_search(monkeypatch, by_tag):
+    """Steam's store search over {tag: [games]}: a query with several tags answers the games in all of them."""
+    ids = {tag: i for i, tag in enumerate(by_tag, 1)}
+    monkeypatch.setattr(pipeline.steam_store, "tag_ids", lambda http: ids)
+
+    def search(http, tag_ids, on_page=None):
+        names = [t for t, i in ids.items() if i in tag_ids]
+        shared = set.intersection(*({g.appid for g in by_tag[t]} for t in names))
+        return [g for g in by_tag[names[0]] if g.appid in shared]
+
+    monkeypatch.setattr(pipeline.steam_search, "games_by_tags", search)
+
+
 def fake_verify(http, candidates, limit, progress=None, on_hit=None):
     for g in candidates:
         on_hit(g)
@@ -156,7 +169,7 @@ def fake_verify(http, candidates, limit, progress=None, on_hit=None):
 
 def test_run_tag_survives_one_broken_game(monkeypatch):
     games = [game(appid=1, name="Good"), game(appid=2, name="Broken")]
-    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: games)
+    fake_search(monkeypatch, {"T": games})
     monkeypatch.setattr(pipeline, "verify_games", fake_verify)
 
     def analyze(http, appid, n, progress=None):
@@ -174,39 +187,46 @@ def test_run_tag_survives_one_broken_game(monkeypatch):
 # ---------- CLI ----------
 
 def test_cli_network_error_is_friendly(monkeypatch):
-    def down(http, tag):
-        raise httpx.ConnectError("x", request=REQ)
+    def down(http):
+        raise httpx.ConnectError("x", request=httpx.Request("GET", "https://store.steampowered.com/search/"))
 
-    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", down)
+    monkeypatch.setattr("market_researcher.sources.steam_store.tag_ids", down)
     monkeypatch.delenv("MR_DEBUG", raising=False)
     res = CliRunner().invoke(app, ["discover", "--tag", "Job Simulator"])
     assert res.exit_code == 1
-    assert "Can't reach steamspy.com" in res.output and "Traceback" not in res.output
+    assert "Can't reach store.steampowered.com" in res.output and "Traceback" not in res.output
 
 
 def test_cli_unknown_tag(monkeypatch):
-    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", lambda http, tag: [])
+    monkeypatch.setattr("market_researcher.sources.steam_store.tag_ids", lambda http: {"Colony Sim": 1})
     monkeypatch.setattr(notices, "known_tags", lambda http: ["Xyz Sim", "Colony Sim"])
     res = CliRunner().invoke(app, ["discover", "--tag", "Xyzzy"])
     assert res.exit_code == 1 and "Tag not found" in res.output
 
 
-def test_tag_games_keeps_only_games_with_every_tag(monkeypatch):
-    by_tag = {"A": [game(appid=1, name="One"), game(appid=2, name="Two"), game(appid=3, name="Three")],
-              "B": [game(appid=3), game(appid=2)], "C": [game(appid=2), game(appid=9)]}
-    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: by_tag.get(tag, []))
-    assert [g.name for g in pipeline.tag_games(None, ["A", "B"])] == ["Two", "Three"]
-    assert [g.appid for g in pipeline.tag_games(None, ["A", "B", "C"])] == [2]
-    assert pipeline.tag_games(None, ["A", "C", "B"]) and pipeline.tag_label(["A", "B"]) == "A + B"
+def test_tag_games_asks_steam_once_for_all_tags(monkeypatch):
+    monkeypatch.setattr(pipeline.steam_store, "tag_ids", lambda http: {"Deckbuilding": 32322, "Roguelike": 1716})
+    asked, steps = [], []
+
+    def search(http, tag_ids, on_page):
+        asked.append(tag_ids)
+        on_page(1, 1)
+        return [game(appid=1, name="Peglin")]
+
+    monkeypatch.setattr(pipeline.steam_search, "games_by_tags", search)
+    # "Rogue-like" is SteamSpy's name, shown on game panels; Steam calls it Roguelike
+    games = pipeline.tag_games(None, ["deckbuilding", "Rogue-like"], lambda m, d, t: steps.append((m, d, t)))
+    assert asked == [[32322, 1716]] and [g.name for g in games] == ["Peglin"]
+    assert steps == [("Listing games tagged deckbuilding + Rogue-like from the Steam store", 1, 1)]
     with pytest.raises(pipeline.UnknownTag) as e:
-        pipeline.tag_games(None, ["A", "Nope", "B"])
-    assert e.value.tag == "Nope"
+        pipeline.tag_games(None, ["Deckbuilding", "Nope"])
+    assert e.value.tag == "Nope" and pipeline.tag_label(["A", "B"]) == "A + B"
 
 
 def test_cli_multiple_tags(monkeypatch):
     by_tag = {"Crafting": [game(appid=1, name="Only Crafting"), game(appid=2, name="Both Games")],
               "Survival": [game(appid=2, name="Both Games"), game(appid=3, name="Only Survival")]}
-    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", lambda http, tag: by_tag.get(tag, []))
+    fake_search(monkeypatch, by_tag)
     monkeypatch.setattr("market_researcher.cli.verify_games", lambda http, c, n, p=None: (c[:n], [], set()))
     res = CliRunner().invoke(app, ["discover", "-t", "Crafting", "-t", "Survival", "--min-reviews", "1", "--rating", "0-100"])
     assert res.exit_code == 0, res.output
@@ -334,29 +354,12 @@ def test_steam_search_pages_through_a_tag():
     class FakeHttp:
         def get_json(self, url, params, ttl):
             starts.append(params["start"])
+            assert params["tags"] == "560542,615955" and params["sort_by"] == "Reviews_DESC"
             rows = [_row(params["start"] + i, f"G{params['start'] + i}", "50% of the 200") for i in range(1, 4)]
             return {"total_count": 250, "results_html": "".join(rows)}
 
-    games = steam_search.games_by_tag(FakeHttp(), 560542, lambda d, t: steps.append((d, t)))
+    games = steam_search.games_by_tags(FakeHttp(), [560542, 615955], lambda d, t: steps.append((d, t)))
     assert starts == [0, 100, 200] and steps == [(1, 3), (2, 3), (3, 3)] and len(games) == 9
-
-
-def test_tag_games_uses_steam_search_for_tags_steamspy_cant_search(monkeypatch):
-    by_spy = {"Idler": [game(appid=1, name="Both"), game(appid=2, name="Only Idler")]}
-    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: by_spy.get(tag, []))
-    monkeypatch.setattr(pipeline.steam_store, "tag_ids", lambda http: {"Incremental": 560542, "Idler": 615955})
-    asked = []
-
-    def search(http, tag_id, on_page):
-        asked.append(tag_id)
-        on_page(1, 1)
-        return [game(appid=1, name="Both"), game(appid=3, name="Only Incremental")]
-
-    monkeypatch.setattr(pipeline.steam_search, "games_by_tag", search)
-    steps = []
-    games = pipeline.tag_games(None, ["incremental", "Idler"], lambda m, d, t: steps.append((m, d, t)))
-    assert asked == [560542] and [g.name for g in games] == ["Both"]
-    assert steps == [("Listing games tagged incremental from the Steam store", 1, 1)]
 
 
 # ---------- parallel analysis ----------
@@ -366,7 +369,7 @@ def test_run_tag_analyzes_in_parallel_and_keeps_order(monkeypatch):
     import time
 
     games = [game(appid=i, name=f"G{i}") for i in range(1, 5)]
-    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: games)
+    fake_search(monkeypatch, {"T": games})
     monkeypatch.setattr(pipeline, "verify_games", fake_verify)
     seen, steps = set(), []
 
@@ -409,7 +412,7 @@ def test_run_tag_stops_when_on_step_cancels(monkeypatch):
     games = [game(appid=i, name=f"G{i}") for i in range(1, 9)]
     started = []
     release = threading.Event()
-    monkeypatch.setattr(pipeline.steamspy, "games_by_tag", lambda http, tag: games)
+    fake_search(monkeypatch, {"X": games})
     monkeypatch.setattr(pipeline, "verify_games",
                         lambda http, c, n, p, on_hit: ([on_hit(g) or g for g in c[:n]], [], set()))
 

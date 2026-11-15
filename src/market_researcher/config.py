@@ -58,6 +58,7 @@ CACHE_WARN_BYTES = 500 * 10**6  # the web page warns once the cache file is bigg
 DATA_DIR = Path.home() / ".local" / "share" / "market-researcher"
 RUNS_DB = DATA_DIR / "runs.sqlite"
 TTL_TAG_LIST = 24 * 3600
+TTL_TAG_SEARCH = 7 * 24 * 3600  # a search's game list (steam_search); analysis re-reads each game's reviews
 TTL_TAG_NAMES = 7 * 24 * 3600  # the Steam tag catalog rarely changes
 TTL_HISTOGRAM = 24 * 3600
 TTL_APPDETAILS = 7 * 24 * 3600  # SteamSpy game details

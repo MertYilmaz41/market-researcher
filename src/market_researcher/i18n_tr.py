@@ -33,7 +33,7 @@ TR: dict[str, str] = {
 
     # ---- notices: after a tag run
     "No game has all these tags": "Bu etiketlerin hepsine sahip oyun yok",
-    "No game on SteamSpy is tagged {tag}.": "SteamSpy'da {tag} etiketli oyun yok.",
+    "No game on Steam with 10+ reviews is tagged {tag}.": "Steam'de {tag} etiketli, 10+ incelemeli oyun yok.",
     "Remove a tag or pick a broader one.": "Bir etiketi kaldırın ya da daha geniş bir etiket seçin.",
     "Very broad tag": "Çok geniş etiket",
     "'{tag}' has {n:,} games. The method works best on specific genres with a clear player fantasy.":
@@ -159,7 +159,7 @@ TR: dict[str, str] = {
     "Did you mean {names}?": "Şunu mu demek istediniz: {names}?",
     "Check the spelling. Examples: {examples}.": "Yazımı kontrol edin. Örnekler: {examples}.",
     "Tag not found": "Etiket bulunamadı",
-    "SteamSpy has no games tagged '{tag}'.": "SteamSpy'da '{tag}' etiketli oyun yok.",
+    "Steam has no tag '{tag}'.": "Steam'de '{tag}' diye bir etiket yok.",
 
     # ---- risk flags
     "{period}: {n:,} reviews ({share:.0%} of all), {neg:.0%} negative. "

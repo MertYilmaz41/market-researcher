@@ -81,3 +81,18 @@ Method and rules are in `CLAUDE.md`; the report is `reports/backtest.md`.
 - Steam's review API is sometimes very slow: 20-90+ s per page.
 - GetAppReviews said 1,588 reviews for Apex Legends, against 1.18 million in its histogram and 453,416 English ones on the store page (why the histogram wins when the summary is under half its total).
 - The HTTP cache reached 733 MB before `mr cache prune` existed.
+
+## Tag lists: SteamSpy vs Steam's store search (Nov 2026)
+
+SteamSpy's `request=tag` lists missed most of a tag's games (fresh fetch, 2026-11-15), so searches moved to Steam's store search (`steam_search.games_by_tags`). Games with 100+ reviews:
+
+| Tag | SteamSpy list | Store search, default order (pages) | Store search, `sort_by=Reviews_DESC` (pages) |
+|---|---|---|---|
+| Colony Sim | 34 (49 games in all) | 472 (25) | 471 (9) |
+| Deckbuilding | 17 (54 games in all) | 754 (64) | 755 (19) |
+| Survival | 386 (434 games in all) | 2,591 (159) | 2,601 (59) |
+
+- Sorted by review score, the search leaves out games without one (under 10 reviews) and keeps every game with 100+ reviews, at a third of the pages (3 s each: Survival ~3 min the first time). `filter=topsellers` stops after ~150 rows (Colony Sim: 140 of 472), so it isn't used.
+- Several tags in one query return the games with all of them: Deckbuilding + Roguelike + Pinball + Replay Value gave 7 rated games, Peglin among them; SteamSpy's lists had none (Peglin was missing from all four).
+- **Bias:** the rows' review numbers are English reviews only ("calculated from reviews written in your language"; `l`, `reviews_lang`, `ndl` don't change it). Peglin: 10,372 at 88% in the search, 16,738 at 83% in Steam's all-language summary. The demand and rating filters and the market stats use these; analyzed games get the all-language numbers (`pipeline.official_reviews`).
+- Each row also carries the game's first 7 tag ids (`data-ds-tagids`), not all of them.
