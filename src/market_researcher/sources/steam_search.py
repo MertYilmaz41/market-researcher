@@ -28,6 +28,7 @@ _TITLE = re.compile(r'<span class="title">(.*?)</span>', re.S)
 _REVIEWS = re.compile(r"(\d+)% of the ([\d,]+) user reviews")
 _FINAL = re.compile(r'data-price-final="(\d+)"')
 _ORIGINAL = re.compile(r'class="discount_original_price">[^\d<]*([\d,]+)\.(\d\d)')
+_TAG_IDS = re.compile(r'data-ds-tagids="\[([\d,]*)\]"')  # the game's first 7 tags
 _RELEASED = re.compile(r'search_released[^>]*>\s*([^<]*?)\s*<')
 
 
@@ -53,6 +54,7 @@ def parse_search_page(data: dict) -> tuple[list[Game], int]:
         pct, n = (int(reviews[1]), int(reviews[2].replace(",", ""))) if reviews else (0, 0)
         positive = round(pct * n / 100)
         final, original, released = _FINAL.search(row), _ORIGINAL.search(row), _RELEASED.search(row)
+        tag_ids = _TAG_IDS.search(row)
         price = int(final[1]) if final else 0
         games.append(Game(
             appid=int(appid[1]),
@@ -62,17 +64,21 @@ def parse_search_page(data: dict) -> tuple[list[Game], int]:
             price_cents=price,
             initial_price_cents=int(original[1].replace(",", "") + original[2]) if original else price,
             release_date=parse_date(released[1]) if released else None,
+            tag_ids=[int(t) for t in tag_ids[1].split(",") if t] if tag_ids else [],
         ))
     return games, int(data.get("total_count") or 0)
 
 
 def games_by_tags(http: HttpClient, tag_ids: list[int],
                   on_page: Callable[[int, int], None] | None = None) -> list[Game]:
-    """Every game with a review score and all of these Steam tag ids. on_page(pages done, total pages)."""
+    """Every game with a review score and all of these Steam tag ids (none: every rated game on Steam).
+    on_page(pages done, total pages)."""
     games, start, total = [], 0, None
     while total is None or start < total:
-        params = {"query": "", "start": start, "count": PAGE_SIZE, "tags": ",".join(map(str, tag_ids)),
-                  "category1": 998, "sort_by": "Reviews_DESC", "infinite": 1, "cc": "us", "l": "english"}
+        params = {"query": "", "start": start, "count": PAGE_SIZE, "category1": 998, "sort_by": "Reviews_DESC",
+                  "infinite": 1, "cc": "us", "l": "english"}
+        if tag_ids:
+            params["tags"] = ",".join(map(str, tag_ids))
         page, total = parse_search_page(http.get_json(SEARCH_URL, params, ttl=config.TTL_TAG_SEARCH))
         if not page:  # past the end, or the markup changed
             break

@@ -1162,7 +1162,7 @@ const BIG_MARKET = 20; // "Only tags with 20+ games with demand"
 
 function marketsButton() {
   setButtonBusy($("#markets-run"), markets.running,
-    markets.running ? t("Building...") : markets.result ? t("Rebuild · about 7 min") : t("Build market ranking"));
+    markets.running ? t("Building...") : markets.result ? t("Rebuild") : t("Build market ranking"));
 }
 
 $("#markets-run").addEventListener("click", async () => {
@@ -1216,11 +1216,11 @@ function marketsText() {
   $("#markets-key-under").textContent = t("Underserved ({range})", { range: range(result?.lo ?? 5, result?.hi ?? 70) });
   $("#markets-key-well").textContent = t("Well served ({pct}+)", { pct: well });
   if (!result) {
-    $("#markets-note").textContent = t("Rank every Steam tag by its games with demand that players rate poorly. Uses the Filters; the first build takes ~7 minutes, then ~1 day from the cache.");
+    $("#markets-note").textContent = t("Rank every Steam tag by its games with demand that players rate poorly. Uses the Filters; the first build reads every rated game on Steam (~36 minutes), then a week from the cache.");
     return;
   }
   const notes = [t("{n} tags ranked by well-served games, then games with demand (≥ {min} reviews): in a backtest, new games did better in such tags. Underserved = {range} positive. Broad tags (1,000+ games) come last.", {
-    n: markets.rows.length, min: fmt(result.min_reviews), range: range(result.lo, result.hi) })];
+    n: markets.rows.length, min: fmt(result.min_reviews), range: range(result.lo, result.hi) }), t("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.")];
   if (result.skipped.length) notes.push(t("{n} tags SteamSpy can't search are left out (search them one by one).", { n: result.skipped.length }));
   $("#markets-note").textContent = notes.join(" ");
 }

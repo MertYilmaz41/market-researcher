@@ -107,3 +107,17 @@ The store date in search rows is the release date (for games that left Early Acc
 | Deckbuilding | 1,827 | 1,465 | 1 of 218 (dated 1 month before) | 0 of 60 |
 
 So `track_record` skips games dated more than `TRACK_RELEASE_MARGIN` (3) months before the window. Games dated after the window can't be skipped: Early Access games are dated by their 1.0 release. Colony Sim falls under `TRACK_MAX_GAMES` (800) again; Deckbuilding stays too broad.
+
+## Markets from one read of every rated game (Nov 2026)
+
+`run_markets` reads every rated game once (no tag, sorted by review score): 72,154 games, 731 pages, 36 min the first time (2026-11-15). Each row carries the game's first 7 tag ids, so a tag's market is the games it is a main tag of. Against the tag's full search (games with 100+ reviews):
+
+| Tag | Full search | First 7 tags | Unmet share: full / first 7 |
+|---|---|---|---|
+| Colony Sim | 471 | 307 | 43% / 46% |
+| Deckbuilding | 755 | 416 | 25% / 17% |
+| Survival | 2,601 | 1,066 | 50% / 61% |
+| Job Simulator | 230 | 101 | 28% / 37% |
+| Pinball | 49 | 31 | 26% / 28% |
+
+Chosen by the user over one full search per tag (~9-10 h first time, estimated, not measured). Markets shows a note saying a tag counts its main-tag games.

@@ -19,6 +19,7 @@ class Game(BaseModel):
     ccu: int = 0
     tags: dict[str, int] = {}  # only filled by SteamSpy appdetails
     release_date: dt.date | None = None  # the store's (1.0 date for left-Early-Access games); search rows only
+    tag_ids: list[int] = []  # Steam tag ids of the game's first 7 tags; search rows only
     # Where positive/negative come from: "steamspy" (search results), or for analyzed games "steam"
     # (Steam's own All Reviews number) or "histogram" (Steam's monthly review counts, a fallback).
     rating_source: str = "steamspy"
