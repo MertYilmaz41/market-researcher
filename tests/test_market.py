@@ -1,3 +1,5 @@
+import datetime as dt
+
 import pytest
 from typer.testing import CliRunner
 
@@ -105,12 +107,15 @@ def test_track_record_counts_hits_among_games_released_48_to_24_months_ago(monke
         6: [HistPoint(date=_ts(2023, 1), up=400, down=0), HistPoint(date=_ts(2025, 6), up=400, down=0)],  # 500 only later
     }
     games = [game(pos=50, neg=50, appid=a) for a in hists] + [game(pos=3, neg=3, appid=99)]  # 99: under 10 reviews
+    old = game(pos=50, neg=50, appid=98).model_copy(update={"release_date": dt.date(2022, 7, 31)})  # 4 months early
+    games[3] = games[3].model_copy(update={"release_date": dt.date(2022, 8, 1)})  # 3 months early: still read
+    games.append(old)
     fetched = []
     monkeypatch.setattr(pipeline, "tag_games", lambda http, tags: games)
     monkeypatch.setattr(pipeline.steam_store, "review_histogram",
                         lambda http, appid, ttl: fetched.append(appid) or hists[appid])
     tr = pipeline.track_record(None, ["Colony Sim"], now=now)
-    assert 99 not in fetched
+    assert 99 not in fetched and 98 not in fetched and 4 in fetched
     assert (tr.entrants, tr.hits, tr.sold) == (4, 1, 2) and tr.window() == ("2022-11", "2024-10")
     assert "too few to tell" in market.track_text(tr)
     tr.entrants = 20

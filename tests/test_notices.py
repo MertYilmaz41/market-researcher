@@ -1,3 +1,4 @@
+import datetime as dt
 import re
 
 import httpx
@@ -315,15 +316,16 @@ def test_tag_list_keeps_every_steam_tag():
 
 # ---------- Steam store search (tags SteamSpy can't search) ----------
 
-def _row(appid, title, reviews="", price='<div class="discount_final_price">$8.99</div>', final=899):
+def _row(appid, title, reviews="", price='<div class="discount_final_price">$8.99</div>', final=899, released=""):
     tip = f' data-tooltip-html="Very Positive&lt;br&gt;{reviews} user reviews for this game are positive."' if reviews else ""
     return (f'<a href="https://store.steampowered.com/app/{appid}/X/?snr=1" data-ds-appid="{appid}" class="search_result_row">'
-            f'<span class="title">{title}</span><span class="search_review_summary"{tip}></span>'
+            f'<span class="title">{title}</span><div class="col search_released responsive_secondrow">{released}</div>'
+            f'<span class="search_review_summary"{tip}></span>'
             f'<div class="search_price_discount_combined" data-price-final="{final}">{price}</div></a>')
 
 
 SEARCH_PAGE = {"success": 1, "total_count": 250, "results_html": "\n".join([
-    _row(1, "Plain &amp; Simple", "78% of the 3,325"),
+    _row(1, "Plain &amp; Simple", "78% of the 3,325", released="Aug 17, 2026"),
     _row(2, "On Sale", "90% of the 100", '<div class="discount_original_price">$9.99</div>'
                                          '<div class="discount_final_price">$4.99</div>', 499),
     _row(3, "Free Game", "75% of the 21,990", '<div class="discount_final_price free">Free</div>', 0),
@@ -343,7 +345,16 @@ def test_parse_search_page():
     assert (sale.price_cents, sale.initial_price_cents, sale.base_price) == (499, 999, 9.99)
     assert free.base_price == 0 and free.reviews == 21990
     assert new.reviews == 0
+    assert plain.release_date == dt.date(2026, 8, 17) and new.release_date is None
     assert parse_search_page({}) == ([], 0) and parse_search_page(None) == ([], 0)
+
+
+def test_parse_search_release_dates():
+    from market_researcher.sources.steam_search import parse_date
+
+    assert parse_date(" Dec 10, 2024 ") == dt.date(2024, 12, 10) and parse_date("10 Dec, 2024") == dt.date(2024, 12, 10)
+    assert parse_date("Dec 2024") == dt.date(2024, 12, 1)
+    assert parse_date("Coming soon") is None and parse_date("") is None
 
 
 def test_steam_search_pages_through_a_tag():

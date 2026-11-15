@@ -43,6 +43,9 @@ WELL_SERVED_RATING = 85
 # A tag's track record (pipeline.track_record) reads one review histogram per game with 10+ reviews; the
 # backtest only measured tags with up to this many such games, so bigger ones aren't measured (~20 min at most).
 TRACK_MAX_GAMES = 800
+# It skips games the store says were released this many months before its window opens: the store date is
+# the same as or later than the first review (Early Access), so those can't be entrants (docs/measurements.md).
+TRACK_RELEASE_MARGIN = 3
 LOW_GAP = 0.30  # under 30% of rated demand games underserved: "already well served" notice
 
 # Box Method review -> sales multipliers
