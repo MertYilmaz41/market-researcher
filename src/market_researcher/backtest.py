@@ -410,7 +410,7 @@ def render(rows: Sequence[Row], skipped_tags: Sequence[str], recent: Sequence[Ro
         "- Correlation, not cause: entrants may not have fixed the old games' complaints.",
     ]
     if skipped_tags:
-        lines += ["", f"Skipped (no SteamSpy list or failed): {', '.join(skipped_tags)}"]
+        lines += ["", f"Skipped (no games, or over --max-games): {', '.join(skipped_tags)}"]
     return "\n".join(lines) + "\n"
 
 
@@ -419,12 +419,11 @@ def render(rows: Sequence[Row], skipped_tags: Sequence[str], recent: Sequence[Ro
 
 def main() -> None:
     from .http import HttpClient
-    from .pipeline import _UNSEARCHABLE
-    from .sources import steam_store, steamspy
+    from .sources import steam_search, steam_store
 
     ap = argparse.ArgumentParser(description="Backtest the unmet share against later success of new games.")
     ap.add_argument("--tags", action="append", default=[], help="tag to test (repeatable)")
-    ap.add_argument("--all", action="store_true", help="every tag SteamSpy can search")
+    ap.add_argument("--all", action="store_true", help="every Steam tag")
     ap.add_argument("--max-games", type=int, default=800,
                     help=f"with --all: skip tags with more games than this having >= {MIN_HIST_REVIEWS} reviews")
     ap.add_argument("--cutoffs", nargs="+", default=CUTOFFS, help="cutoff months, YYYY-MM")
@@ -435,20 +434,24 @@ def main() -> None:
     http = HttpClient()
 
     if args.all:
-        names = [t for t in steam_store.tag_names(http) if t.casefold() not in _UNSEARCHABLE]
+        names = steam_store.tag_names(http)
     elif args.tags:
         names = args.tags
     else:
         ap.error("give --tags or --all")
 
+    # Markets' definition (pipeline.run_markets): one read of every rated game, each counted toward its
+    # first 7 tags, so this tests the ranking Markets shows.
+    ids = {name.casefold(): i for name, i in steam_store.tag_ids(http).items()}
+    by_tag: dict[int, list[Game]] = {}
+    for g in steam_search.games_by_tags(http, []):
+        if g.positive + g.negative >= MIN_HIST_REVIEWS:
+            for tag_id in g.tag_ids:
+                by_tag.setdefault(tag_id, []).append(g)
     tag_lists: dict[str, list[Game]] = {}
     skipped = []
     for tag in names:
-        try:
-            games = [g for g in steamspy.games_by_tag(http, tag) if g.positive + g.negative >= MIN_HIST_REVIEWS]
-        except Exception as e:  # one broken tag must not sink the run
-            print(f"{tag}: {e}")
-            games = []
+        games = by_tag.get(ids.get(tag.casefold()), [])
         if not games or (args.all and len(games) > args.max_games):
             skipped.append(tag)
             continue
