@@ -1,9 +1,13 @@
-"""Steam store search: games by tag, for the tags SteamSpy can't search (config.STEAMSPY_UNSEARCHABLE_TAGS).
+"""Steam store search: the games of a search's tags (pipeline.tag_games).
 
 The endpoint returns JSON with the result rows as HTML. Each row has the appid, title, review summary
-("78% of the 3,325 user reviews") and price in cents, which is all steps 1-3 need. It can't sort by
-review count, so a tag is read page by page. Review counts can be slightly language-filtered;
-analyze_game loads the full numbers from SteamSpy later.
+("78% of the 3,325 user reviews") and price in cents, which is all steps 1-3 need. Several tag ids in one
+query return only games with all of them. Sorted by review score, the results leave out games without one
+(under 10 reviews), which saves most pages; it can't sort by review count, so they're read page by page.
+Review counts are English reviews only (Steam computes the row's score in the visitor's language);
+analyze_game loads Steam's all-language numbers later.
+SteamSpy's tag lists were far smaller than Steam's (Colony Sim: 34 of 472 games with 100+ reviews, Nov 2026;
+docs/measurements.md).
 """
 
 import html
@@ -49,13 +53,14 @@ def parse_search_page(data: dict) -> tuple[list[Game], int]:
     return games, int(data.get("total_count") or 0)
 
 
-def games_by_tag(http: HttpClient, tag_id: int, on_page: Callable[[int, int], None] | None = None) -> list[Game]:
-    """Every game with this Steam tag id. on_page(pages done, total pages) reports progress."""
+def games_by_tags(http: HttpClient, tag_ids: list[int],
+                  on_page: Callable[[int, int], None] | None = None) -> list[Game]:
+    """Every game with a review score and all of these Steam tag ids. on_page(pages done, total pages)."""
     games, start, total = [], 0, None
     while total is None or start < total:
-        params = {"query": "", "start": start, "count": PAGE_SIZE, "tags": tag_id, "category1": 998,
-                  "infinite": 1, "cc": "us", "l": "english"}
-        page, total = parse_search_page(http.get_json(SEARCH_URL, params, ttl=config.TTL_TAG_LIST))
+        params = {"query": "", "start": start, "count": PAGE_SIZE, "tags": ",".join(map(str, tag_ids)),
+                  "category1": 998, "sort_by": "Reviews_DESC", "infinite": 1, "cc": "us", "l": "english"}
+        page, total = parse_search_page(http.get_json(SEARCH_URL, params, ttl=config.TTL_TAG_SEARCH))
         if not page:  # past the end, or the markup changed
             break
         games.extend(page)

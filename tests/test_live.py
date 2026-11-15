@@ -81,7 +81,7 @@ def test_tag_catalog(http):
 
 
 def test_store_search_page(http):
-    tag_id = steam_store.tag_ids(http)["Incremental"]  # a tag SteamSpy can't search
+    tag_id = steam_store.tag_ids(http)["Incremental"]
     params = {"query": "", "start": 0, "count": steam_search.PAGE_SIZE, "tags": tag_id, "category1": 998,
               "infinite": 1, "cc": "us", "l": "english"}
     games, total = steam_search.parse_search_page(http.get_json(steam_search.SEARCH_URL, params))
@@ -90,3 +90,13 @@ def test_store_search_page(http):
     assert sum(g.positive + g.negative > 0 for g in games) >= 25
     assert any(g.price_cents > 0 for g in games)
     assert all(isinstance(g, Game) and g.name for g in games)
+
+
+def test_store_search_by_several_tags(http):
+    """Several tags in one query: only games with all of them, and only games with a review score."""
+    ids = steam_store.tag_ids(http)
+    games = steam_search.games_by_tags(http, [ids["Deckbuilding"], ids["Pinball"]])
+    assert 5 <= len(games) <= 2000 and any(g.name == "Peglin" for g in games)
+    assert all(g.reviews >= 10 for g in games)
+
+

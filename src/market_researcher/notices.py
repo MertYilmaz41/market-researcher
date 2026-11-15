@@ -89,10 +89,10 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
     n_cand = len(result.candidates)
     ranked = rank(result.analyses)
 
-    if result.n_tag_games == 0:  # only possible with several tags: no game has all of them
+    if result.n_tag_games == 0:  # usually several tags no rated game has all of
         return [Notice(
             level="warning", title=_("No game has all these tags"),
-            message=_("No game on SteamSpy is tagged {tag}.", tag=tag),
+            message=_("No game on Steam with 10+ reviews is tagged {tag}.", tag=tag),
             hint=_("Remove a tag or pick a broader one."),
         )]
 
@@ -346,7 +346,7 @@ def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
     hint = (_("Did you mean {names}?", names=joined) if close
             else _("Check the spelling. Examples: {examples}.", examples=TAG_EXAMPLES))
     return Notice(level="error", title=_("Tag not found"),
-                  message=_("SteamSpy has no games tagged '{tag}'.", tag=tag), hint=hint)
+                  message=_("Steam has no tag '{tag}'.", tag=tag), hint=hint)
 
 
 def known_tags(http) -> list[str]:

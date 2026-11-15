@@ -6,7 +6,7 @@ from market_researcher.cli import app
 from market_researcher.market import MarketStats, market_stats
 
 from test_m4 import game
-from test_notices import post, tag_result
+from test_notices import fake_search, post, tag_result
 
 
 def g(pct_positive, n=1000, appid=1):
@@ -68,7 +68,7 @@ def test_cli_markets(monkeypatch):
 
 
 def test_discover_prints_market_line(monkeypatch):
-    monkeypatch.setattr("market_researcher.sources.steamspy.games_by_tag", lambda http, tag: [g(40), g(95, appid=2)])
+    fake_search(monkeypatch, {"Hot": [g(40), g(95, appid=2)]})
     monkeypatch.setattr("market_researcher.cli.verify_games", lambda http, c, n, p=None: (c[:n], [], set()))
     res = CliRunner().invoke(app, ["discover", "-t", "Hot"])
     assert "Market:" in res.output and "1 underserved" in res.output
