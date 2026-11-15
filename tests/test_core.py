@@ -2,7 +2,7 @@ import pytest
 
 from market_researcher import boxmethod
 from market_researcher.discover import filter_candidates, parse_rating_range
-from market_researcher.sources.steamspy import parse_tag_response
+from market_researcher.sources.steamspy import parse_game
 
 SAMPLE = {
     "1": {"appid": 1, "name": "Great Game", "positive": 900, "negative": 100, "price": "999", "initialprice": "999"},
@@ -22,7 +22,7 @@ def test_box_method_guide_examples():
 
 
 def test_parse_and_filter():
-    games = parse_tag_response(SAMPLE)
+    games = [parse_game(row) for row in SAMPLE.values()]
     assert len(games) == 4
     sim = next(g for g in games if g.appid == 2)
     assert sim.reviews == 600 and sim.rating == 50.0 and sim.base_price == 19.99
@@ -33,7 +33,7 @@ def test_parse_and_filter():
 
 
 def test_filter_sorted_by_rating_ascending():
-    games = parse_tag_response(SAMPLE)
+    games = [parse_game(row) for row in SAMPLE.values()]
     hits = filter_candidates(games, min_reviews=1, min_rating=0, max_rating=100)
     assert [round(g.rating) for g in hits] == sorted(round(g.rating) for g in hits)
 
