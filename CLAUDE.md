@@ -90,7 +90,7 @@ uv run mr --lang tr report --tag "Job Simulator"   # Turkish output (or MR_LANG=
 uv run mr cache clear | prune               # prune deletes expired entries and shrinks the file (nothing else ever does)
 uv run python -m market_researcher.mining.evaluate [--games]   # miner accuracy against labeled reviews
 uv run python -m market_researcher.summary_eval --models gemma3:12b gemma4:12b   # compare summary models (--lang en, --recheck)
-uv run python -m market_researcher.backtest --all   # does the unmet share predict later success? (~13 h first time)
+uv run python -m market_researcher.backtest --all   # does the unmet share predict later success? (~50 h first time, every tag; --dry-run counts it)
 uv run python -m market_researcher.boxcheck         # reviews x45 vs disclosed sales (reports/box-check.md)
 MR_LIVE=1 uv run pytest tests/test_live.py -v       # do Steam/SteamSpy still answer as we parse? (~20 s; CI weekly)
 uv run --with playwright pytest tests/test_ui.py    # browser smoke test, if .venv lacks Playwright
@@ -102,7 +102,7 @@ Tag names are Steam tag names (e.g. "Job Simulator", "Colony Sim"; SteamSpy's ol
 
 The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.filter_candidates` → `boxmethod.estimate` → output. `pipeline.py` holds the steps the CLI commands and the web share: `verify_games` enforces "Games Only" (Steam appdetails per result, since SteamSpy has no type field; ~1.5 s per game the first time), and `analyze_game` builds an `Analysis` (game, details, flags, mining, `Opportunity`). Put new per-game logic in `analyze_game`, not in the CLI or the server.
 
-**Tag searches:** `pipeline.tag_games` lists the games with all tags and a review score (10+ reviews) from Steam's store search, in one query (`steam_search.games_by_tags`); Steam does the intersection. Its review numbers are English only (filters and market stats use them; analyzed games get all languages). For most games that's the same count; re-checking games near the cutoffs was measured and not adopted (`docs/measurements.md`). Not SteamSpy: its tag lists missed most games (Colony Sim: 34 of 472 with 100+ reviews, Nov 2026; `docs/measurements.md`). The backtest still uses SteamSpy. A tag missing from Steam's catalog raises `pipeline.UnknownTag`. Titles, notices and report file names use one label, `pipeline.tag_label` ("Crafting + Survival").
+**Tag searches:** `pipeline.tag_games` lists the games with all tags and a review score (10+ reviews) from Steam's store search, in one query (`steam_search.games_by_tags`); Steam does the intersection. Its review numbers are English only (filters and market stats use them; analyzed games get all languages). For most games that's the same count; re-checking games near the cutoffs was measured and not adopted (`docs/measurements.md`). Not SteamSpy: its tag lists missed most games (Colony Sim: 34 of 472 with 100+ reviews, Nov 2026; `docs/measurements.md`). A tag missing from Steam's catalog raises `pipeline.UnknownTag`. Titles, notices and report file names use one label, `pipeline.tag_label` ("Crafting + Survival").
 
 **Parallel analysis:** `run_tag` analyzes games in a thread pool (`config.ANALYZE_WORKERS`); each starts as soon as it passes the store-type check. `run_tag` records per-game failures in `TagResult.failed` and keeps going. A failed review fetch sets `review_error` instead of dropping the game; a failed positive-review fetch keeps the negative sample.
 
@@ -212,7 +212,7 @@ Review mining and Steam data stay English.
 ### Game data
 
 - `Game.rating` is % positive (0–100). `Game.base_price` is the undiscounted USD price; the Box Method uses it.
-- **Official review numbers:** search results use SteamSpy's counts; analyzed games get Steam's own via `pipeline.official_reviews` from `steam_store.review_summary` (GetAppReviews' `query_summary` with `languages: ["all"]`, which matches the store page's "All Reviews" and excludes confirmed review-bomb periods; without `languages` it is English-only). Fallback: histogram totals, then SteamSpy. The histogram also wins when the summary is under half its total (GetAppReviews can be wildly low). `Game.rating_source` and `steamspy_rating` record the choice (`report.rating_source_text`); SteamSpy can be far off.
+- **Official review numbers:** search results use the store search's English-only counts; analyzed games get Steam's own via `pipeline.official_reviews` from `steam_store.review_summary` (GetAppReviews' `query_summary` with `languages: ["all"]`, which matches the store page's "All Reviews" and excludes confirmed review-bomb periods; without `languages` it is English-only). Fallback: histogram totals, then SteamSpy. The histogram also wins when the summary is under half its total (GetAppReviews can be wildly low). `Game.rating_source` and `steamspy_rating` record the choice (`report.rating_source_text`); SteamSpy can be far off.
 - A second call with `filter_offtopic_activity: 0` counts review-bomb periods too; the difference is `Game.offtopic_reviews`, which `Game.reviews` (demand, Box Method) includes but `Game.rating` doesn't.
 
 ### Tests
