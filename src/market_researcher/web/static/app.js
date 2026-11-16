@@ -1993,8 +1993,7 @@ function complaintsTab(g) {
   ];
 }
 
-// ---------- one game read by the local LLM: written on request, saved with the run (a game opened by AppID:
-// kept while the app runs) ----------
+// ---------- one game read by the local LLM: written on request, saved (with the run, if it's in one) ----------
 function gameSummaryTab(g) {
   const s = g.summary;
   const inRun = state.games.some((x) => x.game.appid === g.game.appid);
@@ -2013,7 +2012,7 @@ function gameSummaryTab(g) {
   return el("div", { class: "tab-body game-summary" },
     el("div", { class: "ai-bar" },
       el("span", {}, inRun ? t("{model} on your computer · saved with the run", { model: s.model })
-        : t("{model} on your computer · kept until the app closes", { model: s.model })),
+        : t("{model} on your computer · saved", { model: s.model })),
       inRun ? writeButton(t("Rewrite")) : null),
     s.why ? el("section", {}, el("h5", {}, t("Why players are unhappy")), el("p", { class: "why-text" }, s.why)) : null,
     s.fix.length ? el("section", {}, el("h5", {}, t("What a better game would do")), el("ol", { class: "numbered" }, s.fix.map((f) => el("li", {}, f)))) : null,

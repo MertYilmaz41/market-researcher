@@ -680,7 +680,6 @@ def test_summary_of_a_game_opened_by_appid(client, monkeypatch):
     from market_researcher.models import GameSummary
 
     monkeypatch.setattr(server, "_single", {})
-    monkeypatch.setattr(server, "_single_summaries", {})
     monkeypatch.setattr(pipeline, "analyze_game", lambda http, appid, n: analysis(42, "Solo", appid=appid))
     monkeypatch.setattr(server.pipeline, "review_sample", lambda http, appid, kind, limit: [])
     calls = []
@@ -692,3 +691,5 @@ def test_summary_of_a_game_opened_by_appid(client, monkeypatch):
     assert client.post("/api/games/5/summary").json()["summary"]["why"] == "Why (en)" and calls == ["en"]  # once
     assert client.get("/api/games/5").json()["summary"]["why"] == "Why (en)"  # shown when the game is opened again
     assert client.get("/api/games/5", headers={"X-Lang": "tr"}).json()["summary"] is None  # per language
+    monkeypatch.setattr(server, "_single", {})  # the app restarted: the analysis is gone, the summary is saved
+    assert client.get("/api/games/5").json()["summary"]["why"] == "Why (en)"

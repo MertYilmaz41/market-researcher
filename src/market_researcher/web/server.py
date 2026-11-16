@@ -396,8 +396,6 @@ class ShortlistPut(BaseModel):
 # Games analyzed by AppID (the "One game" form), so they can be starred too. The latest few only.
 _single: dict[int, Analysis] = {}
 SINGLE_KEEP = 50
-# Their LLM summaries, by language: kept as long as the game is in _single (in memory, like the analyses).
-_single_summaries: dict[int, dict[str, summary.GameSummary]] = {}
 
 
 def _remember_single(a: Analysis) -> None:
@@ -405,7 +403,7 @@ def _remember_single(a: Analysis) -> None:
         _single.pop(a.game.appid, None)
         _single[a.game.appid] = a
         while len(_single) > SINGLE_KEEP:
-            _single_summaries.pop(_single.pop(next(iter(_single))).game.appid, None)
+            _single.pop(next(iter(_single)))
 
 
 def _snapshot_of(a: Analysis, source: str, run_id: str | None) -> dict:
@@ -734,20 +732,17 @@ def _write_game_summary(a: Analysis, reviews: int, language: str):
 
 @app.post("/api/games/{appid}/summary")
 def write_single_summary(appid: int, reviews: int = 300):
-    """The summary of a game analyzed by AppID, in the request's language: written once, kept in memory with
-    the analysis."""
+    """The summary of a game analyzed by AppID, in the request's language: written once and saved."""
     a, language = _single.get(appid), lang()
     if a is None:
         raise HTTPException(404, _("Open the game again: its analysis is no longer in memory."))
     with _summary_lock:
-        s = _single_summaries.get(appid, {}).get(language)
+        s = _runs.game_summary(appid, language)
         if s is None:
             s = _write_game_summary(a, max(10, min(reviews, 1000)), language)
             if isinstance(s, JSONResponse):
                 return s
-            with _lock:
-                if appid in _single:
-                    _single_summaries.setdefault(appid, {})[language] = s
+            _runs.save_game_summary(appid, language, s)
         return {"summary": _summary_json(s)}
 
 
@@ -770,7 +765,7 @@ def game(appid: int, reviews: int = 300):
         return JSONResponse(status_code=404, content={"detail": notice.message, "notice": notice.model_dump()})
     _remember_single(a)
     data = game_json(a)
-    data["summary"] = _summary_json(_single_summaries.get(appid, {}).get(lang()))
+    data["summary"] = _summary_json(_runs.game_summary(appid, lang()))
     data["llm_model"] = config.LLM_MODEL
     data["notices"] = [n.model_dump() for n in notices.for_game(a)]
     return data

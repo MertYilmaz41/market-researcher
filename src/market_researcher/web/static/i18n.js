@@ -345,7 +345,7 @@ const TR = {
   "{neg} negative, {pos} positive · half most helpful, half newest ({recent} negative from the last 12 months) · reviews written under 2 h of play count half": "{neg} olumsuz, {pos} olumlu · yarısı en faydalı, yarısı en yeni (son 12 aydan {recent} olumsuz) · 2 saatten az oynanarak yazılan incelemeler yarım sayılır",
   "{n} more quotes": "{n} alıntı daha",
   "{model} on your computer · saved with the run": "bilgisayarınızdaki {model} · taramayla birlikte kaydedildi",
-  "{model} on your computer · kept until the app closes": "bilgisayarınızdaki {model} · uygulama kapanana kadar saklanır",
+  "{model} on your computer · saved": "bilgisayarınızdaki {model} · kaydedildi",
   "Rewrite": "Yeniden yaz",
   "Why players are unhappy": "Oyuncular neden mutsuz",
   "What a better game would do": "Daha iyi bir oyun ne yapardı",

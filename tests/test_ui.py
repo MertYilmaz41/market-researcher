@@ -734,5 +734,5 @@ def test_ui_star_a_game_analyzed_by_appid(base_url, browser):
     page.click("#panel .opp-empty button")
     page.wait_for_selector("#panel .game-summary")
     assert "Anti-cheat" in page.inner_text("#panel .game-summary")
-    assert "kept until the app closes" in page.inner_text("#panel .game-summary .ai-bar")
+    assert "on your computer · saved" in page.inner_text("#panel .game-summary .ai-bar")
     assert page.errors == []
