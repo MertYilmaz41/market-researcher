@@ -13,7 +13,7 @@ Based on [Code Monkey](https://www.youtube.com/@CodeMonkeyUnity)'s Underserved A
 ## What it does
 
 - **Discovers** games in one or more tags (e.g. *Job Simulator*, or *Crafting + Survival*) with many reviews but a low rating (5–70% positive).
-- **Compares markets:** ranks every Steam tag by how many of its popular games players rate well, then by market size: in a backtest, new games did better in such tags. Each search also measures the tag's **track record**: how many of its games from 2–4 years ago became hits.
+- **Compares markets:** ranks every Steam tag by how often its games from 2–4 years ago became hits: in a backtest, new games did better in such tags. Each search also measures the tag's **track record** exactly: how many of its games from 2–4 years ago became hits.
 - **Estimates sales and revenue** with the Box Method (reviews × 30–100).
 - **Uses Steam's own review numbers** for analyzed games (the store page's "All Reviews"). Reviews from review-bomb periods count toward demand but not toward % positive.
 - **Flags misleading numbers:** review bombs, sudden review spikes (a sale, an update, a streamer), deep discounts, very cheap prices, online multiplayer, niche audiences and AAA expectations. It also flags fading demand (few reviews lately) and games that are already improving (rated much better in the last 12 months).
@@ -185,18 +185,18 @@ Market Researcher is an independent project. It is not affiliated with or endors
 
 The method assumes that where many players are unhappy, a better game will do well. The tool was tested against history to see if that holds at the market level (`uv run python -m market_researcher.backtest --all`, report in `reports/backtest.md`):
 
-- **How:** for 180 Steam tags, each tag's unmet share (underserved games / (underserved + well-served games)) was rebuilt as it was in January 2019, 2020, 2021 and 2022 from monthly review histories (32,000 games). Then the games released in the next 24 months were followed. A *hit* is a new game with 500+ reviews at 80%+ positive in its first two years; *sold* is 500+ reviews at any rating.
+- **How:** for 357 Steam tags, each tag's unmet share (underserved games / (underserved + well-served games)) was rebuilt as it was in January 2019, 2020, 2021 and 2022 from monthly review histories (72,000 games, every rated game on Steam, Nov 2026). Then the games released in the next 24 months were followed. A *hit* is a new game with 500+ reviews at 80%+ positive in its first two years; *sold* is 500+ reviews at any rating.
 - **The rule, fixed before the results were seen:** the unmet share counts as a predictor only if tags with a higher share had more hits, beyond chance, also with market size held fixed, and the top fifth's hit rate was at least 1.25× the bottom fifth's.
-- **Result: none of these held.**
+- **Result: it did not hold.**
 
   | Tags by unmet share (fifths) | Lowest | 2 | 3 | 4 | Highest |
   |---|---|---|---|---|---|
-  | Hit rate (500+ reviews, 80%+ positive) | 11.6% | 11.2% | 11.0% | 11.0% | 10.7% |
-  | Sold rate (500+ reviews) | 14.4% | 16.0% | 17.4% | 18.1% | 20.5% |
+  | Hit rate (500+ reviews, 80%+ positive) | 10.2% | 9.5% | 9.0% | 9.8% | 10.9% |
+  | Sold rate (500+ reviews) | 11.9% | 11.8% | 12.5% | 14.9% | 18.4% |
 
-  The correlation of unmet share with the hit rate was −0.04 (95% interval −0.17 to +0.09): no link either way. With the sold rate it was +0.19 (+0.05 to +0.31).
+  The correlation of unmet share with the hit rate was +0.03 (95% interval −0.06 to +0.13): no link. With the sold rate it was +0.30 (+0.21 to +0.38).
 - **What it means:** where the unmet share is high, players keep buying new games of that kind, so the demand is real. But the new games disappointed them about as often as the old ones; few of them were rated well. A high unmet share tells you where to look, not that a new game there will succeed. Making the better game is still on you.
-- **Other measures, written down before they were measured:** three did predict hits: the tag's earlier games' hit rate (released 2–4 years before; correlation +0.47, top fifth 14.6% vs bottom fifth 7.3%), the number of well-served games (+0.36) and market size (+0.33). New games did well where earlier games had done well. The Markets view is ranked by the last two, and each tag search measures the first as the tag's track record (it reads one review history per game, so the first time takes a few minutes, up to about 20).
+- **Other measures, written down before they were measured:** only one predicted hits: the tag's earlier games' hit rate (released 2–4 years before; correlation +0.47, top fifth 13.3% vs bottom fifth 5.9%, and +0.51 on 2023–2024). New games did well where earlier games had done well. The number of well-served games and market size, which an earlier run on SteamSpy's incomplete tag lists had found predictive, did not hold on the complete data. The Markets view is ranked by an estimate of the first that needs no review histories (games by store date, and how many are now hits; it matches the exact measure closely), and each tag search measures it exactly as the tag's track record (it reads one review history per game, so the first time takes a few minutes, up to about 20).
 
 So read the unmet share as a **filter for exploring**: it narrows thousands of tags down to the ones worth a closer look. Then read the complaints and quotes of the games themselves. The backtest tests tag-level measures only; the per-game score and the complaint mining were not tested against later success, so the words beside a score describe the evidence ("Many buyers, most unhappy") rather than promise an opportunity. It also has known biases (games removed from Steam are missing, tags are today's), listed in the report.
 

@@ -1219,7 +1219,7 @@ function marketsText() {
     $("#markets-note").textContent = t("Rank every Steam tag by its games with demand that players rate poorly. Uses the Filters; the first build reads every rated game on Steam (~36 minutes), then a week from the cache.");
     return;
   }
-  const notes = [t("{n} tags ranked by well-served games, then games with demand (≥ {min} reviews): in a backtest, new games did better in such tags. Underserved = {range} positive. Broad tags (1,000+ games) come last.", {
+  const notes = [t("{n} tags ranked by the earlier entrants' hit rate: of each tag's games released 2 to 4 years ago (store date), the share now at 500+ reviews and 80%+ positive. In a backtest it was the one measure that predicted how new games did. Tags with under 10 such games come last. Underserved = {range} positive (≥ {min} reviews).", {
     n: markets.rows.length, min: fmt(result.min_reviews), range: range(result.lo, result.hi) }), t("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.")];
   if (result.skipped.length) notes.push(t("{n} tags SteamSpy can't search are left out (search them one by one).", { n: result.skipped.length }));
   $("#markets-note").textContent = notes.join(" ");
@@ -1252,7 +1252,7 @@ function renderMarkets() {
   const q = $("#market-find").value.trim().toLocaleLowerCase();
   const big = $("#market-big").checked;
   const { key, asc } = markets.sort;
-  const val = (r) => (key === "tag" ? r.tag.toLowerCase() : r[key]);
+  const val = (r) => (key === "tag" ? r.tag.toLowerCase() : key === "hit_rate" ? r.hit_rate ?? -1 : r[key]);
   const shown = markets.rows.filter((r) => (!q || r.tag.toLocaleLowerCase().includes(q)) && (!big || r.n_demand >= BIG_MARKET));
   const rows = shown.sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * (asc ? 1 : -1));
   markSorted(document.querySelectorAll("#markets th"), key, asc);
@@ -1266,6 +1266,8 @@ function renderMarkets() {
       el("td", { class: "num" }, n(r.n_demand)),
       el("td", { class: "num under" }, n(r.n_underserved)),
       el("td", { class: "num dim" }, n(r.n_well_served)),
+      el("td", { class: "num" }, r.hit_rate == null ? "–" : pct(r.hit_rate),
+        r.hit_rate == null ? null : el("span", { class: "dim" }, ` (${n(r.hits)}/${n(r.entrants)})`)),
       el("td", {}, el("div", { class: "share-cell" },
         el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(r.gap * 100)}%` })),
         el("span", {}, pct(r.gap)))),
@@ -1273,14 +1275,14 @@ function renderMarkets() {
     ), () => pickTag(r.tag, "markets")));
   }));
   $("#markets-shown").textContent = t("{n} of {total} tags shown · click tags to add them to the search", { n: rows.length, total: markets.rows.length });
-  // The top three by the server's order (well-served games, then games with demand; broad tags last), among the shown ones.
+  // The top three by the server's order (earlier entrants' hit rate; too few to tell last), among the shown ones.
   const top = [...shown].sort((a, b) => a.rank - b.rank).slice(0, 3);
   $("#market-cards").hidden = !top.length;
   $("#market-cards").replaceChildren(...top.map((r) => el("button", { type: "button", class: "market-card", onclick: () => searchTag(r.tag) },
     el("span", { class: "top" }, `#${r.rank}`, el("b", {}, marketVerdict(r)[0])),
     el("span", { class: "tag" }, r.tag),
-    el("span", { class: "share" }, el("b", {}, n(r.n_well_served)),
-      el("span", {}, t("well served of {demand} with demand · unmet share {pct}", { demand: n(r.n_demand), pct: pct(r.gap) }))),
+    el("span", { class: "share" }, el("b", {}, r.hit_rate == null ? "–" : pct(r.hit_rate)),
+      el("span", {}, t("hits among {n} games released 2-4 years ago · unmet share {pct}", { n: n(r.entrants), pct: pct(r.gap) }))),
     el("span", { class: "go" }, t("Search this tag →")))));
 }
 $("#market-find").addEventListener("input", renderMarkets);
@@ -1743,6 +1745,7 @@ function terms() {
     underserved: [t("Underserved"), t("Games with demand whose % positive is inside the range set in the Filters: many players, let down.")],
     well_served: [t("Well served"), t("Games with demand that players rate {pct} positive or more: these players already have a good game.", { pct: percent(state.result?.well_served ?? 85) })],
     track_record: [t("Track record"), t("How the tag's games released 2 to 4 years ago did: the share that became hits, 500+ reviews at 80%+ positive in their first 2 years. In a backtest it was the best sign of how new games would do (new games did better where it was high), unlike the unmet share. Rates fell year by year as Steam grew, so compare tags with each other, not with older numbers. It reads one review history per game, so the first time takes a few minutes (up to about 20); then it's saved with the run. Tags with over 800 games aren't measured.")],
+    earlier_hits: [t("Earlier hits"), t("Of the tag's games released 2 to 4 years ago (by store date), the share now at 500+ reviews and 80%+ positive. It estimates the track record without reading review histories, so every tag has one. In a backtest the track record was the one market measure that predicted how new games did, so Markets is ranked by it. Under 10 such games: too few to tell.")],
     unmet_share: [t("Unmet share"), t("Of the games with demand that are clearly rated, the share that are underserved: underserved / (underserved + well served). Higher means players have fewer good games to choose from. A filter for exploring, not a forecast: in a backtest, new games in high-share tags sold more often, but were not rated well more often.")],
     min_reviews: [t("Minimum reviews"), t("How proven the demand must be: a game needs at least this many reviews to be considered.")],
     pct_range: [t("% positive range"), t("Which games count as letting players down. 5-70% leaves out games that are simply broken (under 5%) and games players already like (over 70%).")],

@@ -93,6 +93,10 @@ def related_tags(games: list[Game], tags: list[str], limit: int = 6) -> list[dic
 class TagMarket(BaseModel):
     tag: str
     stats: MarketStats
+    # The earlier entrants' hit rate, estimated without review histories (pipeline.run_markets): games the store
+    # dates 48-24 months before the build, and how many are now at 500+ reviews and 80%+ positive. 0 in old runs.
+    entrants: int = 0
+    hits: int = 0
 
 
 class TrackRecord(BaseModel):

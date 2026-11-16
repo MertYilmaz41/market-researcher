@@ -389,14 +389,11 @@ TR: dict[str, str] = {
     "Fetching SteamSpy, Steam store data and reviews...": "SteamSpy, Steam mağaza verileri ve incelemeler alınıyor...",
     "Report written to {path} (the run is also saved: mr runs, or Past runs in mr ui)":
         "Rapor {path} dosyasına yazıldı (tarama da kaydedildi: mr runs ya da mr ui'de Geçmiş taramalar)",
-    "Markets: tags by well-served games (>={min} reviews, {lo:g}-{hi:g}% positive)":
-        "Pazarlar: iyi karşılanmış oyunlarına göre etiketler (>={min} inceleme, %{lo:g}-{hi:g} olumlu)",
-    "Ranked by well-served games, then games with demand: in a backtest, new games did better "
-    "in such tags. Unmet share = underserved / (underserved + well served); it did not "
-    "predict success.":
-        "İyi karşılanmış oyun sayısına, sonra talep gören oyun sayısına göre sıralı: geriye dönük testte yeni oyunlar "
-        "böyle etiketlerde daha iyi iş çıkardı. Karşılanmama oranı = karşılanmamış / (karşılanmamış + iyi karşılanmış); "
-        "başarıyı tahmin etmedi.",
+    "Markets: tags by earlier entrants' hit rate (>={min} reviews, {lo:g}-{hi:g}% positive)":
+        "Pazarlar: önceki oyunlarının hit oranına göre etiketler (>={min} inceleme, %{lo:g}-{hi:g} olumlu)",
+    "Ranked by the earlier entrants' hit rate: of the games the store dates 48-24 months ago, the share now at 500+ reviews and 80%+ positive. In a backtest it was the one market measure that predicted how new games did; well-served games, market size and the unmet share (underserved / (underserved + well served)) did not.":
+        "Önceki oyunların hit oranına göre sıralı: mağazanın 48-24 ay önce çıkmış gösterdiği oyunlardan şu an 500+ incelemede %80+ olumlu olanların payı. Geriye dönük testte yeni oyunların nasıl iş çıkaracağını öngören tek pazar ölçüsü buydu; iyi karşılanmış oyun sayısı, pazar büyüklüğü ve karşılanmama oranı (karşılanmamış / (karşılanmamış + iyi karşılanmış)) öngörmedi.",
+    "Earlier hits": "Önceki hitler",
     "Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).":
         "SteamSpy'ın arayamadığı {n} etiket atlandı (onları mr discover ile tek tek arayın).",
     "Could not read {tag}:": "{tag} okunamadı:",
