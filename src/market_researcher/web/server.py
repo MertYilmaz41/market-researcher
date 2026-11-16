@@ -696,9 +696,9 @@ def write_summary(job_id: str):
 
 
 @app.post("/api/tag-runs/{job_id}/games/{appid}/summary")
-def write_game_summary(job_id: str, appid: int):
+def write_game_summary(job_id: str, appid: int, fresh: bool = False):
     """One game of the run, read by the local LLM (why players are unhappy, what to do, complaints no
-    category covers), in the request's language; written once and saved with the run."""
+    category covers), in the request's language; written once and saved with the run (fresh: write it again)."""
     with _pinned_job(job_id) as job:
         if job.result is None:
             raise HTTPException(409, _("The run hasn't finished yet."))
@@ -707,7 +707,7 @@ def write_game_summary(job_id: str, appid: int):
         if a is None:
             raise HTTPException(404, _("This game isn't part of the run."))
         with _summary_lock:
-            s = res.game_summaries.get(appid, {}).get(language)
+            s = None if fresh else res.game_summaries.get(appid, {}).get(language)
             if s is None:
                 s = _write_game_summary(a, job.request.reviews, language)
                 if isinstance(s, JSONResponse):
@@ -731,13 +731,14 @@ def _write_game_summary(a: Analysis, reviews: int, language: str):
 
 
 @app.post("/api/games/{appid}/summary")
-def write_single_summary(appid: int, reviews: int = 300):
-    """The summary of a game analyzed by AppID, in the request's language: written once and saved."""
+def write_single_summary(appid: int, reviews: int = 300, fresh: bool = False):
+    """The summary of a game analyzed by AppID, in the request's language: written once and saved (fresh: write
+    it again)."""
     a, language = _single.get(appid), lang()
     if a is None:
         raise HTTPException(404, _("Open the game again: its analysis is no longer in memory."))
     with _summary_lock:
-        s = _runs.game_summary(appid, language)
+        s = None if fresh else _runs.game_summary(appid, language)
         if s is None:
             s = _write_game_summary(a, max(10, min(reviews, 1000)), language)
             if isinstance(s, JSONResponse):

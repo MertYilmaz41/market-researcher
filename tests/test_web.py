@@ -691,5 +691,30 @@ def test_summary_of_a_game_opened_by_appid(client, monkeypatch):
     assert client.post("/api/games/5/summary").json()["summary"]["why"] == "Why (en)" and calls == ["en"]  # once
     assert client.get("/api/games/5").json()["summary"]["why"] == "Why (en)"  # shown when the game is opened again
     assert client.get("/api/games/5", headers={"X-Lang": "tr"}).json()["summary"] is None  # per language
+    assert client.post("/api/games/5/summary?fresh=1").json()["summary"]["why"] == "Why (en)"  # Rewrite
+    assert calls == ["en", "en"]
     monkeypatch.setattr(server, "_single", {})  # the app restarted: the analysis is gone, the summary is saved
     assert client.get("/api/games/5").json()["summary"]["why"] == "Why (en)"
+
+
+def test_rewrite_writes_a_run_games_summary_again(client, monkeypatch, run_store):
+    from market_researcher.models import GameSummary
+
+    monkeypatch.setattr(pipeline, "run_tag", lambda *a: fake_result())
+    monkeypatch.setattr(server.pipeline, "review_sample", lambda http, appid, kind, limit: [])
+    calls = []
+
+    def write_game(a, negative, lang, **kw):
+        calls.append(1)
+        return GameSummary(why=f"Take {len(calls)}", model="m")
+
+    monkeypatch.setattr(server.summary, "write_game", write_game)
+    job = client.post("/api/tag-runs", json={"tags": ["X"]}).json()["id"]
+    while client.get(f"/api/tag-runs/{job}").json()["status"] == "running":
+        time.sleep(0.05)
+    appid = client.get(f"/api/tag-runs/{job}").json()["result"]["games"][0]["game"]["appid"]
+    url = f"/api/tag-runs/{job}/games/{appid}/summary"
+    assert client.post(url).json()["summary"]["why"] == "Take 1"
+    assert client.post(url).json()["summary"]["why"] == "Take 1"  # saved: not written again
+    assert client.post(url + "?fresh=1").json()["summary"]["why"] == "Take 2"  # Rewrite
+    assert client.post(url).json()["summary"]["why"] == "Take 2"  # and the new one is saved
