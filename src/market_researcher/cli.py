@@ -317,7 +317,7 @@ def markets(
                       fmt("{x:.0%} ({h}/{n})", x=r.hits / r.entrants, h=r.hits, n=r.entrants)
                       if r.entrants >= MIN_TRACK_ENTRANTS else "-", money(m.underserved_gross))
     console.print(table)
-    console.print("[dim]" + _("Ranked by the earlier entrants' hit rate: of the games the store dates 48-24 months ago, the share now at 500+ reviews and 80%+ positive. In a backtest it was the one market measure that predicted how new games did; well-served games, market size and the unmet share (underserved / (underserved + well served)) did not.") + " " + _("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.") + "[/]")
+    console.print("[dim]" + _("Ranked by the earlier entrants' hit rate: of the games the store dates 48-24 months ago, the share now at 500+ reviews and 80%+ positive. In a backtest it was the one market measure that predicted how new games did; well-served games, market size and the unmet share (underserved / (underserved + well served)) did not.") + " " + _("Sorted by the low end of that rate's 95% range, so a tag with few such games needs a clearly higher rate to rank high.") + " " + _("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.") + "[/]")
     if result.skipped:
         console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).",
                                   n=len(result.skipped)) + "[/]")

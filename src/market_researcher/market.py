@@ -4,6 +4,7 @@ Pure: works on the game list a tag search already returned, so it costs no extra
 The list comes from SteamSpy (or Steam's store search) and may include a few non-games.
 """
 
+import math
 from statistics import median, quantiles
 
 from pydantic import BaseModel
@@ -121,6 +122,12 @@ class TrackRecord(BaseModel):
 
 
 MIN_TRACK_ENTRANTS = 10  # the backtest's floor: fewer releases say too little
+
+
+def wilson_low(hits: int, n: int, z: float = 1.96) -> float:
+    """The low end of the 95% Wilson interval of hits / n: few games need a clearly higher rate to rank high."""
+    p = hits / n
+    return (p + z * z / (2 * n) - z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / (1 + z * z / n)
 
 
 def track_text(tr: TrackRecord) -> str:

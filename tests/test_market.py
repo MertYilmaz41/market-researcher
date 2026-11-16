@@ -94,9 +94,12 @@ def test_market_rank_puts_tags_whose_earlier_games_became_hits_first():
         return TagMarket(tag=tag, stats=stats, entrants=entrants, hits=hits)
 
     rows = [row("Indie", 9000, 4000, 200), row("Rugby", 20, 4, 3), row("Job Sim", 130, 40, 8),
-            row("Colony Sim", 400, 120, 12), row("Big but new", 900, 0, 0)]
-    # by the earlier entrants' hit rate (the backtest's one signal), not by size; too few to tell last, biggest first
-    assert [r.tag for r in sorted(rows, key=pipeline.market_rank)] == ["Job Sim", "Colony Sim", "Indie", "Big but new", "Rugby"]
+            row("Colony Sim", 400, 120, 12), row("Big but new", 900, 0, 0), row("Lucky", 50, 12, 8)]
+    # by the low end of the earlier entrants' hit rate (the backtest's one signal), not by size: Lucky's 8 of 12
+    # (67%, low end ~39%) still leads, but 3 of 12 would rank below 54 of 220; too few to tell last, biggest first
+    assert [r.tag for r in sorted(rows, key=pipeline.market_rank)] == ["Lucky", "Job Sim", "Colony Sim", "Indie",
+                                                                       "Big but new", "Rugby"]
+    assert round(market.wilson_low(8, 12), 2) == 0.39 and market.wilson_low(3, 12) < market.wilson_low(54, 220)
 
 
 def test_earlier_hits_counts_games_dated_in_the_window():
