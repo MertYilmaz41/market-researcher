@@ -58,6 +58,33 @@ def test_feed_the_cups_review_bomb_detected():
     assert "% positive" in without.message
 
 
+def test_negative_surge_is_a_review_bomb_even_when_positive_reviews_rose():
+    # Big Walk, Nov 2026: weekly negatives ~40, then 599 in a week that is 7% of all reviews, 19% negative
+    hist = [HistPoint(date=0, up=8799, down=758), HistPoint(date=1, up=7162, down=322)]
+    hist += [HistPoint(date=2 + i, up=1500, down=40) for i in range(12)]
+    hist.append(HistPoint(date=99 * 86400 * 30, up=2602, down=599))
+    flags = risk.check_spikes(hist)
+    assert [f.code for f in flags] == ["review_bomb", "rating_without_spikes"]
+    assert "599 negative reviews" in flags[0].message
+    assert risk.rating_without_bombs(hist) > 100 * sum(p.up for p in hist) / sum(p.total for p in hist)
+
+
+def test_one_huge_negative_period_cannot_hide_behind_itself():
+    # HELLDIVERS 2, May 2024: the bomb month outweighs all others, so it can't be in its own baseline
+    hist = [HistPoint(date=i, up=u, down=d) for i, (u, d) in enumerate(
+        [(119827, 40360), (98970, 16423), (45283, 6147), (114571, 228757), (8762, 1872), (4573, 873),
+         (5011, 1744), (4448, 489), (13175, 786)])]
+    assert [p.down for p in risk.bomb_periods(hist)] == [228757]
+
+
+def test_long_stretch_of_complaints_is_not_a_bomb():
+    # Call of Duty: Ghosts, 2014: a year of ~50% negative months is the game's own record, not a spike
+    hist = [HistPoint(date=0, up=900, down=600), HistPoint(date=1, up=200, down=150)]
+    hist += [HistPoint(date=2 + i, up=150, down=150) for i in range(12)]
+    hist += [HistPoint(date=20 + i, up=10, down=9) for i in range(40)]
+    assert risk.bomb_periods(hist) == []
+
+
 def test_flat_history_no_spike():
     assert risk.check_spikes(flat_hist()) == []
 

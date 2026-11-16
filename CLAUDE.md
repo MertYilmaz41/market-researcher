@@ -119,7 +119,7 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 ### Risk checks (`risk.py`)
 
 Each check returns `RiskFlag`s; thresholds live in `config.py`. `risk.checks` lists every check, passed or flagged, for the History tab.
-- Spike detection skips the launch window. A spike at least 60% negative is a review bomb, otherwise a "Review spike" (code `streamer_spike`; the old flag message stays in `i18n_tr` for saved runs). It reports the rating with spikes excluded.
+- Spike detection skips the launch window. A spike at least 60% negative is a review bomb, and so is a surge of negative reviews alone (`find_negative_spikes`: 50+, 10x the median period's, a negative share 2x that of all other periods; it caught Big Walk's Nov 2026 bomb, which the volume spike missed); otherwise a "Review spike" (code `streamer_spike`; the old flag message stays in `i18n_tr` for saved runs). It reports the rating with spikes excluded.
 - `recent_activity` counts reviews in the last 12 months ("Last 12 mo"); a game 2+ years old with under 5% of its reviews there gets `fading_demand`. `recent_rating` is the % positive of those months. Both count back from `Analysis.analyzed_at`, so a saved run shows its own day's figures.
 - `check_recovered` flags `recovered` (-20) with 50+ recent reviews rated 15+ points above all time, or 70%+. Not lower than 50: with 30 the noise was too large (Bus-Simulator 2012, no updates since 2013, was flagged).
 

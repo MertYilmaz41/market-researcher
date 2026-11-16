@@ -77,6 +77,12 @@ SPIKE_MEDIAN_FACTOR = 5.0  # period >= 5x the median period...
 SPIKE_MIN_SHARE = 0.10  # ...and holds >= 10% of all reviews
 SPIKE_MIN_REVIEWS = 50  # ...and has at least this many reviews
 SPIKE_BOMB_NEGATIVE_SHARE = 0.6  # spike with >= 60% negative = review bomb
+# A surge of negative reviews is a review bomb too, even when positive reviews rose with it or the period is a
+# small part of a big game's reviews (Big Walk, Nov 2026: 599 negative in a week, usually ~46). Measured on
+# 1,901 games: catches 10 of 10 known bombs, flags 1.3% of random games (docs/measurements.md).
+NEG_SPIKE_MIN = 50  # period with >= 50 negative reviews...
+NEG_SPIKE_FACTOR = 10.0  # ...>= 10x the median period's negatives...
+NEG_SPIKE_SHARE_FACTOR = 2.0  # ...and a negative share >= 2x that of all other periods
 DEEP_DISCOUNT_PERCENT = 75
 CHEAP_PRICE_USD = 1.0
 NETCODE_CATEGORY_IDS = {
@@ -97,7 +103,7 @@ HARD_TAGS = {"Physics", "Open World", "MMORPG", "Massively Multiplayer"}
 # third part (0.25) until Nov 2026; it is ~100% for almost every game, so it only raised every score.
 # It is still computed and shown, but not counted.
 SCORE_WEIGHTS = {"demand": 0.40, "dissatisfaction": 0.35}
-SCORE_VERSION = 2  # in runs.compare_key: runs scored by the old formula aren't compared with new ones
+SCORE_VERSION = 3  # in runs.compare_key: runs scored by the old formula aren't compared with new ones
 DEMAND_LOG_MIN = 1.5  # log10(reviews) mapped to 0 (~32 reviews)
 DEMAND_LOG_MAX = 4.0  # ...and to 1 (10,000 reviews)
 DEFAULT_FIXABILITY = 0.5  # when reviews couldn't be mined
