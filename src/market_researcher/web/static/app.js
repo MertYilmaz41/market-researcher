@@ -1998,8 +1998,8 @@ function gameSummaryTab(g) {
   const s = g.summary;
   const inRun = state.games.some((x) => x.game.appid === g.game.appid);
   const busy = state.gameSummarizing === g.game.appid;
-  const writeButton = (label) => {
-    const b = el("button", { type: "button", class: "ghost", onclick: () => writeGameSummary(g) });
+  const writeButton = (label, fresh = false) => {
+    const b = el("button", { type: "button", class: "ghost", onclick: () => writeGameSummary(g, fresh) });
     setButtonBusy(b, busy, busy ? t("Writing...") : label);
     return b;
   };
@@ -2013,7 +2013,7 @@ function gameSummaryTab(g) {
     el("div", { class: "ai-bar" },
       el("span", {}, inRun ? t("{model} on your computer · saved with the run", { model: s.model })
         : t("{model} on your computer · saved", { model: s.model })),
-      inRun ? writeButton(t("Rewrite")) : null),
+      writeButton(t("Rewrite"), true)),
     s.why ? el("section", {}, el("h5", {}, t("Why players are unhappy")), el("p", { class: "why-text" }, s.why)) : null,
     s.fix.length ? el("section", {}, el("h5", {}, t("What a better game would do")), el("ol", { class: "numbered" }, s.fix.map((f) => el("li", {}, f)))) : null,
     el("section", {}, el("h5", {}, t("Other complaints · outside the categories")),
@@ -2024,15 +2024,15 @@ function gameSummaryTab(g) {
   );
 }
 
-async function writeGameSummary(g) {
+async function writeGameSummary(g, fresh = false) {
   if (state.gameSummarizing || state.summarizing) return stillRunning(t("A summary is being written."));
   const id = state.runId, appid = g.game.appid;
   const inRun = state.games.some((x) => x.game.appid === appid);
   state.gameSummarizing = appid;
   if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, TABS.summary, false);
   try {
-    const url = inRun ? `/api/tag-runs/${id}/games/${appid}/summary`
-      : `/api/games/${appid}/summary?reviews=${+$("#reviews").value || 300}`;
+    const url = (inRun ? `/api/tag-runs/${id}/games/${appid}/summary?`
+      : `/api/games/${appid}/summary?reviews=${+$("#reviews").value || 300}&`) + (fresh ? "fresh=1" : "");
     const res = await api(url, { method: "POST" });
     if (!res.ok) throw await apiError(res);
     const data = await res.json();
