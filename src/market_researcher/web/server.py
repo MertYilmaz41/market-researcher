@@ -580,7 +580,9 @@ def market_result_json(job_id: str, r: MarketRunRequest, result: pipeline.Market
     return {
         "min_reviews": r.min_reviews, "lo": r.lo, "hi": r.hi,
         "well_served": config.WELL_SERVED_RATING,
-        "rows": [{"tag": row.tag, **row.stats.model_dump()} for row in result.rows],
+        "rows": [{"tag": row.tag, **row.stats.model_dump(), "entrants": row.entrants, "hits": row.hits,
+                  "hit_rate": row.hits / row.entrants if row.entrants >= market.MIN_TRACK_ENTRANTS else None}
+                 for row in result.rows],
         "skipped": result.skipped,
         "failed": [{"tag": t, "reason": why} for t, why in result.failed],
     }

@@ -16,6 +16,7 @@ from .http import HttpClient
 from .i18n import LANG, LANGS, _, fmt, lang, num
 from .mining.llm import LLMUnavailable
 from .models import Analysis, GameSummary, MiningResult
+from .market import MIN_TRACK_ENTRANTS
 from .pipeline import (TagResult, UnknownTag, analyze_game, review_sample, run_markets, run_tag, tag_games, tag_label,
                        verify_games)
 from .report import money, percent, rank, rating_source_text, recent_text, render, risk_label, severity, slug
@@ -303,19 +304,20 @@ def markets(
         result = run_markets(http, min_reviews, lo, hi,
                              lambda msg, done, total: progress.update(task, description=msg[:50], completed=done, total=total))
 
-    table = Table(title=_("Markets: tags by well-served games (>={min} reviews, {lo:g}-{hi:g}% positive)",
+    table = Table(title=_("Markets: tags by earlier entrants' hit rate (>={min} reviews, {lo:g}-{hi:g}% positive)",
                           min=min_reviews, lo=lo, hi=hi))
     for i, col in enumerate(["#", _("Tag"), _("Games"), _("With demand"), _("Underserved"),
-                             _("Well served ({pct}%+)", pct=config.WELL_SERVED_RATING), _("Unmet share"), _("Underserved revenue")]):
+                             _("Well served ({pct}%+)", pct=config.WELL_SERVED_RATING), _("Unmet share"), _("Earlier hits"),
+                             _("Underserved revenue")]):
         table.add_column(col, justify="left" if i == 1 else "right")
     for i, r in enumerate(result.rows[:top], 1):
         m = r.stats
         table.add_row(str(i), r.tag, num(m.n_games), num(m.n_demand), f"[bold]{num(m.n_underserved)}[/]",
-                      num(m.n_well_served), fmt("{x:.0%}", x=m.gap), money(m.underserved_gross))
+                      num(m.n_well_served), fmt("{x:.0%}", x=m.gap),
+                      fmt("{x:.0%} ({h}/{n})", x=r.hits / r.entrants, h=r.hits, n=r.entrants)
+                      if r.entrants >= MIN_TRACK_ENTRANTS else "-", money(m.underserved_gross))
     console.print(table)
-    console.print("[dim]" + _("Ranked by well-served games, then games with demand: in a backtest, new games did better "
-                              "in such tags. Unmet share = underserved / (underserved + well served); it did not "
-                              "predict success.") + " " + _("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.") + "[/]")
+    console.print("[dim]" + _("Ranked by the earlier entrants' hit rate: of the games the store dates 48-24 months ago, the share now at 500+ reviews and 80%+ positive. In a backtest it was the one market measure that predicted how new games did; well-served games, market size and the unmet share (underserved / (underserved + well served)) did not.") + " " + _("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.") + "[/]")
     if result.skipped:
         console.print("[dim]" + _("Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).",
                                   n=len(result.skipped)) + "[/]")

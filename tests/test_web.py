@@ -196,7 +196,7 @@ def test_market_run(client, monkeypatch):
 
     def fake(http, min_reviews, lo, hi, step):
         step("Reading tag Hot", 1, 2)
-        return pipeline.MarketsResult(rows=[TagMarket(tag="Hot", stats=stats)], failed=[("Broken", "down")],
+        return pipeline.MarketsResult(rows=[TagMarket(tag="Hot", stats=stats, entrants=40, hits=6), TagMarket(tag="New", stats=stats, entrants=3, hits=3)], failed=[("Broken", "down")],
                                       skipped=["Incremental"])
 
     monkeypatch.setattr(pipeline, "run_markets", fake)
@@ -209,6 +209,7 @@ def test_market_run(client, monkeypatch):
     assert job["status"] == "done", job
     res = job["result"]
     assert res["rows"][0]["tag"] == "Hot" and res["rows"][0]["n_underserved"] == 4
+    assert res["rows"][0]["hit_rate"] == 0.15 and res["rows"][1]["hit_rate"] is None  # under 10 entrants: too few
     assert res["skipped"] == ["Incremental"] and res["failed"][0]["tag"] == "Broken"
     assert res["min_reviews"] == 200
     assert client.get(f"/api/tag-runs/{run_id}").status_code == 404  # not a tag run

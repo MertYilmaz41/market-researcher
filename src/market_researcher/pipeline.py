@@ -8,13 +8,13 @@ from dataclasses import dataclass, field
 import httpx
 
 from . import backtest, config, risk, scoring
-from .market import MarketStats, TagMarket, TrackRecord, market_stats
+from .market import MIN_TRACK_ENTRANTS, MarketStats, TagMarket, TrackRecord, market_stats
 from .http import HttpClient, RetryableStatus
 from .i18n import _
 from .mining import mine
 from .discover import filter_candidates
 from .models import Analysis, Game, GameSummary, HistPoint, OpportunitySummary, Review
-from .notices import BROAD_TAG_GAMES, friendly_error
+from .notices import friendly_error
 from .sources import steam_search, steam_store, steamspy
 
 
@@ -302,19 +302,32 @@ def run_markets(
     for g in games:
         for tag_id in g.tag_ids:
             by_tag.setdefault(tag_id, []).append(g)
-    result = MarketsResult(rows=[TagMarket(tag=name, stats=market_stats(by_tag[i], min_reviews, lo, hi))
+    start = backtest.month(int(time.time())) - backtest.HORIZON - backtest.OUTCOME
+    result = MarketsResult(rows=[TagMarket(tag=name, stats=market_stats(by_tag[i], min_reviews, lo, hi),
+                                           **earlier_hits(by_tag[i], start))
                                  for name, i in steam_store.tag_ids(http).items() if by_tag.get(i)])
     result.rows.sort(key=market_rank)
     return result
 
 
+def earlier_hits(games: list[Game], start: int) -> dict:
+    """{"entrants", "hits"}: the games the store dates in the HORIZON months from `start` (a backtest month), and
+    those now at 500+ reviews and 80%+ positive. Estimates track_record's measure without review histories:
+    Spearman +0.86 with it across 363 tags (docs/measurements.md)."""
+    entrants = [g for g in games if g.release_date
+                and start <= g.release_date.year * 12 + g.release_date.month - 1 < start + backtest.HORIZON]
+    hits = sum(g.reviews >= backtest.SUCCESS_REVIEWS and g.rating >= backtest.SUCCESS_RATING for g in entrants)
+    return {"entrants": len(entrants), "hits": hits}
+
+
 def market_rank(row: TagMarket) -> tuple:
-    """Most well-served games first, then most games with demand: in the backtest (reports/backtest.md)
-    new games did better in tags with many well-liked games (rho +0.36, +0.15 with market size held fixed)
-    and in big markets (+0.33), while the unmet share predicted nothing. Broad tags (Indie, Action...) go
-    last: the backtest only covered tags with up to TRACK_MAX_GAMES games, and they'd top every list."""
-    m = row.stats
-    return (1 if m.n_games > BROAD_TAG_GAMES else 0), -m.n_well_served, -m.n_demand
+    """Highest earlier entrants' hit rate first: in the backtest (reports/backtest.md) it was the one market
+    measure that predicted how new games did (rho +0.47; top fifth 13.3% hits vs bottom 5.9%), while
+    well-served games, market size and the unmet share did not. Tags with too few entrants to tell go last,
+    biggest market first."""
+    if row.entrants < MIN_TRACK_ENTRANTS:
+        return 1, 0.0, -row.stats.n_demand
+    return 0, -row.hits / row.entrants, -row.entrants
 
 
 def track_record(http: HttpClient, tags: list[str], on_step: Callable[[str, int, int], None] | None = None,

@@ -85,18 +85,29 @@ def test_discover_prints_market_line(monkeypatch):
     assert "Market:" in res.output and "1 underserved" in res.output
 
 
-def test_market_rank_puts_tags_with_many_well_served_games_first():
+def test_market_rank_puts_tags_whose_earlier_games_became_hits_first():
     from market_researcher.market import TagMarket
 
-    def row(tag, n_games, under, well):
-        gap = under / (under + well) if under + well else 0
-        return TagMarket(tag=tag, stats=MarketStats(n_games=n_games, n_demand=under + well, n_underserved=under,
-                                                    n_well_served=well, median_rating=60, underserved_gross=0, gap=gap))
+    def row(tag, demand, entrants, hits):
+        stats = MarketStats(n_games=demand, n_demand=demand, n_underserved=0, n_well_served=demand,
+                            median_rating=80, underserved_gross=0, gap=0)
+        return TagMarket(tag=tag, stats=stats, entrants=entrants, hits=hits)
 
-    rows = [row("Indie", 50_000, 3000, 6000), row("Rugby", 20, 1, 0), row("Job Sim", 130, 10, 24),
-            row("Colony Sim", 400, 30, 10)]
-    # by well-served games (the backtest's signal, not the unmet share); broad tags last
-    assert [r.tag for r in sorted(rows, key=pipeline.market_rank)] == ["Job Sim", "Colony Sim", "Rugby", "Indie"]
+    rows = [row("Indie", 9000, 4000, 200), row("Rugby", 20, 4, 3), row("Job Sim", 130, 40, 8),
+            row("Colony Sim", 400, 120, 12), row("Big but new", 900, 0, 0)]
+    # by the earlier entrants' hit rate (the backtest's one signal), not by size; too few to tell last, biggest first
+    assert [r.tag for r in sorted(rows, key=pipeline.market_rank)] == ["Job Sim", "Colony Sim", "Indie", "Big but new", "Rugby"]
+
+
+def test_earlier_hits_counts_games_dated_in_the_window():
+    def dated(appid, year, month, pct, n):
+        return g(pct, n=n, appid=appid).model_copy(update={"release_date": dt.date(year, month, 1)})
+
+    start = 2022 * 12 + 10  # 2022-11
+    games = [dated(1, 2022, 11, 90, 600), dated(2, 2024, 10, 85, 500),  # hits
+             dated(3, 2023, 5, 70, 900), dated(4, 2023, 5, 95, 100),  # entrants, no hit
+             dated(5, 2022, 10, 95, 900), dated(6, 2024, 11, 95, 900), g(95, n=900, appid=7)]  # outside / no date
+    assert pipeline.earlier_hits(games, start) == {"entrants": 4, "hits": 2}
 
 
 def _ts(year, month):
