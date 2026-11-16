@@ -394,6 +394,8 @@ TR: dict[str, str] = {
     "Ranked by the earlier entrants' hit rate: of the games the store dates 48-24 months ago, the share now at 500+ reviews and 80%+ positive. In a backtest it was the one market measure that predicted how new games did; well-served games, market size and the unmet share (underserved / (underserved + well served)) did not.":
         "Önceki oyunların hit oranına göre sıralı: mağazanın 48-24 ay önce çıkmış gösterdiği oyunlardan şu an 500+ incelemede %80+ olumlu olanların payı. Geriye dönük testte yeni oyunların nasıl iş çıkaracağını öngören tek pazar ölçüsü buydu; iyi karşılanmış oyun sayısı, pazar büyüklüğü ve karşılanmama oranı (karşılanmamış / (karşılanmamış + iyi karşılanmış)) öngörmedi.",
     "Earlier hits": "Önceki hitler",
+    "Sorted by the low end of that rate's 95% range, so a tag with few such games needs a clearly higher rate to rank high.":
+        "Sıralama bu oranın %95 aralığının alt ucuna göredir; bu yüzden bu tür oyunu az olan bir etiketin üstlere çıkması için oranının belirgin şekilde yüksek olması gerekir.",
     "Skipped {n} tags SteamSpy can't search (search them one by one with mr discover).":
         "SteamSpy'ın arayamadığı {n} etiket atlandı (onları mr discover ile tek tek arayın).",
     "Could not read {tag}:": "{tag} okunamadı:",

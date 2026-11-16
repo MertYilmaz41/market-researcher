@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from . import backtest, config, risk, scoring
-from .market import MIN_TRACK_ENTRANTS, MarketStats, TagMarket, TrackRecord, market_stats
+from .market import MIN_TRACK_ENTRANTS, MarketStats, TagMarket, TrackRecord, market_stats, wilson_low
 from .http import HttpClient, RetryableStatus
 from .i18n import _
 from .mining import mine
@@ -323,11 +323,12 @@ def earlier_hits(games: list[Game], start: int) -> dict:
 def market_rank(row: TagMarket) -> tuple:
     """Highest earlier entrants' hit rate first: in the backtest (reports/backtest.md) it was the one market
     measure that predicted how new games did (rho +0.47; top fifth 13.3% hits vs bottom 5.9%), while
-    well-served games, market size and the unmet share did not. Tags with too few entrants to tell go last,
-    biggest market first."""
+    well-served games, market size and the unmet share did not. By the low end of its 95% interval, so a few
+    lucky games don't top the list: in the backtest that predicted as well (check rho +0.48 vs +0.47; recent
+    +0.46 vs +0.51; docs/measurements.md). Tags with too few entrants to tell go last, biggest market first."""
     if row.entrants < MIN_TRACK_ENTRANTS:
         return 1, 0.0, -row.stats.n_demand
-    return 0, -row.hits / row.entrants, -row.entrants
+    return 0, -wilson_low(row.hits, row.entrants), -row.entrants
 
 
 def track_record(http: HttpClient, tags: list[str], on_step: Callable[[str, int, int], None] | None = None,

@@ -1220,7 +1220,7 @@ function marketsText() {
     return;
   }
   const notes = [t("{n} tags ranked by the earlier entrants' hit rate: of each tag's games released 2 to 4 years ago (store date), the share now at 500+ reviews and 80%+ positive. In a backtest it was the one measure that predicted how new games did. Tags with under 10 such games come last. Underserved = {range} positive (≥ {min} reviews).", {
-    n: markets.rows.length, min: fmt(result.min_reviews), range: range(result.lo, result.hi) }), t("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.")];
+    n: markets.rows.length, min: fmt(result.min_reviews), range: range(result.lo, result.hi) }), t("Sorted by the low end of that rate's 95% range, so a tag with few such games needs a clearly higher rate to rank high."), t("A tag counts the games that have it among their first 7 tags, so it has fewer games than its search finds.")];
   if (result.skipped.length) notes.push(t("{n} tags SteamSpy can't search are left out (search them one by one).", { n: result.skipped.length }));
   $("#markets-note").textContent = notes.join(" ");
 }
