@@ -139,3 +139,12 @@ Random games with 30+ English reviews in the search, against Steam's all-languag
 
 - Of the 11 changes, 5 are the summary being far too low (Romans: Age of Caesar, 1 review vs 466 in the search; analysis falls back to the histogram then), 5 sit at 70% where rounding decides, and 1 is real: Eastern Era, 72% in English, 67% over 3,258 reviews in all languages, left out of the search.
 - Re-checking the games near the cutoffs (100+ reviews at 70-80%, or 50-99 reviews at 5-80%) before filtering would cost 191 games for Colony Sim, 316 for Deckbuilding and 1,116 for Survival (~3 s each: 10-56 min). Not adopted: about 1 game in 260 would change.
+
+## Review bombs: negative surges (Nov 17 2026)
+
+Big Walk (1478500) got 599 negative reviews in the week of Nov 10 2026 (usually ~46), but wasn't flagged: the spike check looks at all reviews, and that week was 7% of 44k reviews, 19% negative, since positive reviews rose too. The volume-spike check caught 1 of 10 known review bombs.
+
+- Data: review histograms of 1,891 random games with 200+ reviews (40 random pages of the store search) and 10 known bombs (Borderlands 2, Firewatch, Total War: ROME II, Skyrim, GTA V, HELLDIVERS 2, PAYDAY 2, Apex Legends, Hunt: Showdown 1896, Big Walk).
+- Check: a period after the launch window with >= N negative reviews, >= F x the median period's negatives, and a negative share >= S x the game's usual share. Grid N 50/100, F 5/10/20, S 2/3/4.
+- The usual share as the game's overall share missed HELLDIVERS 2 (its bomb month outweighs all others, so it raised its own baseline). The median period's share flagged Call of Duty: Ghosts for 11 months of 2014 (a long stretch of complaints, not a spike). The share of all other periods fixes both.
+- Chosen: N 50, F 10, S 2. Known bombs 10/10; random games 25 of 1,891 (1.3%). Read every flagged period: most are known controversies (Capcom's DRM on old Resident Evil games Jan 2024, 2K's launcher on XCOM and Tales from the Borderlands, New World's end of development, Ion Fury Aug 2019, Europa Universalis V), some may be real complaints (Among Us cheaters Mar-Apr 2021). The flag says to check the complaints. N 100 flagged 17 random games, also 10/10, but leaves out small games, which the app looks at most.

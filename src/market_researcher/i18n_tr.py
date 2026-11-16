@@ -162,6 +162,8 @@ TR: dict[str, str] = {
     "Likely a review bomb or controversy, not poor execution.":
         "{period}: {n:,} inceleme (tümünün {share:.0%} kadarı), {neg:.0%} olumsuz. "
         "Muhtemelen kötü yapımdan değil, bir inceleme bombardımanı ya da tartışmadan.",
+    "{period}: {down:,} negative reviews, {x:.0f}x the usual; {neg:.0%} of that period's reviews were negative, against {base:.0%} in the others. Likely a review bomb or controversy; check whether the complaints are about the game.":
+        "{period}: {down:,} olumsuz inceleme, olağanın {x:.0f} katı; o dönemin incelemelerinin {neg:.0%} kadarı olumsuz, diğer dönemlerde {base:.0%}. Muhtemelen bir inceleme bombardımanı ya da tartışma; şikâyetlerin oyunla ilgili olup olmadığına bakın.",
     "{period}: {n:,} reviews ({share:.0%} of all) in one period. A sale, an update, a streamer or a viral moment may have caused it; check before reading it as lasting demand.":
         "{period}: tek dönemde {n:,} inceleme (tümünün {share:.0%} kadarı). Bir indirim, bir güncelleme, bir yayıncı "
         "ya da viral bir an getirmiş olabilir; kalıcı talep saymadan önce bakın.",

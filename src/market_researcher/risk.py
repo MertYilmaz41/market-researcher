@@ -28,14 +28,51 @@ def find_spikes(hist: list[HistPoint]) -> list[HistPoint]:
     ]
 
 
+def find_negative_spikes(hist: list[HistPoint]) -> list[HistPoint]:
+    """Periods after the launch window with a surge of negative reviews, whatever the positive ones did."""
+    rest = hist[config.SPIKE_LAUNCH_PERIODS:]
+    total = sum(p.total for p in hist)
+    if not total or len(rest) < 3:
+        return []
+    down = sum(p.down for p in hist)
+    usual = median(p.down for p in rest) or 1
+    # The share of every other period: one huge period can't raise its own baseline (HELLDIVERS 2, May 2024),
+    # while a long stretch of complaints still sets it.
+    return [p for p in rest
+            if p.down >= config.NEG_SPIKE_MIN and p.down >= config.NEG_SPIKE_FACTOR * usual and total > p.total
+            and p.down / p.total >= config.NEG_SPIKE_SHARE_FACTOR * (down - p.down) / (total - p.total)]
+
+
+def bomb_periods(hist: list[HistPoint]) -> list[HistPoint]:
+    """Spikes that are mostly negative, and surges of negative reviews."""
+    old = [p for p in find_spikes(hist) if p.down / p.total >= config.SPIKE_BOMB_NEGATIVE_SHARE]
+    dates = {p.date for p in old}
+    return old + [p for p in find_negative_spikes(hist) if p.date not in dates]
+
+
 def check_spikes(hist: list[HistPoint]) -> list[RiskFlag]:
     flags = []
     spikes = find_spikes(hist)
+    spiked = {p.date for p in spikes}
+    bombs = bomb_periods(hist)
     total = sum(p.total for p in hist)
+    down = sum(p.down for p in hist)
+    usual = median(p.down for p in hist[config.SPIKE_LAUNCH_PERIODS:]) if hist else 0
+    for p in bombs:
+        if p.date not in spiked:  # a negative surge in an otherwise ordinary period
+            flags.append(RiskFlag.make(
+                "review_bomb", "high",
+                N_("{period}: {down:,} negative reviews, {x:.0f}x the usual; {neg:.0%} of that period's reviews "
+                   "were negative, against {base:.0%} in the others. Likely a review bomb or controversy; check "
+                   "whether the complaints are about the game."),
+                period=_period(p.date), down=p.down, x=p.down / (usual or 1), neg=p.down / p.total,
+                base=(down - p.down) / (total - p.total),
+            ))
+    bombed = {p.date for p in bombs}
     for p in spikes:
         share = p.total / total
         neg = p.down / p.total
-        if neg >= config.SPIKE_BOMB_NEGATIVE_SHARE:
+        if p.date in bombed:
             flags.append(RiskFlag.make(
                 "review_bomb", "high",
                 N_("{period}: {n:,} reviews ({share:.0%} of all), {neg:.0%} negative. "
@@ -49,6 +86,7 @@ def check_spikes(hist: list[HistPoint]) -> list[RiskFlag]:
                    "or a viral moment may have caused it; check before reading it as lasting demand."),
                 period=_period(p.date), n=p.total, share=share,
             ))
+    spikes += [p for p in bombs if p.date not in spiked]
     if spikes:
         up = sum(p.up for p in hist) - sum(p.up for p in spikes)
         rest = total - sum(p.total for p in spikes)
@@ -63,7 +101,7 @@ def check_spikes(hist: list[HistPoint]) -> list[RiskFlag]:
 
 def rating_without_bombs(hist: list[HistPoint]) -> float | None:
     """% positive with review-bomb periods removed; None if there was no bomb."""
-    bombs = [p for p in find_spikes(hist) if p.down / p.total >= config.SPIKE_BOMB_NEGATIVE_SHARE]
+    bombs = bomb_periods(hist)
     rest = sum(p.total for p in hist) - sum(p.total for p in bombs)
     if not bombs or not rest:
         return None
