@@ -674,3 +674,21 @@ def test_a_search_stops_the_track_record(client, monkeypatch):
             break
         time.sleep(0.02)
     assert seen == ["cancelled"] and server._jobs["x"].result.track is None and server._jobs["x"].measuring is None
+
+
+def test_summary_of_a_game_opened_by_appid(client, monkeypatch):
+    from market_researcher.models import GameSummary
+
+    monkeypatch.setattr(server, "_single", {})
+    monkeypatch.setattr(server, "_single_summaries", {})
+    monkeypatch.setattr(pipeline, "analyze_game", lambda http, appid, n: analysis(42, "Solo", appid=appid))
+    monkeypatch.setattr(server.pipeline, "review_sample", lambda http, appid, kind, limit: [])
+    calls = []
+    monkeypatch.setattr(server.summary, "write_game", lambda a, negative, lang, **kw: calls.append(lang) or GameSummary(
+        why=f"Why ({lang})", model="m"))
+    assert client.post("/api/games/5/summary").status_code == 404  # not analyzed yet
+    assert client.get("/api/games/5").json()["summary"] is None
+    assert client.post("/api/games/5/summary").json()["summary"]["why"] == "Why (en)"
+    assert client.post("/api/games/5/summary").json()["summary"]["why"] == "Why (en)" and calls == ["en"]  # once
+    assert client.get("/api/games/5").json()["summary"]["why"] == "Why (en)"  # shown when the game is opened again
+    assert client.get("/api/games/5", headers={"X-Lang": "tr"}).json()["summary"] is None  # per language
