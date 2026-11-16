@@ -730,4 +730,9 @@ def test_ui_star_a_game_analyzed_by_appid(base_url, browser):
     assert "Lone Game" in card.inner_text() and "AppID" in card.inner_text()
     page.click("#panel .star")  # unstar
     page.wait_for_selector('#panel .star:not(.on)[data-appid="4242"]')
+    page.click("#panel .tabs button:has-text('Summary')")  # a game opened by AppID gets a summary too
+    page.click("#panel .opp-empty button")
+    page.wait_for_selector("#panel .game-summary")
+    assert "Anti-cheat" in page.inner_text("#panel .game-summary")
+    assert "kept until the app closes" in page.inner_text("#panel .game-summary .ai-bar")
     assert page.errors == []

@@ -510,6 +510,7 @@ TR: dict[str, str] = {
     "A better game would": "Daha iyi bir oyun",
     "Caveats": "Dikkat",
     # Game summary (local LLM)
+    "Open the game again: its analysis is no longer in memory.": "Oyunu yeniden açın: analizi artık bellekte değil.",
     "This game isn't part of the run.": "Bu oyun bu aramada yok.",
     "Analyze this game again to star it.": "Yıldızlamak için bu oyunu yeniden analiz edin.",
     "This game isn't on the shortlist.": "Bu oyun kısa listede yok.",

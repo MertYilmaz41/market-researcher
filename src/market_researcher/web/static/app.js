@@ -1993,7 +1993,8 @@ function complaintsTab(g) {
   ];
 }
 
-// ---------- one game read by the local LLM: written on request, saved with the run ----------
+// ---------- one game read by the local LLM: written on request, saved with the run (a game opened by AppID:
+// kept while the app runs) ----------
 function gameSummaryTab(g) {
   const s = g.summary;
   const inRun = state.games.some((x) => x.game.appid === g.game.appid);
@@ -2004,15 +2005,15 @@ function gameSummaryTab(g) {
     return b;
   };
   if (!s) {
-    if (!inRun) return el("div", { class: "callout" }, t("A summary can be written for the games in the current ranking."));
     return el("div", { class: "opp-empty" },
       el("p", {}, t("Why players are unhappy, what a better game would do, and complaints no category covers. Written by the local model {model} (Ollama) in under a minute.",
-        { model: state.result?.llm_model || "" })),
+        { model: g.llm_model || state.result?.llm_model || "" })),
       writeButton(t("Write summary")));
   }
   return el("div", { class: "tab-body game-summary" },
     el("div", { class: "ai-bar" },
-      el("span", {}, t("{model} on your computer · saved with the run", { model: s.model })),
+      el("span", {}, inRun ? t("{model} on your computer · saved with the run", { model: s.model })
+        : t("{model} on your computer · kept until the app closes", { model: s.model })),
       inRun ? writeButton(t("Rewrite")) : null),
     s.why ? el("section", {}, el("h5", {}, t("Why players are unhappy")), el("p", { class: "why-text" }, s.why)) : null,
     s.fix.length ? el("section", {}, el("h5", {}, t("What a better game would do")), el("ol", { class: "numbered" }, s.fix.map((f) => el("li", {}, f)))) : null,
@@ -2027,13 +2028,16 @@ function gameSummaryTab(g) {
 async function writeGameSummary(g) {
   if (state.gameSummarizing || state.summarizing) return stillRunning(t("A summary is being written."));
   const id = state.runId, appid = g.game.appid;
+  const inRun = state.games.some((x) => x.game.appid === appid);
   state.gameSummarizing = appid;
   if (state.panelGame?.game.appid === appid) renderPanel(state.panelGame, TABS.summary, false);
   try {
-    const res = await api(`/api/tag-runs/${id}/games/${appid}/summary`, { method: "POST" });
+    const url = inRun ? `/api/tag-runs/${id}/games/${appid}/summary`
+      : `/api/games/${appid}/summary?reviews=${+$("#reviews").value || 300}`;
+    const res = await api(url, { method: "POST" });
     if (!res.ok) throw await apiError(res);
     const data = await res.json();
-    const target = state.runId === id && state.games.find((x) => x.game.appid === appid);
+    const target = inRun ? state.runId === id && state.games.find((x) => x.game.appid === appid) : g;
     if (target) target.summary = data.summary;
   } catch (err) {
     notifyError(err);
