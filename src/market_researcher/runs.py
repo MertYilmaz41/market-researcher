@@ -19,6 +19,7 @@ from typing import Any
 from pydantic import TypeAdapter
 
 from . import config
+from .models import GameSummary
 from .pipeline import MarketsResult, TagResult
 from .report import rank
 
@@ -49,6 +50,11 @@ class RunStore:
             )
             self._conn.execute(
                 "CREATE TABLE IF NOT EXISTS shortlist (appid INTEGER PRIMARY KEY, added REAL, note TEXT, snapshot TEXT)"
+            )
+            # LLM summaries of games opened by AppID (a run's games keep theirs in the run)
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS game_summaries (appid INTEGER, lang TEXT, created REAL, summary TEXT,"
+                " PRIMARY KEY (appid, lang))"
             )
         return self._conn
 
@@ -150,6 +156,19 @@ class RunStore:
             rows = self._db().execute(
                 "SELECT appid, added, note, snapshot FROM shortlist ORDER BY added DESC").fetchall()
         return [{**json.loads(r[3]), "appid": r[0], "added": r[1], "note": r[2]} for r in rows]
+
+    def game_summary(self, appid: int, lang: str) -> GameSummary | None:
+        with self._lock:
+            row = self._db().execute("SELECT summary FROM game_summaries WHERE appid = ? AND lang = ?",
+                                     (appid, lang)).fetchone()
+        return GameSummary.model_validate_json(row[0]) if row else None
+
+    def save_game_summary(self, appid: int, lang: str, summary: GameSummary) -> None:
+        with self._lock:
+            db = self._db()
+            db.execute("INSERT OR REPLACE INTO game_summaries VALUES (?, ?, ?, ?)",
+                       (appid, lang, time.time(), summary.model_dump_json()))
+            db.commit()
 
     def previous_scores(self, run_id: str) -> dict[int, float] | None:
         """Scores of the last comparable tag run saved before this one; None if there is none."""
