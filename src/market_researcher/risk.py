@@ -57,7 +57,8 @@ def check_spikes(hist: list[HistPoint]) -> list[RiskFlag]:
     bombs = bomb_periods(hist)
     total = sum(p.total for p in hist)
     down = sum(p.down for p in hist)
-    usual = median(p.down for p in hist[config.SPIKE_LAUNCH_PERIODS:]) if hist else 0
+    after_launch = hist[config.SPIKE_LAUNCH_PERIODS:]
+    usual = median(p.down for p in after_launch) if after_launch else 0
     for p in bombs:
         if p.date not in spiked:  # a negative surge in an otherwise ordinary period
             flags.append(RiskFlag.make(

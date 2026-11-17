@@ -95,6 +95,12 @@ def test_launch_window_ignored():
     assert risk.check_spikes(hist) == []
 
 
+def test_game_younger_than_launch_window_has_no_spikes():
+    # AppID 5285160, Nov 2026: one histogram period crashed median() on an empty list
+    hist = [HistPoint(date=0, up=40, down=12)]
+    assert risk.check_spikes(hist) == []
+
+
 def test_positive_spike_is_streamer_warning():
     hist = flat_hist()
     hist[6] = HistPoint(date=hist[6].date, up=3000, down=200)
