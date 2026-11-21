@@ -55,7 +55,8 @@ def parse_price(appid: int, country: str, data: dict) -> RegionalPrice | None:
         initial_cents=price.get("initial", 0),
         final_cents=price.get("final", 0),
         discount_percent=price.get("discount_percent", 0),
-        text=price.get("final_formatted", ""),
+        # initial_formatted is empty without a discount; the table compares undiscounted prices
+        text=price.get("initial_formatted") or price.get("final_formatted", ""),
     )
 
 

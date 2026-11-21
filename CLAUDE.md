@@ -81,7 +81,7 @@ uv run pytest tests/test_core.py::test_parse_and_filter   # single test
 uv run mr discover --tag "Job Simulator" --min-reviews 100 --rating 5-70 --top 30
 uv run mr discover -t Crafting -t Survival  # several tags: only games that have all of them
 uv run mr analyze 2336220 --reviews 300     # risks, mining, score for one AppID (--summary: local LLM, needs Ollama)
-uv run mr report --tag "Job Simulator" --max-games 15 --reviews 200   # writes reports/job-simulator.md (--summary)
+uv run mr report --tag "Job Simulator" --max-games 15 --reviews 200   # writes reports/job-simulator.md (--summary; --prices: every region's price, ~1 min per game the first time)
 uv run mr markets --top 30                  # rank every tag by earlier entrants' hit rate (~36 min first time)
 uv run mr runs                              # saved runs
 uv run mr ui                                # web UI on http://localhost:8501
@@ -201,6 +201,7 @@ Review mining and Steam data stay English.
 ### Messages, CLI and reports
 
 - User-facing messages come from `notices.py` as `Notice(level, title, message, hint)`, shared by the CLI (colored) and the web (toasts). Add new cases there, not ad hoc in the UI; only instant field validation lives in JS. `friendly_error(exc)` turns exceptions into plain language. CLI commands are wrapped in `_guarded` (no traceback unless `MR_DEBUG=1`).
+- `mr report --prices` adds each ranked game's regional price table (`cli._regional_prices`, `pipeline.regional_prices`; a game that fails is left out with a warning). Country names come from `regional.COUNTRY_NAMES` (translated in `i18n_tr`), since Python has no `Intl.DisplayNames`. The local price shown is the undiscounted one (Steam's `initial_formatted`), like the dollar column.
 - `report.py` renders `templates/report.md.j2` with Jinja2. Arbitrary text going into the template must pass through the `md` filter (escapes pipes, flattens newlines).
 
 ### HTTP and cache

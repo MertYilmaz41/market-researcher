@@ -91,6 +91,16 @@
 ### {{ _("Risk checks") }}
 {% for f in a.flags %}- **{{ severity(f.severity) }}** `{{ f.code }}`: {{ f.text()|md }}
 {% endfor %}{% endif %}
+{% set rp = prices.get(a.game.appid) %}{% if rp and rp.rows %}
+### {{ _("Regional prices") }}
+
+| {{ _("Country") }} | {{ _("Price") }} | {{ _("In dollars") }} | {{ _("vs US") }} |
+|---|---|---:|---:|
+{% for r in rp.rows -%}
+| {{ country_name(r.country) }} | {% if r.price %}{{ r.price.text|md }}{% if r.price.discount_percent %} {{ _("({pct} off now)", pct=percent(r.price.discount_percent)) }}{% endif %}{% else %}{{ _("Not sold") }}{% endif %} | {% if r.usd is not none %}{{ fmt_price(r.usd) }}{% else %}-{% endif %} | {% if r.vs_us is none %}-{% elif r.country != "us" %}{{ vs_us(r.vs_us) }}{% endif %} |
+{% endfor %}
+{{ _("Undiscounted prices from the Steam store, cheapest first.") }}{% if rp.rates_date %} {{ _("Exchange rates by [Exchange Rate API](https://www.exchangerate-api.com), {date}.", date=rates_day(rp.rates_date)) }}{% endif %}
+{% endif %}
 {% endfor %}
 {% if not_games or unlisted %}
 ---

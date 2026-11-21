@@ -17,8 +17,8 @@ from .i18n import LANG, LANGS, _, fmt, lang, num
 from .mining.llm import LLMUnavailable
 from .models import Analysis, GameSummary, MiningResult
 from .market import MIN_TRACK_ENTRANTS
-from .pipeline import (TagResult, UnknownTag, analyze_game, review_sample, run_markets, run_tag, tag_games, tag_label,
-                       verify_games)
+from .pipeline import (TagResult, UnknownTag, analyze_game, regional_prices, review_sample, run_markets, run_tag,
+                       tag_games, tag_label, verify_games)
 from .report import money, percent, rank, rating_source_text, recent_text, render, risk_label, severity, slug
 
 app = typer.Typer(help="Find underserved Steam audiences (CodeMonkey's method).", no_args_is_help=True)
@@ -213,6 +213,30 @@ def _print_game_summary(s: GameSummary) -> None:
             console.print(f'  - {o.text} "{o.quote}"', markup=False)
 
 
+def _regional_prices(http: HttpClient, ranked: list) -> dict:
+    """appid -> pipeline.RegionalPrices for each ranked game; a game that fails is left out with a warning."""
+    console.print(_("--prices: reading every region's price for {n} games (about a minute each the first time)",
+                    n=len(ranked)))
+    prices, shown = {}, set()
+    with Progress(console=console, transient=True) as progress:
+        task = progress.add_task("", total=len(ranked))
+        for a in ranked:
+            progress.update(task, description=_("Regional prices: {game}", game=a.game.name)[:50])
+            try:
+                r = regional_prices(http, a.game.appid)
+            except Exception as e:  # one game's failure shouldn't lose the report
+                n = notices.friendly_error(e)
+                n.title = _("Couldn't load the regional prices of {game}", game=a.game.name)
+                _print_notices([n])
+            else:
+                prices[a.game.appid] = r
+                fresh = [n for n in r.notices if n.title not in shown]  # the rates warning once, not per game
+                shown.update(n.title for n in fresh)
+                _print_notices(fresh)
+            progress.advance(task)
+    return prices
+
+
 @app.command()
 @_guarded
 def report(
@@ -223,6 +247,8 @@ def report(
     reviews: int = typer.Option(200, "--reviews", min=10, max=1000, help="Max negative and max positive reviews per game"),
     out: Path = typer.Option(None, "--out", "-o", help="Markdown file (default: reports/<tag>.md)"),
     with_summary: bool = typer.Option(False, "--summary", help="Also write an opportunity summary with a local LLM (Ollama)"),
+    with_prices: bool = typer.Option(False, "--prices", help="Also list each game's price in every Steam region "
+                                     "(about a minute per game the first time)"),
     no_cache: bool = NO_CACHE_OPT,
 ):
     """Steps 1-4 for a whole tag: rank games by opportunity and write a Markdown report."""
@@ -254,11 +280,14 @@ def report(
         except LLMUnavailable as e:
             _print_notices([notices.llm_unavailable(e.missing_model)])
 
+    prices = _regional_prices(http, rank(analyses)) if with_prices else {}
+
     text = render(
         tag=label, analyses=analyses, n_candidates=len(result.candidates), n_tag_games=result.n_tag_games,
         min_reviews=min_reviews, lo=lo, hi=hi, not_games=result.not_games, unlisted=result.unlisted,
         market=market.summary(result.market) if result.market else "",
         summary=result.summaries.get(lang()),
+        prices=prices,
     )
     out = out or Path("reports") / f"{slug(label)}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
