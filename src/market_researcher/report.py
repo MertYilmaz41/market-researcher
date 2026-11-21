@@ -2,13 +2,14 @@
 
 import csv
 import datetime as dt
+import email.utils
 import io
 import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from . import boxmethod, config, risk
+from . import boxmethod, config, regional, risk
 from .i18n import N_, _, fmt, lang, num
 from .models import Analysis, Game, GameSummary, OpportunitySummary
 
@@ -47,6 +48,19 @@ def percent(rating: float) -> str:
 
 def fmt_price(price: float) -> str:
     return fmt("${x:.2f}", x=price)
+
+
+def rates_day(when: str) -> str:
+    """open.er-api.com's "Fri, 20 Nov 2026 00:02:32 +0000" as 2026-11-20."""
+    try:
+        return email.utils.parsedate_to_datetime(when).date().isoformat()
+    except (TypeError, ValueError):
+        return when
+
+
+def vs_us(x: float) -> str:
+    """A regional price against the US one: -76% / -%76, +2%, +-0%."""
+    return ("+" if x > 0.005 else "-" if x < -0.005 else "+-") + pct(abs(x))
 
 
 SEVERITY_NAMES = {"high": N_("Serious"), "warn": N_("Caution"), "info": N_("Note")}
@@ -142,6 +156,7 @@ def render(
     track: str = "",  # market.track_text() of the tag, when it was measured
     summary: OpportunitySummary | None = None,  # the run's LLM summary in the report language
     game_summaries: dict[int, GameSummary] | None = None,  # appid -> LLM game summary in the report language
+    prices: dict | None = None,  # appid -> pipeline.RegionalPrices (mr report --prices)
 ) -> str:
     _env.filters["md"] = md
     _env.filters["risk_label"] = risk_label
@@ -163,6 +178,10 @@ def render(
         track=track,
         summary=summary,
         game_summaries=game_summaries or {},
+        prices=prices or {},
+        country_name=regional.country_name,
+        vs_us=vs_us,
+        rates_day=rates_day,
         summary_games=min(config.SUMMARY_GAMES, len(rank(analyses))),
         well_served=config.WELL_SERVED_RATING,
         money=money,

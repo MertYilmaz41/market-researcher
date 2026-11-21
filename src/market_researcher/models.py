@@ -75,7 +75,7 @@ class RegionalPrice(BaseModel):
     initial_cents: int  # undiscounted
     final_cents: int
     discount_percent: int = 0
-    text: str = ""  # Steam's own formatting of the current price, e.g. "¥ 1,480"
+    text: str = ""  # Steam's own formatting of the undiscounted price, e.g. "¥ 1,480"
 
 
 class HistPoint(BaseModel):

@@ -2,7 +2,58 @@
 
 from pydantic import BaseModel
 
+from .i18n import N_, _
 from .models import RegionalPrice
+
+
+# The report's country names (the web page uses the browser's Intl.DisplayNames instead).
+COUNTRY_NAMES = {
+    "us": N_("United States"),
+    "ca": N_("Canada"),
+    "mx": N_("Mexico"),
+    "br": N_("Brazil"),
+    "ar": N_("Argentina"),
+    "cl": N_("Chile"),
+    "co": N_("Colombia"),
+    "pe": N_("Peru"),
+    "uy": N_("Uruguay"),
+    "cr": N_("Costa Rica"),
+    "gb": N_("United Kingdom"),
+    "de": N_("Germany"),
+    "ch": N_("Switzerland"),
+    "no": N_("Norway"),
+    "pl": N_("Poland"),
+    "ua": N_("Ukraine"),
+    "ru": N_("Russia"),
+    "kz": N_("Kazakhstan"),
+    "az": N_("Azerbaijan"),
+    "tr": N_("Turkey"),
+    "il": N_("Israel"),
+    "sa": N_("Saudi Arabia"),
+    "ae": N_("United Arab Emirates"),
+    "qa": N_("Qatar"),
+    "kw": N_("Kuwait"),
+    "za": N_("South Africa"),
+    "in": N_("India"),
+    "pk": N_("Pakistan"),
+    "id": N_("Indonesia"),
+    "my": N_("Malaysia"),
+    "sg": N_("Singapore"),
+    "ph": N_("Philippines"),
+    "th": N_("Thailand"),
+    "vn": N_("Vietnam"),
+    "cn": N_("China"),
+    "hk": N_("Hong Kong"),
+    "tw": N_("Taiwan"),
+    "jp": N_("Japan"),
+    "kr": N_("South Korea"),
+    "au": N_("Australia"),
+    "nz": N_("New Zealand"),
+}
+
+
+def country_name(country: str) -> str:
+    return _(COUNTRY_NAMES[country]) if country in COUNTRY_NAMES else country.upper()
 
 
 class PriceRow(BaseModel):
