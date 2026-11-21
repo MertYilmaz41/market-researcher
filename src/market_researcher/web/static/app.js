@@ -1749,6 +1749,7 @@ function terms() {
     unmet_share: [t("Unmet share"), t("Of the games with demand that are clearly rated, the share that are underserved: underserved / (underserved + well served). Higher means players have fewer good games to choose from. A filter for exploring, not a forecast: in a backtest, new games in high-share tags sold more often, but were not rated well more often.")],
     min_reviews: [t("Minimum reviews"), t("How proven the demand must be: a game needs at least this many reviews to be considered.")],
     pct_range: [t("% positive range"), t("Which games count as letting players down. 5-70% leaves out games that are simply broken (under 5%) and games players already like (over 70%).")],
+    regional_prices: [t("Regional prices"), t("What the game costs in each Steam store region, one country per currency, from Steam itself. Dollar figures use the day's exchange rates; vs US compares the undiscounted price with the US one. Steam asks lower prices in poorer regions, so this is where a game's buyers pay less. Reading every region takes about a minute the first time; then it's kept for a day.")],
     reviews_read: [t("Reviews read per game"), t("How many reviews are read to find the complaints, half the most helpful and half the newest. More is slower but more reliable.")],
   };
 }
@@ -1953,6 +1954,7 @@ function overviewTab(g) {
       el("div", {}, risks.map((p) => [el("b", {}, t("{label} · −{points} points", { label: p.label, points: p.points })), el("p", {}, p.reason)])))
       : null,
     loved.length ? el("section", {}, el("h4", {}, t("What players love"), info("loved")), el("p", { class: "loved" }, loved.join(", ") + ".")) : null,
+    pricesSection(g.game.appid),
     tags.length ? el("div", { class: "chips" }, tags.map((tag) => markGameChip(el("button", {
       type: "button", class: "chip", "data-tag": tag, onclick: () => pickTag(tag, g.game.appid) }, tag)))) : null,
     el("div", { class: "links" },
@@ -1960,6 +1962,63 @@ function overviewTab(g) {
       el("button", { type: "button", class: "link-btn go", onclick: () => goTab(TABS.history) }, t("Review history →")),
       g.score_explained ? scoreAnchor(el("button", { type: "button", class: "link-btn how-scored" }, t("How the score works")), g) : null),
   ];
+}
+
+// ---------- regional prices: asked on request (~1 min the first time), kept per game for the session ----------
+const prices = {}; // appid -> "loading" | { rows, rates_date }
+
+function pricesSection(appid) {
+  const box = el("section", { class: "prices", "data-appid": appid });
+  fillPrices(box, appid);
+  return box;
+}
+
+function fillPrices(box, appid) {
+  const data = prices[appid];
+  const head = el("h4", {}, t("Regional prices"), info("regional_prices"));
+  if (!data || data === "loading") {
+    box.replaceChildren(head, el("button", { type: "button", class: "link-btn go", disabled: data === "loading",
+      onclick: () => loadPrices(appid) },
+    data === "loading" ? t("Loading the price in every region (about a minute the first time)...") : t("Show the price in every region →")));
+    return;
+  }
+  if (!data.rows.length) { box.replaceChildren(head, el("p", { class: "muted" }, t("No regional prices"))); return; }
+  const names = new Intl.DisplayNames([getLang()], { type: "region" });
+  const sign = (x) => (x > 0.005 ? "+" : x < -0.005 ? "−" : "±") + pct(Math.abs(x));
+  box.replaceChildren(head,
+    el("div", { class: "table-scroll" }, el("table", { class: "price-table" },
+      el("thead", {}, el("tr", {}, el("th", {}, t("Country")), el("th", {}, t("Price")),
+        el("th", { class: "num" }, t("In dollars")), el("th", { class: "num" }, t("vs US")))),
+      el("tbody", {}, data.rows.map((r) => el("tr", { class: r.country === "us" ? "us" : null },
+        el("td", {}, names.of(r.country.toUpperCase())),
+        el("td", {}, r.price ? r.price.text : t("Not sold"),
+          r.price?.discount_percent ? el("span", { class: "muted" }, " ", t("({pct} off now)", { pct: percent(r.price.discount_percent) })) : null),
+        el("td", { class: "num" }, r.usd == null ? "-" : `$${decimal(r.usd, 2)}`),
+        el("td", { class: `num ${r.vs_us < -0.005 ? "cheaper" : r.vs_us > 0.005 ? "pricier" : ""}` },
+          r.vs_us == null ? "-" : r.country === "us" ? "" : sign(r.vs_us))))))),
+    el("p", { class: "muted" }, t("Undiscounted prices from the Steam store, cheapest first."), " ",
+      data.rates_date ? [t("Rates by"), " ", el("a", { href: "https://www.exchangerate-api.com", target: "_blank", rel: "noopener" }, "Exchange Rate API"),
+        ", ", new Date(data.rates_date).toLocaleDateString(getLang() === "tr" ? "tr-TR" : "en-GB", { dateStyle: "medium" }), "."] : null));
+}
+
+async function loadPrices(appid) {
+  prices[appid] = "loading";
+  const refill = () => {
+    const box = document.querySelector(`.prices[data-appid="${appid}"]`);
+    if (box) fillPrices(box, appid);
+  };
+  refill();
+  try {
+    const res = await api(`/api/games/${appid}/prices`);
+    if (!res.ok) throw await apiError(res);
+    const data = await res.json();
+    for (const n of data.notices) notify(n);
+    prices[appid] = data;
+  } catch (err) {
+    delete prices[appid];
+    notifyError(err, t("Couldn't load the regional prices"));
+  }
+  refill();
 }
 
 function complaintsTab(g) {

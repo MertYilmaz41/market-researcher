@@ -331,6 +331,19 @@ def llm_unavailable(missing_model: str | None) -> Notice:
                   hint=_("Start the Ollama app (or install it from ollama.com), then try again."))
 
 
+def no_regional_prices() -> Notice:
+    return Notice(level="info", title=_("No regional prices"),
+                  message=_("Steam lists no price for this game in any region: it is free, unreleased or delisted."),
+                  hint="")
+
+
+def no_exchange_rates(error: Notice) -> Notice:
+    """open.er-api.com failed: the local prices are shown without dollar figures."""
+    return Notice(level="warning", title=_("Prices shown without dollar figures"),
+                  message=_("The exchange rates couldn't be loaded: {error}", error=error.message),
+                  hint=error.hint)
+
+
 def unknown_tag(tag: str, known: list[str] | tuple = ()) -> Notice:
     fold = tag.strip().casefold()
     by_fold = {k.casefold(): k for k in known}

@@ -7,15 +7,15 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from . import backtest, config, risk, scoring
+from . import backtest, config, notices, regional, risk, scoring
 from .market import MIN_TRACK_ENTRANTS, MarketStats, TagMarket, TrackRecord, market_stats, wilson_low
 from .http import HttpClient, RetryableStatus
 from .i18n import _
 from .mining import mine
 from .discover import filter_candidates
 from .models import Analysis, Game, GameSummary, HistPoint, OpportunitySummary, Review
-from .notices import friendly_error
-from .sources import steam_search, steam_store, steamspy
+from .notices import Notice, friendly_error
+from .sources import exchange, steam_search, steam_store, steamspy
 
 
 def verify_games(
@@ -134,6 +134,26 @@ def analyze_game(http: HttpClient, appid: int, review_limit: int = 300,
         review_error=review_error,
         opportunity=opportunity,
     )
+
+
+@dataclass
+class RegionalPrices:
+    rows: list[regional.PriceRow]
+    rates_date: str = ""  # when open.er-api.com last updated its rates; "" without rates
+    notices: list[Notice] = field(default_factory=list)
+
+
+def regional_prices(http: HttpClient, appid: int) -> RegionalPrices:
+    """The game's price in each of config.PRICE_COUNTRIES (one store request each, ~1 min uncached).
+    Without exchange rates the local prices still come back, with a warning."""
+    prices = {cc: steam_store.regional_price(http, appid, cc) for cc in config.PRICE_COUNTRIES}
+    if not any(prices.values()):
+        return RegionalPrices(rows=[], notices=[notices.no_regional_prices()])
+    try:
+        rates, date = exchange.usd_rates(http)
+    except (RuntimeError, httpx.HTTPError, RetryableStatus) as e:
+        return RegionalPrices(rows=regional.compare(prices, {}), notices=[notices.no_exchange_rates(friendly_error(e))])
+    return RegionalPrices(rows=regional.compare(prices, rates), rates_date=date)
 
 
 class Cancelled(Exception):
