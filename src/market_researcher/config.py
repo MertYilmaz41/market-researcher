@@ -54,6 +54,17 @@ TTL_APPDETAILS = 7 * 24 * 3600  # SteamSpy game details
 # last 1-2 weeks, so a week-old answer could miss a sale or keep one that ended.
 TTL_STORE_DETAILS = 24 * 3600
 TTL_REVIEWS = 24 * 3600
+TTL_EXCHANGE_RATES = 24 * 3600  # open.er-api.com updates its rates once a day
+
+# Regional prices (the game panel, on request): one country per Steam store currency, asked from
+# Steam's appdetails with cc=<country>. Argentina, Turkey, Azerbaijan (CIS) and Pakistan (South Asia)
+# are priced in regional US dollars. One request each at the store's pace: ~1 min per game the first time.
+PRICE_COUNTRIES = [
+    "us", "ca", "mx", "br", "ar", "cl", "co", "pe", "uy", "cr",
+    "gb", "de", "ch", "no", "pl", "ua", "ru", "kz", "az", "tr",
+    "il", "sa", "ae", "qa", "kw", "za", "in", "pk", "id", "my",
+    "sg", "ph", "th", "vn", "cn", "hk", "tw", "jp", "kr", "au", "nz",
+]
 
 # Review sample for mining: half most helpful (all time), half newest.
 # Reviews written after under SHORT_PLAYTIME_MINUTES count SHORT_PLAYTIME_WEIGHT in complaint shares:

@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 from .. import config
 from ..http import HttpClient
-from ..models import AppDetails, HistPoint, Review
+from ..models import AppDetails, HistPoint, RegionalPrice, Review
 
 STORE = "https://store.steampowered.com"
 
@@ -40,6 +40,32 @@ def app_details(http: HttpClient, appid: int) -> AppDetails | None:
         ttl=config.TTL_STORE_DETAILS,
     )
     return parse_app_details(appid, data or {})
+
+
+def parse_price(appid: int, country: str, data: dict) -> RegionalPrice | None:
+    """None if the game isn't sold there (unknown, region-locked) or is free (data is then an empty list)."""
+    entry = data.get(str(appid)) or {}
+    d = entry.get("data") if entry.get("success") else None
+    price = d.get("price_overview") if isinstance(d, dict) else None
+    if not price:
+        return None
+    return RegionalPrice(
+        country=country,
+        currency=price.get("currency", ""),
+        initial_cents=price.get("initial", 0),
+        final_cents=price.get("final", 0),
+        discount_percent=price.get("discount_percent", 0),
+        text=price.get("final_formatted", ""),
+    )
+
+
+def regional_price(http: HttpClient, appid: int, country: str) -> RegionalPrice | None:
+    data = http.get_json(
+        f"{STORE}/api/appdetails",
+        {"appids": appid, "cc": country, "filters": "price_overview"},
+        ttl=config.TTL_STORE_DETAILS,
+    )
+    return parse_price(appid, country, data or {})
 
 
 def parse_histogram(data: dict) -> list[HistPoint]:

@@ -66,6 +66,18 @@ class AppDetails(BaseModel):
     coming_soon: bool = False
 
 
+class RegionalPrice(BaseModel):
+    """A game's price in one Steam store country (appdetails with cc=<country>). Cents are hundredths
+    of the currency's unit, also for JPY, KRW etc."""
+
+    country: str  # lowercase ISO code, e.g. "tr"
+    currency: str  # ISO code, e.g. "JPY"
+    initial_cents: int  # undiscounted
+    final_cents: int
+    discount_percent: int = 0
+    text: str = ""  # Steam's own formatting of the current price, e.g. "¥ 1,480"
+
+
 class HistPoint(BaseModel):
     """One period (usually a month) of the review histogram."""
 

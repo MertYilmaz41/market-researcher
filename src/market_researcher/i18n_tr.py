@@ -539,4 +539,10 @@ TR: dict[str, str] = {
     "Reading review histories": "İnceleme geçmişleri okunuyor",
     "The cache can't be cleaned while a search is using it.": "Bir arama kullanırken önbellek temizlenemez.",
     "Wait for it to finish or cancel it, then try again.": "Bitmesini bekleyin ya da iptal edin, sonra tekrar deneyin.",
+    # regional prices
+    "No regional prices": "Bölgesel fiyat yok",
+    "Steam lists no price for this game in any region: it is free, unreleased or delisted.":
+        "Steam bu oyun için hiçbir bölgede fiyat göstermiyor: ücretsiz, henüz çıkmamış ya da mağazadan kaldırılmış.",
+    "Prices shown without dollar figures": "Fiyatlar dolar karşılığı olmadan gösteriliyor",
+    "The exchange rates couldn't be loaded: {error}": "Döviz kurları yüklenemedi: {error}",
 }

@@ -589,6 +589,15 @@ blockquote.quote { margin: 0; padding: 12px 14px; border-radius: var(--r-md); ba
 button.chip { cursor: pointer; }
 button.chip:hover { color: var(--text); border-color: var(--accent); }
 button.chip[aria-pressed="true"] { color: var(--accent-ink); border-color: var(--accent); }
+.table-scroll { overflow-x: auto; }
+.price-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.price-table th, .price-table td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.price-table th { color: var(--text-3); font-weight: 500; }
+.price-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.price-table td:nth-child(2) { white-space: nowrap; }
+.price-table tr.us td { font-weight: 600; }
+.price-table .cheaper { color: var(--good-ink); }
+.price-table .pricier { color: var(--bad-ink); }
 .links { display: flex; flex-wrap: wrap; gap: 16px; padding-top: 18px; border-top: 1px solid var(--line); }
 .links button.link-btn { font-size: 14px; }
 .links .go { color: var(--accent-ink); font-weight: 500; }

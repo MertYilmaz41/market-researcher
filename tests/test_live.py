@@ -16,7 +16,7 @@ import pytest
 from market_researcher.cache import Cache
 from market_researcher.http import HttpClient
 from market_researcher.models import Game
-from market_researcher.sources import steam_search, steam_store, steamspy
+from market_researcher.sources import exchange, steam_search, steam_store, steamspy
 
 pytestmark = pytest.mark.skipif(os.environ.get("MR_LIVE") != "1", reason="live network checks: set MR_LIVE=1")
 
@@ -39,6 +39,17 @@ def test_steam_appdetails(http):
     details = steam_store.app_details(http, STARDEW)
     assert details is not None and details.type == "game"
     assert details.price_initial_cents > 0 and details.release_date
+
+
+def test_regional_price(http):
+    jp = steam_store.regional_price(http, STARDEW, "jp")
+    assert jp is not None and jp.currency == "JPY" and jp.initial_cents > 0 and jp.text
+    assert steam_store.regional_price(http, 570, "us") is None  # Dota 2 is free: no price
+
+
+def test_exchange_rates(http):
+    rates, date = exchange.usd_rates(http)
+    assert rates["USD"] == 1 and 50 < rates["JPY"] < 500 and date
 
 
 def test_review_histogram(http):

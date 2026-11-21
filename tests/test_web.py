@@ -170,6 +170,29 @@ def test_game_network_error_is_friendly(client, monkeypatch):
     assert res.status_code == 502 and res.json()["notice"]["title"] == "Can't reach steamspy.com"
 
 
+def test_regional_prices_endpoint(client, monkeypatch):
+    from market_researcher import regional
+    from market_researcher.models import RegionalPrice
+
+    p = RegionalPrice(country="jp", currency="JPY", initial_cents=160000, final_cents=160000, text="¥ 1,600")
+    monkeypatch.setattr(pipeline, "regional_prices", lambda http, appid: pipeline.RegionalPrices(
+        rows=regional.compare({"jp": p, "kp": None}, {"JPY": 160}), rates_date="Fri, 20 Nov 2026 00:02:32 +0000"))
+    data = client.get("/api/games/5/prices").json()
+    assert data["rows"][0]["price"]["text"] == "¥ 1,600" and data["rows"][0]["usd"] == 10.0
+    assert data["rows"][1]["price"] is None and data["rates_date"].startswith("Fri") and data["notices"] == []
+
+
+def test_regional_prices_network_error_is_friendly(client, monkeypatch):
+    import httpx
+
+    def down(*a):
+        raise httpx.ConnectError("boom", request=httpx.Request("GET", "https://store.steampowered.com/api/appdetails"))
+
+    monkeypatch.setattr(pipeline, "regional_prices", down)
+    res = client.get("/api/games/5/prices")
+    assert res.status_code == 502 and res.json()["notice"]["title"] == "Can't reach store.steampowered.com"
+
+
 def test_lost_run_message(client):
     assert "restarted" in client.get("/api/tag-runs/nope").json()["detail"]
 

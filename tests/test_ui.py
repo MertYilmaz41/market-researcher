@@ -88,6 +88,13 @@ def base_url(tmp_path_factory):
         why="Players hate the <i>cheaters</i>.", fix=["Anti-cheat"], model="gemma3:12b",
         other=[OtherComplaint(text="Cheaters", quote="cheaters everywhere")]))
     mp.setattr(server.pipeline, "review_sample", lambda http, appid, kind, limit: [])
+    from market_researcher import regional
+    from market_researcher.models import RegionalPrice
+    mp.setattr(pipeline, "regional_prices", lambda http, appid: pipeline.RegionalPrices(
+        rows=regional.compare({"us": RegionalPrice(country="us", currency="USD", initial_cents=2000, final_cents=2000, text="$20.00"),
+                               "jp": RegionalPrice(country="jp", currency="JPY", initial_cents=160000, final_cents=160000, text="¥ 1,600")},
+                              {"USD": 1, "JPY": 160}),
+        rates_date="Fri, 20 Nov 2026 00:02:32 +0000"))
     mp.setattr(server, "_runs", RunStore(tmp_path_factory.mktemp("runs") / "runs.sqlite"))
     mp.setattr(server, "_jobs", {})
     mp.setattr(server, "_http_client", HttpClient(cache=Cache(tmp_path_factory.mktemp("cache") / "cache.sqlite")))
@@ -358,6 +365,11 @@ def test_ui_overview_and_history_tabs(base_url, browser):
     assert page.is_visible("#panel .score-ring") and page.text_content("#panel .why .verdict")
     assert page.locator("#panel .facts .stat").count() == 4
     assert "[object" not in page.inner_text("#panel")  # nested nodes are appended, never stringified
+    # Regional prices: on request, cheapest in dollars first.
+    page.click("#panel .prices button:has-text('Show the price in every region')")
+    page.wait_for_selector("#panel .price-table tbody tr")
+    rows = page.locator("#panel .price-table tbody tr")
+    assert rows.count() == 2 and "Japan" in rows.nth(0).inner_text() and "−50%" in rows.nth(0).inner_text()
     page.click("#panel .links button:has-text('Review history')")
     assert page.get_attribute("#panel-tab-3", "aria-selected") == "true"
     # History: every risk check, passed or flagged.

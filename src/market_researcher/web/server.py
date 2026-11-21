@@ -747,6 +747,18 @@ def write_single_summary(appid: int, reviews: int = 300, fresh: bool = False):
         return {"summary": _summary_json(s)}
 
 
+@app.get("/api/games/{appid}/prices")
+def regional_prices(appid: int):
+    """The game's price in every Steam store region (~1 min the first time, then cached a day)."""
+    try:
+        r = pipeline.regional_prices(_http(), appid)
+    except Exception as e:
+        notice = notices.friendly_error(e)
+        return JSONResponse(status_code=502, content={"detail": notice.message, "notice": notice.model_dump()})
+    return {"rows": [row.model_dump() for row in r.rows], "rates_date": r.rates_date,
+            "notices": [n.model_dump() for n in r.notices]}
+
+
 @app.get("/api/games/{appid}")
 def game(appid: int, reviews: int = 300):
     if appid <= 0:

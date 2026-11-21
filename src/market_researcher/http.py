@@ -13,7 +13,8 @@ from . import config
 from .cache import Cache
 
 # Minimum seconds between requests to the same host
-HOST_INTERVAL = {"steamspy.com": 1.0, "store.steampowered.com": 1.5, "api.steampowered.com": 1.5}
+HOST_INTERVAL = {"steamspy.com": 1.0, "store.steampowered.com": 1.5, "api.steampowered.com": 1.5,
+                 "open.er-api.com": 1.0}
 # Slower pace for URL prefixes with a stricter limit. Steam's store search answered HTTP 429 after
 # ~30 pages at 1.5 s each (Nov 2026).
 URL_INTERVAL = {"https://store.steampowered.com/search/": 3.0}
