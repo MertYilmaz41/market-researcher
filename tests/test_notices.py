@@ -103,7 +103,7 @@ def test_zero_and_weak_scores():
     liked.opportunity.effective_rating = 85
     assert "No disappointed audience found" in titles(post(tag_result(analyses=[liked])))
     assert "No disappointed audience found" not in titles(post(tag_result(analyses=[analysis(30, "Meh")])))
-    weak = titles(post(tag_result(analyses=[analysis(8, "Meh")])))
+    weak = titles(post(tag_result(analyses=[analysis(20, "Meh")])))  # under WEAK_SCORE (25)
     assert "Only weak opportunities" in weak and "Analysis complete" in weak
 
 

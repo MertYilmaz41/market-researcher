@@ -1437,7 +1437,7 @@ function delta(g) {
     d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "=");
 }
 
-// The score as a tinted pill (violet 56+, near-white 35+, gray under).
+// The score as a tinted pill (violet 67+, near-white 42+, gray under).
 function pill(score, size = "") {
   return el("span", { class: `pill ${scoreLevel(score)} ${size}` }, Math.round(score));
 }
