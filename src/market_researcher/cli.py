@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.progress import Progress
 from rich.table import Table
 
-from . import boxmethod, config, market, notices, runs, summary
+from . import boxmethod, config, market, notices, pipeline, runs, scoring, summary
 from .cache import Cache
 from .discover import filter_candidates, parse_rating_range
 from .http import HttpClient
@@ -17,9 +17,10 @@ from .i18n import LANG, LANGS, _, fmt, lang, num
 from .mining.llm import LLMUnavailable
 from .models import Analysis, GameSummary, MiningResult
 from .market import MIN_TRACK_ENTRANTS
-from .pipeline import (TagResult, UnknownTag, analyze_game, regional_prices, review_sample, run_markets, run_tag,
-                       tag_games, tag_label, verify_games)
-from .report import money, percent, rank, rating_source_text, recent_text, render, risk_label, severity, slug
+from .pipeline import (TagResult, UnknownTag, analyze_game, regional_prices, rescore, review_sample,
+                       run_markets, run_tag, tag_games, tag_label, verify_games)
+from .report import (money, percent, rank, rating_source_text, recent_text, render, risk_label, score_text, severity,
+                     slug)
 
 app = typer.Typer(help="Find underserved Steam audiences (CodeMonkey's method).", no_args_is_help=True)
 cache_app = typer.Typer(help="Manage the local cache.")
@@ -186,6 +187,9 @@ def analyze(
                    "Unreleased or very new games may not be listed yet."),
         ))
         raise typer.Exit(1)
+    index = _read_peers(http)
+    if index is not None:
+        scoring.rescore(a, index.of(appid))
     _print_analysis(a)
     console.print()
     _print_notices(notices.for_game(a))
@@ -211,6 +215,20 @@ def _print_game_summary(s: GameSummary) -> None:
         console.print("[bold]" + _("Complaints no category covers:") + "[/]")
         for o in s.other:
             console.print(f'  - {o.text} "{o.quote}"', markup=False)
+
+
+def _read_peers(http: HttpClient):
+    """The similar-games index the score needs (pipeline.read_peers), or None with a warning if it fails."""
+    with Progress(console=console, transient=True) as progress:
+        task = progress.add_task(_("Reading every rated game from the Steam store"), total=None)
+        try:
+            return pipeline.read_peers(http, lambda message, done, total: progress.update(task, completed=done, total=total))
+        except Exception as e:  # the rest of the analysis still stands; the score is left out
+            n = notices.friendly_error(e)
+            n.title = _("Couldn't read the similar games, so there are no scores")
+            progress.stop()
+            _print_notices([n])
+            return None
 
 
 def _regional_prices(http: HttpClient, ranked: list) -> dict:
@@ -267,6 +285,10 @@ def report(
         except UnknownTag as e:
             progress.stop()
             _unknown_tag(http, e)
+    if result.analyses:
+        index = _read_peers(http)
+        if index is not None:
+            rescore(result.analyses, index)
     post = notices.for_tag_result(label, min_reviews, lo, hi, max_games, result)
     if not result.candidates:
         _print_notices(post)
@@ -304,7 +326,7 @@ def report(
             pos += " " + _("({rating} without review bombs)", rating=percent(o.effective_rating))
         top = a.mining.categories[0] if a.mining and a.mining.categories else None
         table.add_row(
-            str(i), a.game.name, f"[bold]{o.score:.0f}[/]", num(a.game.reviews), pos,
+            str(i), a.game.name, f"[bold]{score_text(a)}[/]", num(a.game.reviews), pos,
             f"{_(top.label)} ({fmt('{x:.0%}', x=top.share)})" if top else "-",
         )
     console.print(table)
@@ -394,12 +416,17 @@ def _print_analysis(a: Analysis) -> None:
         console.print(_("Box Method: ~{units} units (x45), revenue {low} - {high} (x30-x100)",
                         units=num(est.units_mid), low=money(est.gross_low), high=money(est.gross_high)))
     o = a.opportunity
-    parts = _("demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive (fixability {fixability}, not counted)",
-              demand=fmt("{x:.0%}", x=o.demand), dissatisfaction=fmt("{x:.0%}", x=o.dissatisfaction),
-              rating=percent(o.effective_rating), fixability=fmt("{x:.0%}", x=o.fixability))
-    if o.penalty:
-        parts += _(", penalty -{points:.0f} for {names}", points=o.penalty, names=", ".join(map(risk_label, o.penalized)))
-    console.print(f"[bold]{_('Opportunity score: {score:.0f}/100', score=o.score)}[/]  ({parts})")
+    head = (_("Opportunity score: not measured") if o.score is None
+            else _("Opportunity score: {score:.0f}/100", score=o.score))
+    if o.penalty and o.score is not None:
+        head += "  " + _("(penalty -{points:.0f} for {names})", points=o.penalty,
+                         names=", ".join(map(risk_label, o.penalized)))
+    console.print(f"[bold]{head}[/]")
+    console.print(scoring.peers_text(o.peers), markup=False)
+    console.print("[dim]" + _("Not counted: demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, "
+                              "fixability {fixability}", demand=fmt("{x:.0%}", x=o.demand),
+                              dissatisfaction=fmt("{x:.0%}", x=o.dissatisfaction), rating=percent(o.effective_rating),
+                              fixability=fmt("{x:.0%}", x=o.fixability)) + "[/]")
 
     if a.review_error:
         console.print(f"[yellow]{_('Review texts unavailable:')}[/] {a.review_error}")

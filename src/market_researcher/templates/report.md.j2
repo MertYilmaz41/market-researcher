@@ -8,9 +8,8 @@
 {% if track %}
 {{ track }}
 {% endif %}
-> **{{ _("Proven Demand + Poor Execution = High Opportunity.") }}** {{ _("The score (0-100) is a weighted geometric mean of") }}
-> {{ _("demand (review volume) and dissatisfaction (how far below 70% positive), minus points for risk flags.") }}
-> {{ _("Review-bombed periods are removed from the rating first. Fixability is shown but not counted.") }}
+> **{{ _("The score (0-100) counts how often the game's similar games became hits.") }}** {{ _("Similar games share 2 of its first 3 Steam tags; counted are those released 48 to 24 months ago, and a hit has 500+ reviews at 80%+ positive.") }}
+> {{ _("25% hits or more = 100, minus points for risk flags. In a backtest over 12,000 games this predicted how new games in the niche did; demand and dissatisfaction added nothing, so they are shown but not counted.") }}
 {% if summary %}
 ## {{ _("Opportunity summary") }}
 
@@ -31,21 +30,22 @@
 | # | {{ _("Game") }} | {{ _("Score") }} | {{ _("Reviews") }} | {{ _("% Pos") }} | {{ _("Est. revenue (x45)") }} | {{ _("Top complaint") }} | {{ _("Risks") }} |
 |--:|---|--:|--:|--:|--:|---|---|
 {% for a in ranked -%}
-| {{ loop.index }} | [{{ a.game.name|md }}](#{{ a.game.appid }}) | **{{ a.opportunity.score|round|int }}** | {{ num(a.game.reviews) }} | {{ percent(a.game.rating) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %} {{ _("({rating} without review bombs)", rating=percent(a.opportunity.effective_rating)) }}{% endif %} | {{ gross(a) }} | {{ complaint_text(a)|md }} | {{ risk_names(a)|md }} |
+| {{ loop.index }} | [{{ a.game.name|md }}](#{{ a.game.appid }}) | **{{ score_text(a) }}** | {{ num(a.game.reviews) }} | {{ percent(a.game.rating) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %} {{ _("({rating} without review bombs)", rating=percent(a.opportunity.effective_rating)) }}{% endif %} | {{ gross(a) }} | {{ complaint_text(a)|md }} | {{ risk_names(a)|md }} |
 {% endfor %}
 
 {% for a in ranked %}
 ---
 
 <a id="{{ a.game.appid }}"></a>
-## {{ loop.index }}. {{ a.game.name|md }} {{ _("(score {score})", score=a.opportunity.score|round|int) }}
+## {{ loop.index }}. {{ a.game.name|md }} {{ _("(score {score})", score=score_text(a)) }}
 
 [{{ _("Steam store") }}]({{ a.game.store_url }}) · AppID {{ a.game.appid }}{% if a.details %} · {{ _("Released {date}", date=a.details.release_date) }}{% endif %} · {{ a.game.developer|md }}
 
 - **{{ _("Demand:") }}** {{ _("{n} reviews, {owners} owners (SteamSpy). Box Method: ~{units} units, {low} - {high} gross at {price}.", n=num(a.game.reviews), owners=a.game.owners, units=num(box(a).units_mid), low=money(box(a).gross_low), high=money(box(a).gross_high), price=fmt_price(a.game.base_price)) }}
 - **{{ _("Recent demand:") }}** {{ _("{recent} of its reviews came in the last 12 months.", recent=recent_text(a)) }}
 - **{{ _("Satisfaction:") }}** {{ _("{rating} positive", rating=percent(a.game.rating)) }}{% if a.opportunity.effective_rating|round != a.game.rating|round %}{{ _(", {rating} with review bombs removed", rating=percent(a.opportunity.effective_rating)) }}{% endif %} ({{ rating_source_text(a.game) }}).
-- **{{ _("Score parts:") }}** {{ _("demand {demand}, dissatisfaction {dissatisfaction} (fixability {fixability}, not counted)", demand=pct(a.opportunity.demand), dissatisfaction=pct(a.opportunity.dissatisfaction), fixability=pct(a.opportunity.fixability)) }}{% if a.opportunity.penalty %}{{ _(", penalty -{points} ({names})", points=a.opportunity.penalty|int, names=a.opportunity.penalized|map("risk_label")|join(", ")) }}{% endif %}.
+- **{{ _("Similar games:") }}** {{ peers_text(a.opportunity.peers)|md }}{% if a.opportunity.penalty %}{{ _(" Penalty -{points} ({names}).", points=a.opportunity.penalty|int, names=a.opportunity.penalized|map("risk_label")|join(", ")) }}{% endif %}
+- **{{ _("Not counted:") }}** {{ _("demand {demand}, dissatisfaction {dissatisfaction}, fixability {fixability}", demand=pct(a.opportunity.demand), dissatisfaction=pct(a.opportunity.dissatisfaction), fixability=pct(a.opportunity.fixability)) }}.
 {% if a.game.tags %}- **{{ _("Tags:") }}** {{ (a.game.tags|list)[:8]|join(", ") }}
 {% endif %}
 {% set gs = game_summaries.get(a.game.appid) %}{% if gs %}

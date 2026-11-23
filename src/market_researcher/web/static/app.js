@@ -759,7 +759,7 @@ function renderLive(job) {
   const games = job?.games || [];
   $("#live").hidden = !games.length;
   if (!games.length) return;
-  const done = games.filter((g) => g.stage === "done").sort((a, b) => b.score - a.score);
+  const done = games.filter((g) => g.stage === "done").sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   const rest = games.filter((g) => g.stage !== "done");
   const row = (g, i) => {
     const finished = g.stage === "done";
@@ -828,6 +828,7 @@ async function analyzeGame(appid) {
     highlightRow();
     renderPanel(g);
     syncRoute();
+    if (g.score_explained?.pending) waitGameScore(g.game.appid);
     if (state.games.length) {
       toast("info", t("Shown in the details panel"), t("{name} isn't part of the current ranking.", { name: g.game.name }));
     }
@@ -943,6 +944,7 @@ function fillResult(result, id, quiet, toasts) {
   map.setGames(state.games);
   renderTable();
   measureTrack(id);
+  waitScores(id);
   if (quiet) {
     const g = state.games.find((x) => x.game.appid === state.selected);
     if (g) renderPanel(g, panelTab(), false);
@@ -1015,6 +1017,7 @@ function narrowWith(tag) {
 const track = { runId: null, progress: null, polling: false };
 
 function renderTrackLine() {
+  renderPeersLine();
   const line = $("#track-line");
   const r = state.searching ? null : state.result;
   if (!r?.market) return line.replaceChildren();
@@ -1026,6 +1029,60 @@ function renderTrackLine() {
   line.replaceChildren(p.total
     ? t("Measuring the track record · {done} / {total} games", { done: fmt(p.done), total: fmt(p.total) })
     : t("Measuring the track record..."), left ? ` · ${left}` : "", " ", info("track_record"));
+}
+
+// ---------- scores: they need every rated Steam game (similar games), read once in the background by the server ----------
+const scores = { runId: null, polling: false };
+const scorePending = (r) => !!r?.games.some((g) => g.score_explained?.pending);
+
+function renderPeersLine() {
+  const line = $("#peers-line");
+  const r = state.searching ? null : state.result;
+  const p = r?.peers;
+  if (!p || !scorePending(r)) return line.replaceChildren();
+  if (p.error) return line.replaceChildren(t("The scores couldn't be measured: {why}", { why: p.error.message }));
+  const left = etaText(p.eta);
+  line.replaceChildren(p.total
+    ? t("Reading every rated Steam game for the scores · {done} / {total} pages", { done: fmt(p.done), total: fmt(p.total) })
+    : t("Reading every rated Steam game for the scores..."), left ? ` · ${left}` : "", " ", info("peers"));
+}
+
+async function waitScores(id) {
+  renderPeersLine();
+  if (!scorePending(state.result) || (scores.polling && scores.runId === id)) return;
+  Object.assign(scores, { runId: id, polling: true });
+  try {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 3000));
+      if (state.runId !== id || state.searching) return;
+      const res = await api(`/api/tag-runs/${id}`);
+      if (!res.ok) return;
+      const job = await res.json();
+      if (state.runId !== id || state.searching || !job.result) return;
+      if (!scorePending(job.result)) return showResult(job.result, id, true);
+      state.result.peers = job.result.peers;
+      renderPeersLine();
+      if (job.result.peers?.error) return;
+    }
+  } finally {
+    if (scores.runId === id) scores.polling = false;
+  }
+}
+
+// A game opened by AppID: shown at once, its score filled in when the list is read.
+async function waitGameScore(appid) {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 3000));
+    if (state.panelGame?.game.appid !== appid) return;
+    const res = await api("/api/peers");
+    if (!res.ok) return;
+    const p = await res.json();
+    if (p.error) return;
+    if (!p.ready) continue;
+    const g = await fetchGame(appid).catch(() => null);
+    if (g && state.panelGame?.game.appid === appid) renderPanel(g, panelTab(), false);
+    return;
+  }
 }
 
 async function measureTrack(id) {
@@ -1437,9 +1494,11 @@ function delta(g) {
     d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "=");
 }
 
-// The score as a tinted pill (violet 67+, near-white 42+, gray under).
+// The score as a tinted pill (violet 67+, near-white 42+, gray under); a dashed "–" while there is none.
+const scoreText = (score) => (score == null ? "–" : String(Math.round(score)));
 function pill(score, size = "") {
-  return el("span", { class: `pill ${scoreLevel(score)} ${size}` }, Math.round(score));
+  return el("span", { class: `pill ${scoreLevel(score)} ${size}`, title: score == null ? t("No score yet, or too few similar games") : null },
+    scoreText(score));
 }
 
 // The risks that cost points, as in the score card.
@@ -1459,7 +1518,7 @@ function renderTable() {
       el("td", {}, g.rank),
       el("td", {}, el("div", { class: "game-cell" }, el("span", { class: "game-name" }, g.game.name), badge)),
       el("td", {}, scoreAnchor(el("span", { class: `pill ${scoreLevel(o.score)} score-pill`,
-        "aria-label": t("Score {score}. How it is calculated", { score: Math.round(o.score) }) }, Math.round(o.score)), g), delta(g)),
+        "aria-label": t("Score {score}. How it is calculated", { score: scoreText(o.score) }) }, scoreText(o.score)), g), delta(g)),
       el("td", {}, top ? el("div", { class: "complaint-cell" },
         el("span", { class: "name", title: top.label }, top.label),
         el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round((top.share / maxShare) * 100)}%` })),
@@ -1675,22 +1734,23 @@ function fillScoreTip(g) {
   const row = (cls, label, value, note) => el("div", { class: `tip-row ${cls}` },
     el("span", {}, label), el("b", {}, value), note ? el("p", {}, note) : null);
   scoreTip.replaceChildren(
-    el("div", { class: "tip-head" }, el("b", {}, t("Opportunity score {score}", { score: Math.round(e.score) })), el("span", {}, "/ 100")),
-    el("p", { class: "tip-lead" }, t("Proven demand + poor execution = high opportunity. Two parts count, each 0-100%:")),
+    el("div", { class: "tip-head" }, el("b", {}, t("Opportunity score {score}", { score: scoreText(e.score) })), el("span", {}, "/ 100")),
+    el("p", { class: "tip-lead" }, t("How often similar games became hits. Only this part counts; the others are shown for context:")),
     ...e.parts.map((p) => el("div", { class: "tip-part" },
       el("div", { class: "tip-part-head" },
         el("span", {}, p.label),
-        el("i", {}, p.weight ? t("weight {pct}", { pct: pct(p.weight) }) : t("not counted")),
-        el("b", {}, pct(p.value))),
-      el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round(p.value * 100)}%` })),
+        el("i", {}, p.weight ? t("counted") : t("not counted")),
+        el("b", {}, p.value == null ? "–" : pct(p.value))),
+      el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.round((p.value ?? 0) * 100)}%` })),
       el("p", {}, p.basis))),
     el("div", { class: "tip-sum" },
-      row("", t("Combined"), Math.round(e.combined)),
+      row("", t("Similar games' hits"), scoreText(e.combined)),
       ...e.penalties.map((p) => row("minus", t("{label} (risk)", { label: p.label }), `-${p.points}`, p.reason)),
-      row("total", t("Score"), Math.round(e.score))),
-    el("p", { class: `tip-note${e.zero_part ? " warn" : ""}` }, e.zero_part
-      ? t("{part} is 0%, so the score is 0: a good opportunity needs both parts.", { part: e.zero_part })
-      : t("If either part is 0%, the score is 0: a good opportunity needs both parts.")),
+      row("total", t("Score"), scoreText(e.score))),
+    el("p", { class: `tip-note${e.score == null ? " warn" : ""}` }, e.pending
+      ? t("No score yet: the list of every rated Steam game is being read (about 36 minutes the first time).")
+      : e.score == null ? t("No score: too few similar games to tell.")
+      : t("In a backtest, this predicted how new games in the niche did; demand and dissatisfaction added nothing.")),
   );
 }
 
@@ -1732,8 +1792,9 @@ function scoreAnchor(node, g) {
 // Change the wording here; every ⓘ and the glossary read it.
 function terms() {
   return {
-    demand: [t("Demand"), t("How many people bought games like this, judged by the number of reviews. Each extra review counts a little less (log scale), so one hit doesn't drown out the rest.")],
-    dissatisfaction: [t("Dissatisfaction"), t("How unhappy the players are: how far the game's % positive is below 70%. A 40% game scores higher than a 65% one. Games above 70% count as slightly unhappy, so a well-liked game with big demand still ranks, below disappointed ones.")],
+    peers: [t("Similar games' hits"), t("What the score counts: of the games sharing 2 of this game's first 3 Steam tags and released 4 to 2 years ago, how many now have 500+ reviews at 80%+ positive. In a backtest over 12,000 games it was the one thing about a game that predicted how new games in its niche did. Reading it needs the list of every rated Steam game: about 36 minutes the first time, then a week from the cache.")],
+    demand: [t("Demand"), t("How many people bought this game, judged by the number of reviews (log scale). Shown, but not counted in the score: once the similar games are known, it adds nothing.")],
+    dissatisfaction: [t("Dissatisfaction"), t("How unhappy the players are: how far the game's % positive is below 70%. Shown, but not counted in the score: in the backtest, how unhappy or happy a game's players were said nothing about how new games did. The complaints still show what a new game should do better.")],
     fixability: [t("Fixability"), t("How many of the complaints a new game could avoid: bugs, controls, missing content, performance and the like. Complaints about price or the genre itself don't count. Shown, but not counted in the score: it is close to 100% for almost every game.")],
     risk_penalty: [t("Risk penalty"), t("Points taken off the score for something that makes a game a weaker opportunity than it looks, e.g. online multiplayer, fading interest, or recent reviews showing it's already fixed. The ⚠ badge in the list shows them; a game's History tab lists every check.")],
     revenue: [t("Estimated revenue"), t("Box Method: each review stands for about 30 to 100 copies sold (45 in the middle), times the full price. A rough figure before Steam's cut, discounts, refunds and taxes. Checked against 23 games that published their sales, x45 matched the median, but for a single game it was within 2 times of the real figure only 61% of the time; the middle half of those games sold 32 to 80 copies per review. What the developer keeps is often half of this or less.")],
@@ -1854,12 +1915,12 @@ function ring(score, size = 84) {
     return n;
   };
   const svg = node("svg", { class: "score-ring", width: size, height: size, viewBox: "0 0 96 96", role: "img",
-    "aria-label": t("Opportunity score {score}. How it is calculated", { score: Math.round(score) }) });
+    "aria-label": t("Opportunity score {score}. How it is calculated", { score: scoreText(score) }) });
   svg.append(
     node("circle", { class: "bg", cx: 48, cy: 48, r: 40, fill: "none", "stroke-width": 8 }),
     node("circle", { cx: 48, cy: 48, r: 40, fill: "none", stroke: scoreColor(score), "stroke-width": 8, "stroke-linecap": "round",
-      "stroke-dasharray": `${(Math.max(0, Math.min(100, score)) / 100) * C} ${C}`, transform: "rotate(-90 48 48)" }),
-    node("text", { x: 48, y: 57, "text-anchor": "middle", "font-size": 27 }, Math.round(score)));
+      "stroke-dasharray": `${(Math.max(0, Math.min(100, score ?? 0)) / 100) * C} ${C}`, transform: "rotate(-90 48 48)" }),
+    node("text", { x: 48, y: 57, "text-anchor": "middle", "font-size": 27 }, scoreText(score)));
   return svg;
 }
 

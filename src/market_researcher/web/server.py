@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
-from .. import boxmethod, config, market, notices, pipeline, risk, runs, scoring, summary
+from .. import boxmethod, config, market, notices, peers, pipeline, risk, runs, scoring, summary
 from ..http import HttpClient
 from ..i18n import LANGS, N_, _, lang, use
 from ..mining import llm
@@ -119,6 +119,15 @@ _lock = threading.Lock()
 _summary_lock = threading.Lock()  # one summary at a time: the local model has one GPU
 _http_client: HttpClient | None = None
 _http_lock = threading.Lock()
+
+
+# The score's similar-games index (pipeline.read_peers), shared by every run and lookup: one read of every rated
+# game (~36 min the first time, cached a week), started by the first thing that needs it and rebuilt from the
+# cache after config.TTL_PEERS. Runs are scored when they're shown once it's ready (_score_run).
+_peers: dict = {"index": None, "loading": False, "done": 0, "total": 0, "step_start": 0.0, "step_done": 0,
+                "error": None, "failed_at": 0.0}
+PEERS_RETRY_SECONDS = 300  # after a failed read, wait this long before reading again
+_score_lock = threading.Lock()  # one run scored at a time, so two polls don't save over each other
 
 
 def _http() -> HttpClient:
@@ -339,6 +348,76 @@ def _status(job_id: str, job: Job, result_json) -> dict:
     return out
 
 
+def _peer_index() -> "peers.PeerIndex | None":
+    """The similar-games index, starting a read in the background if there is none or it's older than
+    config.TTL_PEERS. An old index is still returned until the new one is built."""
+    with _lock:
+        idx, p = _peers["index"], _peers
+        fresh = idx is not None and time.time() - idx.built < config.TTL_PEERS
+        retry = p["error"] is None or time.time() - p["failed_at"] >= PEERS_RETRY_SECONDS
+        if not fresh and not p["loading"] and retry:
+            p.update(loading=True, done=0, total=0, step_start=_now(), step_done=0, error=None)
+            threading.Thread(target=contextvars.copy_context().run, args=(_read_peers,), daemon=True).start()
+    return idx
+
+
+def _read_peers() -> None:
+    def step(message: str, done: int, total: int) -> None:
+        with _lock:
+            if total != _peers["total"]:
+                _peers["step_start"], _peers["step_done"] = _now(), done
+            _peers["done"], _peers["total"] = done, total
+
+    try:
+        idx = pipeline.read_peers(_http(), step)
+    except Exception as e:
+        with _lock:
+            _peers.update(loading=False, error=notices.friendly_error(e).model_dump(), failed_at=time.time())
+        return
+    with _lock:
+        _peers.update(index=idx, loading=False)
+
+
+def _peers_json() -> dict:
+    """The index's state for the page: ready, or how far the read is."""
+    with _lock:
+        p = _peers
+        return {"ready": p["index"] is not None, "loading": p["loading"], "done": p["done"], "total": p["total"],
+                "error": p["error"], "eta": eta(p["done"], p["total"], p["step_done"], p["step_start"], _now())
+                if p["loading"] else None}
+
+
+def _score(a: Analysis) -> bool:
+    """Score one analysis if it has no similar games yet and the index is ready; True if it changed."""
+    if a.opportunity.peers is not None:
+        return False
+    idx = _peer_index()
+    if idx is None:
+        return False
+    scoring.rescore(a, idx.of(a.game.appid))
+    return True
+
+
+def _score_run(job_id: str, job: Job) -> None:
+    """Score a finished run's games once the index is ready, and save it (old runs too: see Opportunity)."""
+    if job.kind != "tag" or job.status != "done" or job.result is None:
+        return
+    if all(a.opportunity.peers is not None for a in job.result.analyses):
+        return
+    with _score_lock, _pinned_job(job_id) as pinned:
+        changed = [_score(a) for a in pinned.result.analyses]
+        if any(changed):
+            _runs.update_result(job_id, pinned.result)
+
+
+@app.get("/api/peers")
+def peers_status() -> dict:
+    """The similar-games index's state; asking starts the read if needed (the page polls this for a game
+    opened by AppID while the score is pending)."""
+    _peer_index()
+    return _peers_json()
+
+
 @app.post("/api/tag-runs/{job_id}/track")
 def measure_track(job_id: str) -> dict:
     """Start measuring the tag's track record (pipeline.track_record) in the background, once per run.
@@ -472,7 +551,7 @@ def clean_cache(action: Literal["prune", "clear"]):
     """Remove expired entries (prune) or all of them (clear), and shrink the file. Not while a search runs:
     it shares the cache, and VACUUM would hold its lock for seconds."""
     with _lock:
-        busy = any(j.status == "running" for j in _jobs.values())
+        busy = any(j.status == "running" for j in _jobs.values()) or _peers["loading"]
     if busy:
         notice = notices.cache_busy()
         return JSONResponse(status_code=409, content={"detail": notice.message, "notice": notice.model_dump()})
@@ -508,15 +587,20 @@ def _starred_analysis(s: dict) -> Analysis:
             job = _job(s["run_id"])
         except HTTPException:  # the run was deleted
             job = None
+        if job is not None:
+            _score_run(s["run_id"], job)
         found = job and job.result and next((a for a in job.result.analyses if a.game.appid == s["appid"]), None)
         if found:
             return found
     with _lock:
         a = _single.get(s["appid"])
+    if a is not None:
+        _score(a)
     if a is None:
         a = pipeline.analyze_game(_http(), s["appid"], 300)
         if a is None:
             raise HTTPException(404, _("SteamSpy has no data for AppID {appid}.", appid=s["appid"]))
+        _score(a)
         _remember_single(a)
     return a
 
@@ -559,6 +643,7 @@ def tag_result_json(job_id: str, r: TagRunRequest, result: pipeline.TagResult) -
         # Other tags the ranked games share, offered for narrowing the search.
         "narrow": {"tags": market.related_tags([a.game for a in ranked], r.tags), "total": len(ranked)},
         "track": _track_json(result.track),
+        "peers": _peers_json(),
         "notices": [n.model_dump() for n in post],
     }
 
@@ -597,7 +682,9 @@ def start_tag_run(req: TagRunRequest) -> dict:
 
 @app.get("/api/tag-runs/{job_id}")
 def tag_run_status(job_id: str) -> dict:
-    return _status(job_id, _job(job_id), tag_result_json)
+    job = _job(job_id)
+    _score_run(job_id, job)
+    return _status(job_id, job, tag_result_json)
 
 
 @app.post("/api/market-runs")
@@ -776,8 +863,10 @@ def game(appid: int, reviews: int = 300):
                    "Unreleased or very new games may not be listed yet."),
         )
         return JSONResponse(status_code=404, content={"detail": notice.message, "notice": notice.model_dump()})
+    _score(a)
     _remember_single(a)
     data = game_json(a)
+    data["peers"] = _peers_json()
     data["summary"] = _summary_json(_runs.game_summary(appid, lang()))
     data["llm_model"] = config.LLM_MODEL
     data["notices"] = [n.model_dump() for n in notices.for_game(a)]

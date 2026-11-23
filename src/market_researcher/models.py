@@ -1,6 +1,6 @@
 import datetime as dt
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, computed_field, model_validator
 
 from . import config
 
@@ -153,14 +153,37 @@ class MiningResult(BaseModel):
     liked: list[tuple[str, int]]  # "loved the X" captures from positive reviews
 
 
+class Peers(BaseModel):
+    """A game's similar games (sharing 2 of its first 3 store tags) released in the 24 months from `start`
+    (a backtest month, 48 months before it was measured), and how many have 500+ reviews at 80%+ now (peers.py)."""
+
+    tags: list[str]  # the game's first 3 store tags; empty when the game isn't in the store's list
+    entrants: int
+    hits: int
+    start: int
+
+    @property
+    def hit_rate(self) -> float:
+        return self.hits / self.entrants if self.entrants else 0.0
+
+
 class Opportunity(BaseModel):
-    score: float  # 0-100
+    score: float | None  # 0-100; None until the similar games are read, or when there are too few of them
     demand: float  # 0-1
     dissatisfaction: float  # 0-1
     fixability: float  # 0-1
     effective_rating: float  # % positive used for scoring (review bombs removed)
     penalty: float
     penalized: list[str] = []  # flag codes that cost points
+    peers: Peers | None = None  # None: not read yet
+
+    @model_validator(mode="before")
+    @classmethod
+    def _old_formula(cls, data):
+        """Runs saved before #12 scored demand x dissatisfaction: their scores aren't shown as today's."""
+        if isinstance(data, dict) and "peers" not in data:
+            data = {**data, "score": None}
+        return data
 
 
 class Analysis(BaseModel):

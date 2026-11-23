@@ -54,6 +54,7 @@
   --score-hi: #A78BFA;    /* 65+ */
   --score-mid: #E4E4E7;   /* 45-64 */
   --score-lo: #A1A1AA;    /* under 45 */
+  --score-none: #52525B;  /* no score yet */
   /* ... and four for the map's bubbles, gray to violet */
   --map-0: #52525B;
   --map-1: #8E8E96;
@@ -113,6 +114,7 @@
   --score-hi: #7C3AED;
   --score-mid: #27272A;
   --score-lo: #52525B;
+  --score-none: #A1A1AA;
   --map-0: #A1A1AA;
   --map-1: #71717A;
   --map-2: #A78BFA;
@@ -318,6 +320,8 @@ body.drawer-open .shell { grid-template-columns: minmax(0, 1fr) minmax(380px, mi
 .lead:empty { display: none; }
 .track-line { margin: 0; max-width: 760px; font-size: 14px; color: var(--text-3); }
 .track-line:empty { display: none; }
+.peers-line { margin: 0; max-width: 760px; font-size: 14px; color: var(--text-3); }
+.peers-line:empty { display: none; }
 .narrow-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text-3); }
 .narrow-line:empty { display: none; }
 .lead b { color: var(--accent-ink); font-weight: 600; }
@@ -472,6 +476,7 @@ td { padding: 0 16px; vertical-align: middle; }
 }
 .pill.mid { --c: var(--score-mid); background: color-mix(in srgb, var(--c) 10%, transparent); }
 .pill.hi { --c: var(--score-hi); }
+.pill.none { --c: var(--muted); background: transparent; border: 1px dashed var(--line-2); }
 .pill.small { min-width: 36px; height: 26px; font-size: 14px; }
 .pill.big { width: 48px; height: 48px; border-radius: 12px; font-size: 20px; }
 .score-anchor { cursor: help; }

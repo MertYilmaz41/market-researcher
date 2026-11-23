@@ -182,7 +182,8 @@ def test_ui_smoke(base_url, browser):
     # Hovering a score explains it; moving away hides it.
     page.hover("#ranking tbody tr:first-child .score-pill")
     tip = page.inner_text("#score-tip")
-    for text in ["Opportunity score 60", "Demand", "Dissatisfaction", "Fixability", "Combined", "weight 40%"]:
+    for text in ["Opportunity score 60", "Similar games' hits", "Demand", "Dissatisfaction", "Fixability", "counted",
+                 "not counted"]:
         assert text in tip
     page.mouse.move(5, 5)
     assert page.is_hidden("#score-tip")

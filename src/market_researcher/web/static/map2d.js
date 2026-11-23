@@ -103,7 +103,7 @@ export function createMap2d(container, { onSelect, describe, axes }) {
     const unit = Math.min(w, h) / 100;
     const size = (i) => (games[i].price > 0 ? (hi > lo ? (grosses[i] - lo) / (hi - lo) : 0.5) : 0);
     const items = games.map((g, i) => ({ g, r: (1.6 + 3.6 * size(i)) * unit }));
-    const best = new Set([...games].sort((a, b) => b.opportunity.score - a.opportunity.score).slice(0, NAMED).map((g) => g.game.appid));
+    const best = new Set([...games].sort((a, b) => (b.opportunity.score ?? -1) - (a.opportunity.score ?? -1)).slice(0, NAMED).map((g) => g.game.appid));
     items.sort((a, b) => b.r - a.r); // big ones first, so small ones stay clickable on top
 
     const names = [];

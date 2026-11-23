@@ -84,12 +84,6 @@ TR: dict[str, str] = {
         "{n} oyunun inceleme metinleri yüklenemedi; bu yüzden şikayetleri çıkarılamadı.",
     "Run again later to fill them in.": "Eksikleri doldurmak için daha sonra tekrar çalıştırın.",
     "No real opportunity found": "Gerçek bir fırsat bulunamadı",
-    "No disappointed audience found": "Hayal kırıklığına uğramış kitle bulunamadı",
-    "Every analyzed game is above 70% positive once review bombs are removed, so they rank on demand alone.":
-        "İnceleme bombardımanları çıkarıldığında analiz edilen her oyun %70'in üstünde olumlu; "
-        "bu yüzden yalnızca taleplerine göre sıralanıyorlar.",
-    "Every analyzed game scored 0: too few reviews, or risk penalties as big as the score.":
-        "Analiz edilen her oyun 0 puan aldı: inceleme sayısı çok az ya da risk cezaları puan kadar büyük.",
     "Try another tag, e.g. {examples}.": "Başka bir etiket deneyin, örneğin {examples}.",
     "Only weak opportunities": "Yalnızca zayıf fırsatlar",
     "The best score is {score:.0f}/100.": "En iyi puan {score:.0f}/100.",
@@ -119,8 +113,6 @@ TR: dict[str, str] = {
         "genel olarak %{rating:.0f} olumlu, ama inceleme bombardımanları çıkarılınca %{adjusted:.0f}",
     "{rating:.0f}% positive": "%{rating:.0f} olumlu",
     "Players are satisfied": "Oyuncular memnun",
-    "This game is {detail}, so it isn't an underserved audience: it scores on demand alone.":
-        "Bu oyun {detail}; yani karşılanmamış bir kitle değil: yalnızca talebinden puan alıyor.",
     "Look for games under 70% positive.": "%70'in altında olumlu olan oyunlara bakın.",
     "Free game": "Ücretsiz oyun",
     "It's free to play, so the Box Method revenue estimate doesn't apply.":
@@ -205,14 +197,6 @@ TR: dict[str, str] = {
     "Rating without spikes": "Sıçramasız puan",
     "Review spike": "İnceleme sıçraması",
     # scoring.verdict / scoring.why: the game panel's one-line reading of the score
-    "Many buyers": "Çok alıcı",
-    "Solid demand": "Sağlam talep",
-    "Few buyers": "Az alıcı",
-    "most unhappy": "çoğu memnun değil",
-    "many unhappy": "birçoğu memnun değil",
-    "mildly unhappy": "biraz memnuniyetsiz",
-    "mostly satisfied": "çoğunlukla memnun",
-    "{buyers}, {unhappy}": "{buyers}, {unhappy}",
     "Many buyers ({n:,} reviews)": "Çok alıcı ({n:,} inceleme)",
     "Solid demand ({n:,} reviews)": "Sağlam talep ({n:,} inceleme)",
     "Few buyers ({n:,} reviews)": "Az alıcı ({n:,} inceleme)",
@@ -254,10 +238,6 @@ TR: dict[str, str] = {
     "Dissatisfaction": "Memnuniyetsizlik",
     "Fixability": "Düzeltilebilirlik",
     " ({adjusted:.0f}% with review-bomb periods removed)": " (inceleme bombardımanı dönemleri çıkarılınca %{adjusted:.0f})",
-    "{n:,} reviews. Log scale: {lo} reviews = 0%, {hi:,}+ = 100%.":
-        "{n:,} inceleme. Logaritmik ölçek: {lo} inceleme = %0, {hi:,}+ = %100.",
-    "{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%. The score counts it as at least {floor:.0%}, so well-liked games aren't zeroed.":
-        "{rating}. %{max:g}+ olumlu = %0, %{min:g} = %100. Puan bunu en az {floor:.0%} sayar; böylece sevilen oyunlar sıfırlanmaz.",
     "{fix:.0%} of complaint mentions are things a small team can fix (bugs, UI, performance...), not scope or genre. "
     "Not counted in the score: it is close to 100% for almost every game.":
         "Şikayetlerin {fix:.0%} kadarı küçük bir ekibin düzeltebileceği şeyler (hatalar, arayüz, performans...), "
@@ -424,9 +404,6 @@ TR: dict[str, str] = {
     "Top tags: {tags}": "Öne çıkan etiketler: {tags}",
     "Box Method: ~{units} units (x45), revenue {low} - {high} (x30-x100)":
         "Box Method: ~{units} satış (x45), gelir {low} - {high} (x30-x100)",
-    "demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive (fixability {fixability}, not counted)":
-        "talep {demand}, {rating} olumluda memnuniyetsizlik {dissatisfaction} (düzeltilebilirlik {fixability}, puana katılmaz)",
-    ", penalty -{points:.0f} for {names}": ", ceza -{points:.0f}: {names}",
     "Opportunity score: {score:.0f}/100": "Fırsat puanı: {score:.0f}/100",
     "Review texts unavailable:": "İnceleme metinleri alınamadı:",
     "Severity": "Önem",
@@ -455,12 +432,6 @@ TR: dict[str, str] = {
         "{candidates} adaydan en çok talep gören {n} tanesi analiz edildi (etiketteki {total} oyun içinden).",
     '"Well served" = {pct}%+ positive; the gap is the share of underserved among those two groups.':
         '"İyi karşılanmış" = %{pct}+ olumlu; boşluk, bu iki grup içinde karşılanmamışların payıdır.',
-    "Proven Demand + Poor Execution = High Opportunity.": "Kanıtlanmış Talep + Kötü Yapım = Büyük Fırsat.",
-    "The score (0-100) is a weighted geometric mean of": "Puan (0-100), şunların ağırlıklı geometrik ortalamasıdır:",
-    "demand (review volume) and dissatisfaction (how far below 70% positive), minus points for risk flags.":
-        "talep (inceleme hacmi) ve memnuniyetsizlik (%70 olumlunun ne kadar altında); risk işaretleri için puan düşülür.",
-    "Review-bombed periods are removed from the rating first. Fixability is shown but not counted.":
-        "İnceleme bombardımanı dönemleri önce puandan çıkarılır. Düzeltilebilirlik gösterilir ama puana katılmaz.",
     "(score {score})": "(puan {score})",
     "Steam store": "Steam mağazası",
     "Released {date}": "Çıkış {date}",
@@ -472,10 +443,6 @@ TR: dict[str, str] = {
     "Satisfaction:": "Memnuniyet:",
     "{rating} positive": "{rating} olumlu",
     ", {rating} with review bombs removed": ", inceleme bombardımanları çıkarılınca {rating}",
-    "Score parts:": "Puan parçaları:",
-    "demand {demand}, dissatisfaction {dissatisfaction} (fixability {fixability}, not counted)":
-        "talep {demand}, memnuniyetsizlik {dissatisfaction} (düzeltilebilirlik {fixability}, puana katılmaz)",
-    ", penalty -{points} ({names})": ", ceza -{points} ({names})",
     "Tags:": "Etiketler:",
     "{pct} of negative reviews still praise the idea or its potential.":
         "Olumsuz incelemelerin {pct} kadarı yine de fikri ya da potansiyelini övüyor.",
@@ -604,4 +571,65 @@ TR: dict[str, str] = {
     "Pakistan": "Pakistan",
     "Vietnam": "Vietnam",
     "Hong Kong": "Hong Kong",
+    # the score since #12: similar games' hits
+    " Penalty -{points} ({names}).":
+        " Ceza -{points} ({names}).",
+    "(penalty -{points:.0f} for {names})":
+        "({names} için -{points:.0f} ceza)",
+    "25% hits or more = 100, minus points for risk flags. In a backtest over 12,000 games this predicted how new games in the niche did; demand and dissatisfaction added nothing, so they are shown but not counted.":
+        "%25 veya daha fazla hit = 100; risk işaretleri puan düşürür. 12.000 oyunluk geriye dönük bir testte bu, nişteki yeni oyunların nasıl iş çıkaracağını öngördü; talep ve memnuniyetsizlik bir şey katmadı, bu yüzden gösterilir ama puana katılmaz.",
+    "Analyzed {n} game(s). The score counts how often each game's similar games became hits, so it needs the list of every rated Steam game (~36 min the first time, then cached for a week).":
+        "{n} oyun analiz edildi. Puan, her oyunun benzer oyunlarının ne sıklıkla hit olduğunu sayar; bu yüzden Steam'deki tüm puanlı oyunların listesi gerekir (ilk seferde ~36 dk, sonra bir hafta önbellekten).",
+    "Couldn't read the similar games, so there are no scores":
+        "Benzer oyunlar okunamadı, bu yüzden puan yok",
+    "Every analyzed game scored 0: their similar games rarely became hits, or risk penalties were as big as the score.":
+        "Analiz edilen her oyunun puanı 0: benzer oyunları nadiren hit oldu ya da risk cezaları puan kadar büyüktü.",
+    "None of the analyzed games has {n}+ similar games released 48 to 24 months ago, so none has a score.":
+        "Analiz edilen oyunların hiçbirinin 48 ile 24 ay önce çıkmış {n}+ benzer oyunu yok, bu yüzden hiçbirinin puanı yok.",
+    "Not counted:":
+        "Puana katılmayanlar:",
+    "Not counted: demand {demand}, dissatisfaction {dissatisfaction} at {rating} positive, fixability {fixability}":
+        "Puana katılmayanlar: talep {demand}, {rating} olumluda memnuniyetsizlik {dissatisfaction}, düzeltilebilirlik {fixability}",
+    "Not measured yet: it needs the list of every rated Steam game (~36 min the first time, then cached for a week).":
+        "Henüz ölçülmedi: Steam'deki tüm puanlı oyunların listesi gerekiyor (ilk seferde ~36 dk, sonra bir hafta önbellekten).",
+    "Only {n} similar games (sharing 2 of its first 3 tags: {tags}) were released {first} to {last}; too few to tell.":
+        "{first} ile {last} arasında yalnızca {n} benzer oyun (ilk 3 etiketinden 2'sini paylaşan: {tags}) çıktı; bir şey söylemek için çok az.",
+    "Opportunity score: not measured":
+        "Fırsat puanı: ölçülmedi",
+    "Score not measured yet":
+        "Puan henüz ölçülmedi",
+    "Scores not measured yet":
+        "Puanlar henüz ölçülmedi",
+    "Similar games often became hits":
+        "Benzer oyunlar sık sık hit oldu",
+    "Similar games rarely became hits":
+        "Benzer oyunlar nadiren hit oldu",
+    "Similar games sometimes became hits":
+        "Benzer oyunlar ara sıra hit oldu",
+    "Similar games share 2 of its first 3 Steam tags; counted are those released 48 to 24 months ago, and a hit has 500+ reviews at 80%+ positive.":
+        "Benzer oyunlar, oyunun ilk 3 Steam etiketinden 2'sini paylaşır; 48 ile 24 ay önce çıkanlar sayılır ve hit, %80+ olumluyla 500+ incelemesi olan oyundur.",
+    "Similar games' hits":
+        "Benzer oyunların hitleri",
+    "Similar games:":
+        "Benzer oyunlar:",
+    "Steam's store search doesn't list this game (it needs 10+ reviews), so its similar games can't be found.":
+        "Steam mağaza araması bu oyunu listelemiyor (10+ inceleme gerekir), bu yüzden benzer oyunları bulunamıyor.",
+    "The ranking fills in by itself once the list is read.":
+        "Liste okununca sıralama kendiliğinden dolar.",
+    "The score (0-100) counts how often the game's similar games became hits.":
+        "Puan (0-100), oyunun benzer oyunlarının ne sıklıkla hit olduğunu sayar.",
+    "This game is {detail}, so it isn't an underserved audience: a new game has less to do better. The score doesn't count this either way.":
+        "Bu oyun {detail}, yani karşılanmamış bir kitle değil: yeni bir oyunun daha iyi yapabileceği şey daha az. Puan bunu ne olumlu ne olumsuz sayar.",
+    "Too few similar games":
+        "Çok az benzer oyun",
+    "demand {demand}, dissatisfaction {dissatisfaction}, fixability {fixability}":
+        "talep {demand}, memnuniyetsizlik {dissatisfaction}, düzeltilebilirlik {fixability}",
+    "{full:.0%}+ = 100%.":
+        "{full:.0%}+ = %100.",
+    "{hits} of {n} similar games (sharing 2 of its first 3 tags: {tags}) released {first} to {last} now have 500+ reviews at 80%+ positive ({rate:.0%}).":
+        "{first} ile {last} arasında çıkan {n} benzer oyundan (ilk 3 etiketinden 2'sini paylaşan: {tags}) {hits} tanesinin şu an %80+ olumluyla 500+ incelemesi var ({rate:.0%}).",
+    "{n:,} reviews. Log scale: {lo} reviews = 0%, {hi:,}+ = 100%. Not counted: once the similar games are known, it adds nothing.":
+        "{n:,} inceleme. Logaritmik ölçek: {lo} inceleme = %0, {hi:,}+ = %100. Puana katılmaz: benzer oyunlar bilindiğinde bir şey katmıyor.",
+    "{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%. Not counted: in the backtest, how unhappy (or happy) a game's players were said nothing about how new games did.":
+        "{rating}. %{max:g}+ olumlu = %0, %{min:g} = %100. Puana katılmaz: geriye dönük testte bir oyunun oyuncularının ne kadar memnuniyetsiz (ya da memnun) olduğu, yeni oyunların nasıl iş çıkaracağı hakkında bir şey söylemedi.",
 }

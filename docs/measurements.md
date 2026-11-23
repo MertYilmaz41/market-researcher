@@ -81,6 +81,9 @@ Method in `CLAUDE.md`; report `reports/game-backtest.md`. 72,957 rated games, 27
 - demand: +0.36 / +0.33 / +0.26, +0.25, 10.2% vs 6.9%: passes. demand x satisfaction: +0.32 / +0.30 / +0.24, 9.9% vs 7.0%: passes.
 - niche's earlier entrants' hit rate: +0.78 / +0.75 / +0.63, +0.69, 13.6% vs 5.6%: passes, by far the strongest.
 - Reading: how satisfied X's players are predicts nothing either way (neither the method's "unhappy audience" nor the user's "satisfied audience"). The current score passes only through its demand part: it is no better than demand alone. What predicts a niche is whether its earlier entrants became hits, as at tag level.
+- **Score candidates (#12), rule written before measuring** (a2c0941: the combination if its check rho is within 0.02 of the plain niche rate's, else the Wilson low bound under the same rule, else the plain rate): demand x niche rate (Wilson) +0.66 / +0.65 / +0.52, size fixed +0.60, 12.9% vs 6.0%; niche rate (Wilson) +0.71 / +0.72 / +0.56, +0.69, 13.4% vs 5.6%. Both more than 0.02 below +0.75: **the plain niche rate is the score.**
+- **App-side estimate (#12)**, rule fixed before running (median per-tag Spearman >= 0.80 with the histogram version at today's month, 30 tags): every rated game with store dates and today's reviews +0.94 (min +0.86), adopted; only the tag search's own games +0.62 (min +0.13), rejected.
+- Today's spread (27,228 games with 100+ reviews): niche hit rate p5 4.2%, p20 6.5%, median 9.2%, p80 13.2%, p95 19.2%, p99 27.3%; 429 have under 10 similar games. Hence `PEER_RATE_FULL` 25%.
 
 ## Box Method check
 

@@ -91,7 +91,8 @@ def _game(a: Analysis) -> str:
     g, m = a.game, a.mining
     recent, _total, _age = risk.recent_activity(a.histogram)
     lately = risk.recent_rating(a.histogram)
-    head = (f"## {g.name}\nScore {a.opportunity.score:.0f}/100, {g.reviews:,} reviews, {g.rating:.0f}% positive")
+    score = "not measured" if a.opportunity.score is None else f"{a.opportunity.score:.0f}/100"
+    head = f"## {g.name}\nScore {score}, {g.reviews:,} reviews, {g.rating:.0f}% positive"
     if lately is not None:
         head += f" (last 12 months: {lately:.0f}% positive of {recent:,} reviews)"
     lines = [head]

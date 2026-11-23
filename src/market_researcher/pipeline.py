@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from . import backtest, config, notices, regional, risk, scoring
+from . import backtest, config, notices, peers, regional, risk, scoring
 from .market import MIN_TRACK_ENTRANTS, MarketStats, TagMarket, TrackRecord, market_stats, wilson_low
 from .http import HttpClient, RetryableStatus
 from .i18n import _
@@ -328,6 +328,23 @@ def run_markets(
                                  for name, i in steam_store.tag_ids(http).items() if by_tag.get(i)])
     result.rows.sort(key=market_rank)
     return result
+
+
+def read_peers(http: HttpClient, on_step: Callable[[str, int, int], None] | None = None) -> peers.PeerIndex:
+    """Every rated game on Steam's store search, as the score's similar-games index (peers.py): the same read
+    as run_markets (~730 pages, ~36 min the first time, then cached a week)."""
+    def page(done: int, total: int) -> None:
+        if on_step:
+            on_step(_("Reading every rated game from the Steam store"), done, total)
+
+    games = steam_search.games_by_tags(http, [], page)
+    return peers.build(games, {i: name for name, i in steam_store.tag_ids(http).items()})
+
+
+def rescore(analyses: list[Analysis], index: peers.PeerIndex) -> None:
+    """Score each analysis by its similar games (scoring.rescore)."""
+    for a in analyses:
+        scoring.rescore(a, index.of(a.game.appid))
 
 
 def earlier_hits(games: list[Game], start: int) -> dict:

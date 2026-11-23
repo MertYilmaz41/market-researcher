@@ -23,7 +23,8 @@ TAG_EXAMPLES = "Job Simulator, Colony Sim, Management, Base Building, Life Sim, 
 SLOW_RUN_SECONDS = 180  # warn before a first run longer than this (a default 15-game run is ~2-3 min)
 BROAD_TAG_GAMES = 1000
 FEW_CANDIDATES = 3
-# was 20 while fixability was in the score, then 12 until the dissatisfaction floor lifted scores (#7)
+# was 20 while fixability was in the score, then 12 until the dissatisfaction floor lifted scores (#7). Since #12
+# (similar games' hit rate x 100 / 25%) it is a 6.25% hit rate, about the 15th percentile.
 WEAK_SCORE = 25
 
 
@@ -184,17 +185,26 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
 
     if ranked:
         best = ranked[0]
-        if all(a.opportunity.effective_rating > config.MAX_RATING for a in ranked):
+        if best.opportunity.score is None and any(a.opportunity.peers is None for a in ranked):
             out.append(Notice(
-                level="warning", title=_("No disappointed audience found"),
-                message=_("Every analyzed game is above 70% positive once review bombs are removed, "
-                          "so they rank on demand alone."),
+                level="info", title=_("Scores not measured yet"),
+                message=_("Analyzed {n} game(s). The score counts how often each game's similar games became hits, "
+                          "so it needs the list of every rated Steam game (~36 min the first time, then cached "
+                          "for a week).", n=len(ranked)),
+                hint=_("The ranking fills in by itself once the list is read."),
+            ))
+        elif best.opportunity.score is None:
+            out.append(Notice(
+                level="warning", title=_("Too few similar games"),
+                message=_("None of the analyzed games has {n}+ similar games released 48 to 24 months ago, "
+                          "so none has a score.", n=config.MIN_PEERS),
                 hint=_("Try another tag, e.g. {examples}.", examples=TAG_EXAMPLES),
             ))
-        if best.opportunity.score <= 0:
+        elif best.opportunity.score <= 0:
             out.append(Notice(
                 level="warning", title=_("No real opportunity found"),
-                message=_("Every analyzed game scored 0: too few reviews, or risk penalties as big as the score."),
+                message=_("Every analyzed game scored 0: their similar games rarely became hits, or risk "
+                          "penalties were as big as the score."),
                 hint=_("Try another tag, e.g. {examples}.", examples=TAG_EXAMPLES),
             ))
         else:
@@ -246,8 +256,8 @@ def for_game(a: Analysis) -> list[Notice]:
                   if bombed else _("{rating:.0f}% positive", rating=g.rating))
         out.append(Notice(
             level="info", title=_("Players are satisfied"),
-            message=_("This game is {detail}, so it isn't an underserved audience: it scores on demand alone.",
-                      detail=detail),
+            message=_("This game is {detail}, so it isn't an underserved audience: a new game has less to do "
+                      "better. The score doesn't count this either way.", detail=detail),
             hint=_("Look for games under 70% positive."),
         ))
     if not g.base_price:

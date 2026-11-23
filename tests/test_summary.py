@@ -151,7 +151,7 @@ def test_summary_of_unknown_run_is_404(client):
 def test_report_names_the_penalties_of_a_penalized_game():
     a = analysis(40, "Old Sim", [flag("fading_demand", "medium")])
     a.opportunity.penalty, a.opportunity.penalized = 10, ["fading_demand"]
-    assert ", penalty -10 (fading_demand)." in render(
+    assert " Penalty -10 (fading_demand)." in render(
         tag="X", analyses=[a], n_candidates=1, n_tag_games=1, min_reviews=50, lo=5, hi=70, not_games=[], unlisted=[])
 
 

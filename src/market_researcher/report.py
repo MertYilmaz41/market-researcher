@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from . import boxmethod, config, regional, risk
+from . import boxmethod, config, regional, risk, scoring
 from .i18n import N_, _, fmt, lang, num
 from .models import Analysis, Game, GameSummary, OpportunitySummary
 
@@ -137,8 +137,14 @@ def lower(text: str) -> str:
 
 
 def rank(analyses: list[Analysis]) -> list[Analysis]:
+    """Highest score first; games without one (not measured yet, too few similar games) last. Ties (games in the
+    same niche share a score) by review count."""
     kept = [a for a in analyses if not a.excluded]
-    return sorted(kept, key=lambda a: -a.opportunity.score)
+    return sorted(kept, key=lambda a: (a.opportunity.score is None, -(a.opportunity.score or 0), -a.game.reviews))
+
+
+def score_text(a: Analysis) -> str:
+    return "-" if a.opportunity.score is None else str(round(a.opportunity.score))
 
 
 def render(
@@ -194,6 +200,8 @@ def render(
         risk_label=risk_label,
         risk_names=risk_names,
         complaint_text=complaint_text,
+        score_text=score_text,
+        peers_text=scoring.peers_text,
         box=box,
         gross=gross,
         top_complaint=top_complaint,
@@ -216,7 +224,7 @@ def ranking_csv(ranked: list[Analysis], changes: dict[int, float | None] | None 
         recent, total, _age = risk.recent_activity(a.histogram, a.analyzed_at)
         lately = risk.recent_rating(a.histogram, a.analyzed_at)
         w.writerow([
-            i, a.game.appid, a.game.name, round(a.opportunity.score),
+            i, a.game.appid, a.game.name, "" if a.opportunity.score is None else round(a.opportunity.score),
             "new" if a.game.appid in changes and change is None else ("" if change == "" else round(change)),
             a.game.reviews, round(a.game.rating), recent if total else "", "" if lately is None else round(lately),
             round(box(a).gross_mid) if a.game.base_price else "", top_complaint(a), risk_codes(a), a.game.store_url,
@@ -232,7 +240,7 @@ def shortlist_csv(items: list[dict]) -> str:
                 "starred", "store_url"])
     for g in items:
         complaint = f"{g['complaint']} ({g['complaint_share']:.0%})" if g.get("complaint") else "-"
-        w.writerow([g["appid"], g["name"], round(g["score"]), round(g["rating"]), g["reviews"], complaint,
+        w.writerow([g["appid"], g["name"], "" if g["score"] is None else round(g["score"]), round(g["rating"]), g["reviews"], complaint,
                     g["source"], g["note"], dt.date.fromtimestamp(g["added"]).isoformat(), g["store_url"]])
     return out.getvalue()
 
