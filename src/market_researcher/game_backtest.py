@@ -19,6 +19,11 @@ any result was seen:
 - Histograms only for games with >= config.MIN_REVIEWS reviews today: below that a game can neither be X nor a hit
   or sold. Entrants below it are dated by the store's release date, as pipeline.earlier_hits does; the others
   by their first month with a review, as in backtest.py.
+
+Score candidates, added Nov 23 2026 after the first run (#12), with this rule written before they were measured:
+the new score is "demand x niche's earlier hit rate (Wilson low)" if it passes backtest.candidate() and its check
+rho is at most 0.02 below the plain niche rate's; else "niche's earlier hit rate (Wilson low)" under the same
+rule; else the plain rate. (The 0.02 margin is the one used for Markets' Wilson ranking.)
 """
 
 import argparse
@@ -30,6 +35,7 @@ from itertools import combinations
 from pathlib import Path
 
 from . import backtest, config, scoring
+from .market import wilson_low
 from .backtest import (CHECK_CUTOFFS, CUTOFFS, HORIZON, MIN_ENTRANTS, OUTCOME, RECENT_CUTOFFS, RECENT_WINDOW,
                        SUCCESS_RATING, SUCCESS_REVIEWS, TUNE_CUTOFFS, Outcomes, as_of, month_text, parse_month,
                        quintiles, release_month, window)
@@ -169,6 +175,10 @@ def satisfaction(rating: float) -> float:
     return max(0.0, min(1.0, (rating - config.MIN_RATING) / (100 - config.MIN_RATING)))
 
 
+def _niche_low(r: GameRow) -> float | None:
+    return wilson_low(r.past.hits, r.past.entrants) if r.past.entrants >= MIN_ENTRANTS else None
+
+
 MEASURES: dict[str, Callable[[GameRow], float | None]] = {
     # The score changed before this ran (#6, Nov 23 2026: dissatisfaction floor), so both formulas are measured.
     "current score (no penalties)": lambda r: scoring.combine(
@@ -180,6 +190,10 @@ MEASURES: dict[str, Callable[[GameRow], float | None]] = {
     "demand": lambda r: scoring.demand(r.reviews),
     "demand x satisfaction": lambda r: _geo(scoring.demand(r.reviews), satisfaction(r.rating)),
     "niche's earlier entrants' hit rate": lambda r: r.past.hit_rate if r.past.entrants >= MIN_ENTRANTS else None,
+    # Score candidates (#12, see the module docstring for the rule).
+    "niche's earlier hit rate (Wilson low)": lambda r: _niche_low(r),
+    "demand x niche's earlier hit rate (Wilson low)": lambda r: (
+        None if _niche_low(r) is None else math.sqrt(scoring.demand(r.reviews) * _niche_low(r))),
 }
 
 
