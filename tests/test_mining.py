@@ -60,6 +60,13 @@ def test_hardly_any_bugs_not_counted():
     ("3 years and you still haven't fixed this career mode getting stuck on loading", True),
     ("the devs should have fixed the bugs before release", True),
     ("i hope they fixed the crashes", True),
+    # #10: a negated fix is still a complaint; a negated bug isn't
+    ("devs never fixed bugs or major issues", True),
+    ("they did not fix the bug where you cannot close the pot", True),
+    ("abandoned game, so no fixes to bugs, don't buy it", True),
+    ("by not patching significant bugs that make the game nearly unplayable", True),
+    ("never had any bugs", False),
+    ("no bugs, but boring", False),
 ])
 def test_fixed_bugs_are_not_a_complaint(text, counted):
     """#9: a fix reported as done isn't a bug complaint; conditions, denials and "fixing" still are."""

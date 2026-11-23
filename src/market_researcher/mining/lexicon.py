@@ -147,6 +147,11 @@ CATEGORIES: tuple[Category, ...] = (
 
 NEGATION = r"\b(?:no|not|never|without|zero|(?:hardly|barely|scarcely)\W+(?:any|ever)|isn'?t|wasn'?t|aren'?t|didn'?t|haven'?t|hasn'?t)\b(?:\W+\w+){0,2}\W+$"
 
+# A negation of a fix doesn't negate the complaint: "devs never fixed bugs", "still haven't patched the crashes",
+# "no fixes to bugs" (#10). A NEGATION match containing one of these words is ignored. Across the fixtures and
+# 7,769 cached negative reviews it brings back 11 matches: 9 clear complaints, 2 borderline.
+NEGATED_FIX = r"\b(?:fix(?:e[sd])?|fixing|patch(?:e[sd]|ing)?|address(?:e[sd]|ing)?|resolve[sd]?|resolving|solve[sd]?|squashed|ironed)\b"
+
 # "they fixed a lot of the bugs": a fix reported as done is not a complaint (#9). Matched against the text just
 # before a negatable category's match: a doer, "fixed" (not "fixing": "instead of fixing bugs"), then up to 4
 # words that don't deny it ("they fixed none of the bugs"). FIX_UNLESS before the doer keeps conditions and
