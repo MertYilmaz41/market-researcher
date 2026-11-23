@@ -15,8 +15,9 @@ TR: dict[str, str] = {
     "The method recommends at least {n} reviews, ideally {ideal}+.":
         "Yöntem en az {n}, ideal olarak {ideal}+ inceleme önerir.",
     "Above 70% isn't underserved": "%70 üstü karşılanmamış sayılmaz",
-    "Games above {max:g}% positive satisfied their players, so they score 0.":
-        "%{max:g} üstü olumlu oyunlar oyuncularını memnun etmiş, bu yüzden 0 puan alırlar.",
+    "Games above {max:g}% positive satisfied their players: they score on demand alone, below disappointed audiences with the same demand.":
+        "%{max:g} üstü olumlu oyunlar oyuncularını memnun etmiş: yalnızca talepten puan alırlar ve aynı talepteki "
+        "hayal kırıklığına uğramış kitlelerin altında kalırlar.",
     "Keep '% positive to' at {max:g} or lower to focus on disappointed audiences.":
         "Hayal kırıklığına uğramış kitlelere odaklanmak için '% olumlu (en çok)' değerini {max:g} veya altında tutun.",
     "Very low ratings included": "Çok düşük puanlar dahil",
@@ -83,9 +84,12 @@ TR: dict[str, str] = {
         "{n} oyunun inceleme metinleri yüklenemedi; bu yüzden şikayetleri çıkarılamadı.",
     "Run again later to fill them in.": "Eksikleri doldurmak için daha sonra tekrar çalıştırın.",
     "No real opportunity found": "Gerçek bir fırsat bulunamadı",
-    "Every analyzed game is above 70% positive once review bombs are removed, so none shows a disappointed audience.":
+    "No disappointed audience found": "Hayal kırıklığına uğramış kitle bulunamadı",
+    "Every analyzed game is above 70% positive once review bombs are removed, so they rank on demand alone.":
         "İnceleme bombardımanları çıkarıldığında analiz edilen her oyun %70'in üstünde olumlu; "
-        "hiçbiri hayal kırıklığına uğramış bir kitle göstermiyor.",
+        "bu yüzden yalnızca taleplerine göre sıralanıyorlar.",
+    "Every analyzed game scored 0: too few reviews, or risk penalties as big as the score.":
+        "Analiz edilen her oyun 0 puan aldı: inceleme sayısı çok az ya da risk cezaları puan kadar büyük.",
     "Try another tag, e.g. {examples}.": "Başka bir etiket deneyin, örneğin {examples}.",
     "Only weak opportunities": "Yalnızca zayıf fırsatlar",
     "The best score is {score:.0f}/100.": "En iyi puan {score:.0f}/100.",
@@ -115,8 +119,8 @@ TR: dict[str, str] = {
         "genel olarak %{rating:.0f} olumlu, ama inceleme bombardımanları çıkarılınca %{adjusted:.0f}",
     "{rating:.0f}% positive": "%{rating:.0f} olumlu",
     "Players are satisfied": "Oyuncular memnun",
-    "This game is {detail}, so it isn't an underserved audience (score 0).":
-        "Bu oyun {detail}; yani karşılanmamış bir kitle değil (puan 0).",
+    "This game is {detail}, so it isn't an underserved audience: it scores on demand alone.":
+        "Bu oyun {detail}; yani karşılanmamış bir kitle değil: yalnızca talebinden puan alıyor.",
     "Look for games under 70% positive.": "%70'in altında olumlu olan oyunlara bakın.",
     "Free game": "Ücretsiz oyun",
     "It's free to play, so the Box Method revenue estimate doesn't apply.":
@@ -252,7 +256,8 @@ TR: dict[str, str] = {
     " ({adjusted:.0f}% with review-bomb periods removed)": " (inceleme bombardımanı dönemleri çıkarılınca %{adjusted:.0f})",
     "{n:,} reviews. Log scale: {lo} reviews = 0%, {hi:,}+ = 100%.":
         "{n:,} inceleme. Logaritmik ölçek: {lo} inceleme = %0, {hi:,}+ = %100.",
-    "{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%.": "{rating}. %{max:g}+ olumlu = %0, %{min:g} = %100.",
+    "{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%. The score counts it as at least {floor:.0%}, so well-liked games aren't zeroed.":
+        "{rating}. %{max:g}+ olumlu = %0, %{min:g} = %100. Puan bunu en az {floor:.0%} sayar; böylece sevilen oyunlar sıfırlanmaz.",
     "{fix:.0%} of complaint mentions are things a small team can fix (bugs, UI, performance...), not scope or genre. "
     "Not counted in the score: it is close to 100% for almost every game.":
         "Şikayetlerin {fix:.0%} kadarı küçük bir ekibin düzeltebileceği şeyler (hatalar, arayüz, performans...), "

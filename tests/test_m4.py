@@ -37,13 +37,23 @@ def test_score_monotonic():
     assert more_demand > worse
 
 
-def test_score_zero_when_satisfied():
-    assert scoring.score(game(pos=800, neg=200), [], mining()).score == 0
+def test_satisfied_games_score_on_demand_alone():
+    """Above 70% dissatisfaction is 0 but counts as DISSATISFACTION_FLOOR: liked games aren't zeroed (#6),
+    and rank below disappointed ones with the same demand."""
+    liked = scoring.score(game(pos=800, neg=200), [], mining())
+    loved = scoring.score(game(pos=990, neg=10), [], mining())
+    assert liked.dissatisfaction == 0 and liked.score > 0 and liked.score == loved.score
+    assert scoring.score(game(pos=690, neg=310), [], mining()).score > liked.score
+    assert scoring.combine({"demand": 1, "dissatisfaction": 0}) == pytest.approx(52.4, abs=0.1)  # the ceiling
+    by_rating = [scoring.score(game(pos=p, neg=1000 - p), [], mining()).score for p in (100, 400, 600, 690, 700, 950)]
+    assert by_rating == sorted(by_rating, reverse=True) and by_rating[3] > by_rating[4]  # rescaled, not clipped
+    assert scoring.score(game(pos=8, neg=2), [], mining()).score == 0  # no demand is still 0
 
 
 def test_review_bomb_adjusted_rating_used():
     o = scoring.score(game(pos=300, neg=700), [], mining(), adjusted_rating=71)
-    assert o.score == 0 and o.effective_rating == 71
+    assert o.dissatisfaction == 0 and o.effective_rating == 71
+    assert o.score == scoring.score(game(pos=710, neg=290), [], mining()).score
 
 
 def test_penalties_and_default_fixability():
@@ -125,8 +135,10 @@ def test_explain_tells_unread_reviews_from_reviews_without_complaints():
 
 
 def test_explain_names_a_zero_part():
-    e = scoring.explain(_analysis_for(game(pos=900, neg=100)))  # 90% positive: not dissatisfied
-    assert e["zero_part"] == "Dissatisfaction" and e["score"] == 0 and e["combined"] == 0
+    e = scoring.explain(_analysis_for(game(pos=9, neg=1)))  # 10 reviews: no demand
+    assert e["zero_part"] == "Demand" and e["score"] == 0 and e["combined"] == 0
+    liked = scoring.explain(_analysis_for(game(pos=900, neg=100)))  # 90% positive: floored, not zeroed
+    assert liked["zero_part"] is None and liked["combined"] > 0 and "at least 25%" in liked["parts"][1]["basis"]
 
 
 def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):

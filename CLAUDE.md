@@ -110,7 +110,7 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 ### Scoring (`scoring.py`)
 
 100 × the weighted geometric mean of demand (log of review count) and dissatisfaction (how far below 70% positive), minus fixed penalties per risk flag (`RISK_PENALTIES` in `config.py`).
-- If any part is 0, the score is 0. Flags in `EXCLUDE_FLAGS` (`not_game`) drop a game from the ranking.
+- Dissatisfaction is counted rescaled to [`config.DISSATISFACTION_FLOOR` (0.25), 1] (`scoring.counted`, inside `combine`), so games above 70% aren't zeroed: they score on demand alone (at most ~52 before penalties), below disappointed games with the same demand. Rescaled, not clipped: clipping tied every game from ~54% to 100%. The part's own value (map, score card) stays unfloored. The user's choice (Nov 23 2026, #6), untested; `game_backtest.py` measures both formulas. If demand is 0, the score is 0. Flags in `EXCLUDE_FLAGS` (`not_game`) drop a game from the ranking.
 - Review bombs aren't penalized; `risk.rating_without_bombs` replaces the rating, so a review-bombed game that's otherwise fine scores 0.
 - Fixability is shown but not counted: it is ~100% for almost every game. Color steps are 56/35 (`palette.scoreLevel`), `notices.WEAK_SCORE` is 12.
 - `config.SCORE_VERSION` is in `runs.compare_key`: bump it when the formula changes, so old runs aren't compared with new ones.
@@ -122,7 +122,7 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 Each check returns `RiskFlag`s; thresholds live in `config.py`. `risk.checks` lists every check, passed or flagged, for the History tab.
 - Spike detection skips the launch window. A spike at least 60% negative is a review bomb, and so is a surge of negative reviews alone (`find_negative_spikes`: 50+, 10x the median period's, a negative share 2x that of all other periods; it caught Big Walk's Nov 2026 bomb, which the volume spike missed); otherwise a "Review spike" (code `streamer_spike`; the old flag message stays in `i18n_tr` for saved runs). It reports the rating with spikes excluded.
 - `recent_activity` counts reviews in the last 12 months ("Last 12 mo"); a game 2+ years old with under 5% of its reviews there gets `fading_demand`. `recent_rating` is the % positive of those months. Both count back from `Analysis.analyzed_at`, so a saved run shows its own day's figures.
-- `check_recovered` flags `recovered` (-20) with 50+ recent reviews rated 15+ points above all time, or 70%+. Not lower than 50: with 30 the noise was too large (Bus-Simulator 2012, no updates since 2013, was flagged).
+- `check_recovered` flags `recovered` (-20) with 50+ recent reviews rated 15+ points above all time, or 70%+ for a game under 70% all time (a game always liked hasn't recovered; this mattered once liked games could score). Not lower than 50: with 30 the noise was too large (Bus-Simulator 2012, no updates since 2013, was flagged).
 
 ### Review mining (`mining/`)
 

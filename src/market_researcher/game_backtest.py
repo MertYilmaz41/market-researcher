@@ -170,8 +170,11 @@ def satisfaction(rating: float) -> float:
 
 
 MEASURES: dict[str, Callable[[GameRow], float | None]] = {
+    # The score changed before this ran (#6, Nov 23 2026: dissatisfaction floor), so both formulas are measured.
     "current score (no penalties)": lambda r: scoring.combine(
         {"demand": scoring.demand(r.reviews), "dissatisfaction": scoring.dissatisfaction(r.rating)}),
+    "score before Nov 23 2026 (no floor, no penalties)": lambda r: _geo(scoring.demand(r.reviews),
+                                                                         scoring.dissatisfaction(r.rating)),
     "dissatisfaction": lambda r: scoring.dissatisfaction(r.rating),
     "% positive": lambda r: r.rating,
     "demand": lambda r: scoring.demand(r.reviews),

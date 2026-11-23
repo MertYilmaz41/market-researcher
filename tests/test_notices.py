@@ -99,6 +99,10 @@ def test_failed_and_missing_reviews():
 
 def test_zero_and_weak_scores():
     assert "No real opportunity found" in titles(post(tag_result(analyses=[analysis(0, "Meh")])))
+    liked = analysis(30, "Liked")
+    liked.opportunity.effective_rating = 85
+    assert "No disappointed audience found" in titles(post(tag_result(analyses=[liked])))
+    assert "No disappointed audience found" not in titles(post(tag_result(analyses=[analysis(30, "Meh")])))
     weak = titles(post(tag_result(analyses=[analysis(8, "Meh")])))
     assert "Only weak opportunities" in weak and "Analysis complete" in weak
 

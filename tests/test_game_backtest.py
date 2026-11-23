@@ -76,6 +76,7 @@ def test_planted_signal_passes_and_noise_fails(signal, passes):
 
 def test_measures():
     row = gb.GameRow(tag=1, t=0, appid=1, reviews=9341, rating=77.0, market=gb.NicheMarket(10), after=backtest.Outcomes())
-    assert gb.MEASURES["current score (no penalties)"](row) == 0  # Moon Sweepers: above 70%, no dissatisfaction
+    assert gb.MEASURES["score before Nov 23 2026 (no floor, no penalties)"](row) == 0  # Moon Sweepers: above 70%
+    assert gb.MEASURES["current score (no penalties)"](row) == pytest.approx(52, abs=0.5)  # floored (#6)
     assert gb.MEASURES["demand x satisfaction"](row) > 50
     assert gb.MEASURES["niche's earlier entrants' hit rate"](row) is None  # under MIN_ENTRANTS earlier entrants
