@@ -23,7 +23,8 @@ TAG_EXAMPLES = "Job Simulator, Colony Sim, Management, Base Building, Life Sim, 
 SLOW_RUN_SECONDS = 180  # warn before a first run longer than this (a default 15-game run is ~2-3 min)
 BROAD_TAG_GAMES = 1000
 FEW_CANDIDATES = 3
-WEAK_SCORE = 12  # was 20 while fixability was in the score (the same games score lower without it)
+# was 20 while fixability was in the score, then 12 until the dissatisfaction floor lifted scores (#7)
+WEAK_SCORE = 25
 
 
 MAX_ANALYZE = 50  # the web's upper limit for 'Games to analyze'
