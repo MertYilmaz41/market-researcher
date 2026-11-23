@@ -6,13 +6,14 @@ from collections import Counter
 
 from .. import config
 from ..models import CategoryResult, MiningResult, Review
-from .lexicon import CATEGORIES, FIX_DONE, FIX_UNLESS, IDEA_PRAISE, NEGATION
+from .lexicon import CATEGORIES, FIX_DONE, FIX_UNLESS, IDEA_PRAISE, NEGATED_FIX, NEGATION
 
 _BBCODE = re.compile(r"\[/?[a-z0-9*]+(?:=[^\]]*)?\]", re.I)
 _URL = re.compile(r"https?://\S+|www\.\S+")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD = re.compile(r"[a-z][a-z'-]+")
 _NEGATION = re.compile(NEGATION)
+_NEGATED_FIX = re.compile(NEGATED_FIX)
 _FIX_DONE = re.compile(FIX_DONE)
 _FIX_UNLESS = re.compile(FIX_UNLESS)
 _COMPILED = {c.code: re.compile(r"\b(?:" + "|".join(c.patterns) + r")\b") for c in CATEGORIES}
@@ -48,6 +49,12 @@ def clean(text: str) -> str:
     return _URL.sub(" ", _BBCODE.sub(" ", text)).lower()
 
 
+def _negated(text: str, start: int) -> bool:
+    """A negation right before `start` ("no bugs"), unless it negates a fix ("never fixed bugs")."""
+    m = _NEGATION.search(text[max(0, start - 30):start])
+    return bool(m) and not _NEGATED_FIX.search(m.group())
+
+
 def _fixed(text: str, start: int) -> bool:
     """The words before `start` say it was fixed ("they fixed a lot of the bugs"), with no "if"/"never" before."""
     before = text[max(0, start - 80):start]
@@ -60,7 +67,7 @@ def _hits(text: str) -> dict[str, re.Match]:
     found = {}
     for cat in CATEGORIES:
         for m in _COMPILED[cat.code].finditer(text):
-            if cat.negatable and (_NEGATION.search(text[max(0, m.start() - 30):m.start()]) or _fixed(text, m.start())):
+            if cat.negatable and (_negated(text, m.start()) or _fixed(text, m.start())):
                 continue
             found[cat.code] = m
             break
