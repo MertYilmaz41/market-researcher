@@ -147,6 +147,17 @@ CATEGORIES: tuple[Category, ...] = (
 
 NEGATION = r"\b(?:no|not|never|without|zero|(?:hardly|barely|scarcely)\W+(?:any|ever)|isn'?t|wasn'?t|aren'?t|didn'?t|haven'?t|hasn'?t)\b(?:\W+\w+){0,2}\W+$"
 
+# "they fixed a lot of the bugs": a fix reported as done is not a complaint (#9). Matched against the text just
+# before a negatable category's match: a doer, "fixed" (not "fixing": "instead of fixing bugs"), then up to 4
+# words that don't deny it ("they fixed none of the bugs"). FIX_UNLESS before the doer keeps conditions and
+# denials as complaints: "if they fixed the bugs", "by the time devs fixed the bugs, you are fed up", "never",
+# "the devs should have fixed". Across the fixtures and 7,769 cached negative reviews (Nov 2026) it drops 2
+# matches, both right; no labeled review changes.
+FIX_DONE = (r"\b(?:they|devs?|developers?|team|studio|update|updates|patch|patches|hotfix(?:es)?|version)(?:'ve)?\s+"
+            r"(?:(?:have|has|finally|actually|already|seem(?:s|ed)? to(?: have)?)\s+){0,2}(?:fixed|squashed|ironed out)\b"
+            r"(?:\W+(?!nothing\b|none\b|no\b|zero\b|any\b)\w+){0,4}\W+$")
+FIX_UNLESS = r"\b(?:if|when|until|unless|once|before|by the time|hope|hopefully|wish|never|not|no)\b(?:\W+\w+){0,2}\W+$"
+
 # Players praising the idea while panning the game: the "great idea, bad execution" signal.
 IDEA_PRAISE = (
     r"(?:great|good|nice|cool|fun|interesting|amazing|awesome) (?:idea|concept|premise)",

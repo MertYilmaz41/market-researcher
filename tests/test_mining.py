@@ -2,7 +2,7 @@ import pytest
 
 from market_researcher import risk
 from market_researcher.mining import mine
-from market_researcher.mining.keywords import clean, core_phrases
+from market_researcher.mining.keywords import _hits, clean, core_phrases
 
 
 def rev(text, up=False, votes=0, i=[0]):
@@ -42,6 +42,28 @@ def test_hardly_any_bugs_not_counted():
     assert "bugs" not in codes(mine([rev(text)], []))
     # "barely" alone stays a complaint word: "barely playable, so many bugs"
     assert codes(mine([rev("barely playable, so many bugs")], []))["bugs"] == 1
+
+
+@pytest.mark.parametrize("text, counted", [
+    ("it feels like they fixed a lot of the bugs from the original, and the gameplay is smoother", False),
+    ("update: they fixed the bugs. the game is actually fine now", False),
+    ("they've fixed most bugs", False),
+    ("the latest patch fixed many old bugs", False),
+    ("although they fixed a handful of bugs, there are twice as many new bugs", True),  # the second one counts
+    ("if they fixed the overworld mission bugs i would", True),
+    ("instead of fixing bugs they added dlc", True),
+    ("when they have fixed all the bugs and optimized the fps", True),
+    ("by the time devs fixed the bugs, you are so fed up", True),
+    ("even the promise of the fixed bugs was a lie", True),
+    ("they fixed none of the bugs", True),
+    ("nothing fixed the issue. sometimes it crashes the game", True),
+    ("3 years and you still haven't fixed this career mode getting stuck on loading", True),
+    ("the devs should have fixed the bugs before release", True),
+    ("i hope they fixed the crashes", True),
+])
+def test_fixed_bugs_are_not_a_complaint(text, counted):
+    """#9: a fix reported as done isn't a bug complaint; conditions, denials and "fixing" still are."""
+    assert ("bugs" in _hits(clean(text))) is counted
 
 
 def test_negation_does_not_hide_content_complaint():
