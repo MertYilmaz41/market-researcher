@@ -67,6 +67,12 @@ def test_hardly_any_bugs_not_counted():
     ("by not patching significant bugs that make the game nearly unplayable", True),
     ("never had any bugs", False),
     ("no bugs, but boring", False),
+    # #11: a wider gap only before "a single / any / even one"
+    ("never had a single bug", False),
+    ("i haven't come across any bugs like some have", False),
+    ("i have never seen so many bugs in a game", True),
+    ("not to mention the crashes", True),
+    ("didn't see any major crashes, but the game has more bugs than i can count", True),  # the second one counts
 ])
 def test_fixed_bugs_are_not_a_complaint(text, counted):
     """#9: a fix reported as done isn't a bug complaint; conditions, denials and "fixing" still are."""

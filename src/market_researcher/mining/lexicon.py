@@ -146,6 +146,10 @@ CATEGORIES: tuple[Category, ...] = (
 )
 
 NEGATION = r"\b(?:no|not|never|without|zero|(?:hardly|barely|scarcely)\W+(?:any|ever)|isn'?t|wasn'?t|aren'?t|didn'?t|haven'?t|hasn'?t)\b(?:\W+\w+){0,2}\W+$"
+# A wider gap only before "a single / any / even one": "never had a single bug", "haven't come across any bugs" (#11).
+# A plain 3-word gap would drop 87 matches across the fixtures and cached reviews, mostly complaints ("never seen
+# so many bugs", "not to mention the crashes"); this drops 3, all true negations.
+NEGATION_ANY = r"\b(?:no|not|never|without|zero|(?:hardly|barely|scarcely)\W+(?:any|ever)|isn'?t|wasn'?t|aren'?t|didn'?t|haven'?t|hasn'?t)\b(?:\W+\w+){0,2}\W+(?:a\W+single|any|even\W+(?:one|a\W+single))(?:\W+\w+)?\W+$"
 
 # A negation of a fix doesn't negate the complaint: "devs never fixed bugs", "still haven't patched the crashes",
 # "no fixes to bugs" (#10). A NEGATION match containing one of these words is ignored. Across the fixtures and

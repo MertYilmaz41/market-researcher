@@ -6,13 +6,14 @@ from collections import Counter
 
 from .. import config
 from ..models import CategoryResult, MiningResult, Review
-from .lexicon import CATEGORIES, FIX_DONE, FIX_UNLESS, IDEA_PRAISE, NEGATED_FIX, NEGATION
+from .lexicon import CATEGORIES, FIX_DONE, FIX_UNLESS, IDEA_PRAISE, NEGATED_FIX, NEGATION, NEGATION_ANY
 
 _BBCODE = re.compile(r"\[/?[a-z0-9*]+(?:=[^\]]*)?\]", re.I)
 _URL = re.compile(r"https?://\S+|www\.\S+")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD = re.compile(r"[a-z][a-z'-]+")
 _NEGATION = re.compile(NEGATION)
+_NEGATION_ANY = re.compile(NEGATION_ANY)
 _NEGATED_FIX = re.compile(NEGATED_FIX)
 _FIX_DONE = re.compile(FIX_DONE)
 _FIX_UNLESS = re.compile(FIX_UNLESS)
@@ -50,8 +51,9 @@ def clean(text: str) -> str:
 
 
 def _negated(text: str, start: int) -> bool:
-    """A negation right before `start` ("no bugs"), unless it negates a fix ("never fixed bugs")."""
-    m = _NEGATION.search(text[max(0, start - 30):start])
+    """A negation right before `start` ("no bugs", "never had a single bug"), unless it negates a fix
+    ("never fixed bugs")."""
+    m = _NEGATION.search(text[max(0, start - 30):start]) or _NEGATION_ANY.search(text[max(0, start - 50):start])
     return bool(m) and not _NEGATED_FIX.search(m.group())
 
 
