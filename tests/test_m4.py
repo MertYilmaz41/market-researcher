@@ -2,7 +2,7 @@ import pytest
 
 from market_researcher import report, scoring
 from market_researcher.models import (
-    Analysis, AppDetails, CategoryResult, Game, MiningResult, Opportunity, RiskFlag,
+    Analysis, AppDetails, CategoryResult, Game, MiningResult, Opportunity, Peers, RiskFlag,
 )
 
 
@@ -21,6 +21,10 @@ def flag(code, severity="warn"):
     return RiskFlag(code=code, severity=severity, message=code)
 
 
+def peers(hits=15, entrants=100, tags=("Simulation", "Casual", "Indie")):
+    return Peers(tags=list(tags), entrants=entrants, hits=hits, start=2020 * 12 + 10)
+
+
 # --- scoring ---
 
 def test_demand_and_dissatisfaction_bounds():
@@ -29,46 +33,55 @@ def test_demand_and_dissatisfaction_bounds():
     assert scoring.dissatisfaction(5) == 1 and scoring.dissatisfaction(70) == 0 and scoring.dissatisfaction(90) == 0
 
 
-def test_score_monotonic():
-    worse = scoring.score(game(pos=300, neg=700), [], mining()).score
-    better_rated = scoring.score(game(pos=650, neg=350), [], mining()).score
-    assert worse > better_rated > 0
-    more_demand = scoring.score(game(pos=3000, neg=7000), [], mining()).score
-    assert more_demand > worse
+def test_score_is_the_similar_games_hit_rate():
+    """#12: 100 x hit rate / PEER_RATE_FULL (25%), capped; demand and dissatisfaction don't move it."""
+    assert scoring.score(game(), [], mining(), peers=peers(15)).score == pytest.approx(60)
+    assert scoring.score(game(), [], mining(), peers=peers(40)).score == 100
+    same = [scoring.score(game(pos=p, neg=n), [], mining(), peers=peers(10)).score
+            for p, n in [(300, 700), (900, 100), (30_000, 70_000), (40, 10)]]
+    assert same == [pytest.approx(40)] * 4
 
 
-def test_satisfied_games_score_on_demand_alone():
-    """Above 70% dissatisfaction is 0 but counts as DISSATISFACTION_FLOOR: liked games aren't zeroed (#6),
-    and rank below disappointed ones with the same demand."""
-    liked = scoring.score(game(pos=800, neg=200), [], mining())
-    loved = scoring.score(game(pos=990, neg=10), [], mining())
-    assert liked.dissatisfaction == 0 and liked.score > 0 and liked.score == loved.score
-    assert scoring.score(game(pos=690, neg=310), [], mining()).score > liked.score
-    assert scoring.combine({"demand": 1, "dissatisfaction": 0}) == pytest.approx(52.4, abs=0.1)  # the ceiling
-    by_rating = [scoring.score(game(pos=p, neg=1000 - p), [], mining()).score for p in (100, 400, 600, 690, 700, 950)]
-    assert by_rating == sorted(by_rating, reverse=True) and by_rating[3] > by_rating[4]  # rescaled, not clipped
-    assert scoring.score(game(pos=8, neg=2), [], mining()).score == 0  # no demand is still 0
+def test_no_score_without_enough_similar_games():
+    assert scoring.score(game(), [], mining()).score is None  # not read yet
+    assert scoring.score(game(), [], mining(), peers=peers(5, entrants=9)).score is None  # too few
+    assert scoring.score(game(), [], mining(), peers=peers(0, entrants=10)).score == 0
+
+
+def test_old_saved_scores_are_not_shown_as_todays():
+    """A run saved before #12 has no peers: its demand x dissatisfaction score is dropped when loaded."""
+    old = {"score": 48.0, "demand": 0.5, "dissatisfaction": 0.5, "fixability": 1, "effective_rating": 40,
+           "penalty": 0}
+    assert Opportunity.model_validate(old).score is None
+    assert Opportunity.model_validate({**old, "peers": None}).score == 48.0
 
 
 def test_review_bomb_adjusted_rating_used():
-    o = scoring.score(game(pos=300, neg=700), [], mining(), adjusted_rating=71)
+    o = scoring.score(game(pos=300, neg=700), [], mining(), adjusted_rating=71, peers=peers())
     assert o.dissatisfaction == 0 and o.effective_rating == 71
-    assert o.score == scoring.score(game(pos=710, neg=290), [], mining()).score
 
 
 def test_penalties_and_default_fixability():
-    base = scoring.score(game(), [], None)
+    base = scoring.score(game(), [], None, peers=peers())
     assert base.fixability == 0.5
-    hit = scoring.score(game(), [flag("netcode"), flag("niche"), flag("review_bomb", "high")], None)
+    hit = scoring.score(game(), [flag("netcode"), flag("niche"), flag("review_bomb", "high")], None, peers=peers())
     assert hit.penalty == 25 and set(hit.penalized) == {"netcode", "niche"}
     assert hit.score == pytest.approx(base.score - 25)
+    assert scoring.score(game(), [flag("recovered")], None, peers=peers(2)).score == 0  # never below 0
+
+
+def test_rescore_fills_in_the_similar_games():
+    a = _analysis_for(game(), [flag("netcode")])
+    assert a.opportunity.score is None
+    scoring.rescore(a, peers(15))
+    assert a.opportunity.score == pytest.approx(45) and a.opportunity.peers.hits == 15
 
 
 # --- report ---
 
 def analysis(score, name, flags=(), mined=True, appid=1):
     o = Opportunity(score=score, demand=0.5, dissatisfaction=0.5, fixability=1, effective_rating=40,
-                    penalty=0, penalized=[])
+                    penalty=0, penalized=[], peers=None if score is None else peers(round(score / 4)))
     return Analysis(game=game(name=name, appid=appid), details=None, flags=list(flags),
                     mining=mining() if mined else None, opportunity=o,
                     review_error=None if mined else "reviews down")
@@ -77,6 +90,13 @@ def analysis(score, name, flags=(), mined=True, appid=1):
 def test_rank_sorts_and_excludes_non_games():
     a = [analysis(10, "Low"), analysis(50, "High"), analysis(90, "DLC", [flag("not_game", "high")])]
     assert [x.game.name for x in report.rank(a)] == ["High", "Low"]
+
+
+def test_rank_puts_unscored_last_and_breaks_ties_by_reviews():
+    a = [analysis(None, "Pending", appid=1), analysis(40, "Small", appid=2), analysis(40, "Big", appid=3),
+         analysis(20, "Low", appid=4)]
+    a[2].game.positive = 5000
+    assert [x.game.name for x in report.rank(a)] == ["Big", "Small", "Low", "Pending"]
 
 
 def test_render_report():
@@ -99,46 +119,52 @@ def test_slug():
 
 # --- score explanation -------------------------------------------------------------------------
 
-def _analysis_for(g, flags=(), mined=True, adjusted=None):
+def _analysis_for(g, flags=(), mined=True, adjusted=None, similar=None):
     flags = list(flags)
     m = mining() if mined else None
-    o = scoring.score(g, flags, m, adjusted)
+    o = scoring.score(g, flags, m, adjusted, similar)
     return Analysis(game=g, details=None, flags=flags, mining=m, opportunity=o)
 
 
 def test_explain_walks_from_parts_to_score():
-    a = _analysis_for(game(), [flag("netcode"), flag("niche_x")])
+    a = _analysis_for(game(), [flag("netcode"), flag("niche_x")], similar=peers(15))
     e = scoring.explain(a)
-    assert [p["label"] for p in e["parts"]] == ["Demand", "Dissatisfaction", "Fixability"]
-    assert [p["weight"] for p in e["parts"]] == [0.40, 0.35, 0.0]  # fixability is shown, not counted
-    assert "Not counted in the score" in e["parts"][2]["basis"]
-    assert e["combined"] - 15 == pytest.approx(e["score"])  # only netcode is penalized
+    assert [p["label"] for p in e["parts"]] == ["Similar games' hits", "Demand", "Dissatisfaction", "Fixability"]
+    assert [p["weight"] for p in e["parts"]] == [1.0, 0.0, 0.0, 0.0]  # only the similar games count
+    assert e["parts"][0]["value"] == pytest.approx(0.6)
+    assert "15 of 100 similar games (sharing 2 of its first 3 tags: Simulation, Casual, Indie) released " \
+           "2020-11 to 2022-10" in e["parts"][0]["basis"]
+    assert "Not counted" in e["parts"][1]["basis"] and "Not counted" in e["parts"][3]["basis"]
+    assert e["combined"] == pytest.approx(60) and e["score"] == pytest.approx(45)  # only netcode is penalized
     assert e["penalties"] == [{"code": "netcode", "label": "Online multiplayer", "points": 15, "reason": "netcode"}]
-    assert "1,000 reviews" in e["parts"][0]["basis"] and "40% positive" in e["parts"][1]["basis"]
-    assert e["zero_part"] is None
+    assert "1,000 reviews" in e["parts"][1]["basis"] and "40% positive" in e["parts"][2]["basis"]
+    assert e["pending"] is False
+
+
+def test_explain_without_a_score():
+    e = scoring.explain(_analysis_for(game()))
+    assert e["pending"] and e["score"] is None and e["combined"] is None and e["parts"][0]["value"] is None
+    assert "Not measured yet" in e["parts"][0]["basis"]
+    few = scoring.explain(_analysis_for(game(), similar=peers(3, entrants=8)))
+    assert not few["pending"] and few["score"] is None and "Only 8 similar games" in few["parts"][0]["basis"]
+    unlisted = scoring.explain(_analysis_for(game(), similar=peers(0, entrants=0, tags=())))
+    assert "doesn't list this game" in unlisted["parts"][0]["basis"]
 
 
 def test_explain_notes_review_bombs_and_unmined_reviews():
     e = scoring.explain(_analysis_for(game(), mined=False, adjusted=55))
-    assert "55% with review-bomb periods removed" in e["parts"][1]["basis"]
-    assert "assumed" in e["parts"][2]["basis"] and e["parts"][2]["value"] == 0.5
+    assert "55% with review-bomb periods removed" in e["parts"][2]["basis"]
+    assert "assumed" in e["parts"][3]["basis"] and e["parts"][3]["value"] == 0.5
 
 
 def test_explain_tells_unread_reviews_from_reviews_without_complaints():
     from market_researcher.models import MiningResult
 
     a = _analysis_for(game(), mined=False)
-    assert a.mining is None and "couldn't be mined" in scoring.explain(a)["parts"][2]["basis"]
+    assert a.mining is None and "couldn't be mined" in scoring.explain(a)["parts"][3]["basis"]
     a.mining = MiningResult(n_negative=40, n_positive=40, categories=[], idea_praise_share=0, fixability=0,
                             core_phrases=[], liked=[])
-    assert "none matched a complaint category" in scoring.explain(a)["parts"][2]["basis"]
-
-
-def test_explain_names_a_zero_part():
-    e = scoring.explain(_analysis_for(game(pos=9, neg=1)))  # 10 reviews: no demand
-    assert e["zero_part"] == "Demand" and e["score"] == 0 and e["combined"] == 0
-    liked = scoring.explain(_analysis_for(game(pos=900, neg=100)))  # 90% positive: floored, not zeroed
-    assert liked["zero_part"] is None and liked["combined"] > 0 and "at least 25%" in liked["parts"][1]["basis"]
+    assert "none matched a complaint category" in scoring.explain(a)["parts"][3]["basis"]
 
 
 def test_analyze_game_keeps_the_negatives_when_positives_fail(monkeypatch):
@@ -188,30 +214,32 @@ def test_recent_figures_count_back_from_the_analysis_time():
 # --- plain-language verdict and checks (web UI game panel) -----------------------------------------
 
 def test_verdict_says_what_the_evidence_shows():
-    def v(pos, neg):
-        return scoring.verdict(_analysis_for(game(pos=pos, neg=neg)))
+    def v(hits, entrants=100):
+        return scoring.verdict(_analysis_for(game(), similar=None if hits is None else peers(hits, entrants)))
 
-    assert v(3_000, 17_000) == "Many buyers, most unhappy"  # 20,000 reviews at 15%
-    assert v(400, 600) == "Solid demand, many unhappy"  # 1,000 at 40%
-    assert v(20, 30) == "Few buyers, many unhappy"
-    assert v(900, 100) == "Solid demand, mostly satisfied"
+    assert v(20) == "Similar games often became hits"  # 80
+    assert v(12) == "Similar games sometimes became hits"  # 48
+    assert v(5) == "Similar games rarely became hits"  # 20
+    assert v(None) == "Score not measured yet"
+    assert v(2, 5) == "Too few similar games"
     from market_researcher.i18n import use
     with use("tr"):
-        assert v(400, 600) == "Sağlam talep, birçoğu memnun değil"
+        assert v(20) == "Benzer oyunlar sık sık hit oldu"
 
 
 def test_fixability_does_not_change_the_score():
     def scored(fix):
         m = mining()
         m.fixability = fix
-        return scoring.score(game(), [], m).score
+        return scoring.score(game(), [], m, peers=peers()).score
 
     assert scored(0.2) == scored(1.0) > 0
 
 
-def test_why_reads_the_two_parts():
-    a = _analysis_for(game(), [flag("netcode")])  # 1,000 reviews at 40%
-    assert scoring.why(a) == "Solid demand (1,000 reviews), many of them unhappy (40% positive)."
+def test_why_reads_the_evidence():
+    a = _analysis_for(game(), [flag("netcode")], similar=peers(15))  # 1,000 reviews at 40%
+    assert scoring.why(a).endswith(" now have 500+ reviews at 80%+ positive (15%). "
+                                   "Solid demand (1,000 reviews), many of them unhappy (40% positive).")
     assert "players mostly like it" in scoring.why(_analysis_for(game(pos=900, neg=100)))
     from market_researcher.i18n import use
     with use("tr"):

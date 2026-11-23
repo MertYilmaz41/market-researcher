@@ -168,11 +168,7 @@ const TR = {
 
   // score card
   "Opportunity score {score}": "Fırsat puanı {score}",
-  "Proven demand + poor execution = high opportunity. Two parts count, each 0-100%:": "Kanıtlanmış talep + kötü yapım = büyük fırsat. İki parça sayılır, her biri %0-100:",
-  "weight {pct}": "ağırlık {pct}",
   "{label} (risk)": "{label} (risk)",
-  "{part} is 0%, so the score is 0: a good opportunity needs both parts.": "{part} %0, bu yüzden puan 0: iyi bir fırsat için iki parçanın da olması gerekir.",
-  "If either part is 0%, the score is 0: a good opportunity needs both parts.": "Parçalardan biri %0 ise puan 0 olur: iyi bir fırsat için iki parçanın da olması gerekir.",
 
   // detail panel
   "Opportunity score {score}. How it is calculated": "Fırsat puanı {score}. Nasıl hesaplandığı",
@@ -238,7 +234,6 @@ const TR = {
   "A new game should: ": "Yeni oyun şunu yapmalı: ",
   "Caution": "Dikkat",
   "Serious": "Ciddi",
-  "Combined": "Birleşik",
   "Est. revenue": "Tahmini gelir",
   "Price range in this market: median {median}, middle half {lo}–{hi}": "Bu pazarda fiyat aralığı: medyan {median}, ortadaki yarı {lo}–{hi}",
   " · well-served games {price}": " · iyi karşılanan oyunlar {price}",
@@ -428,6 +423,21 @@ const TR = {
   "Of the tag's games released 2 to 4 years ago (by store date), the share now at 500+ reviews and 80%+ positive. It estimates the track record without reading review histories, so every tag has one. In a backtest the track record was the one market measure that predicted how new games did, so Markets is ranked by it. Under 10 such games: too few to tell.": "Etiketin 2-4 yıl önce çıkmış (mağaza tarihine göre) oyunlarından şu an 500+ incelemede %80+ olumlu olanların payı. Geçmiş başarıyı inceleme geçmişlerini okumadan tahmin eder, bu yüzden her etiket için vardır. Geriye dönük testte yeni oyunların nasıl iş çıkaracağını öngören tek pazar ölçüsü geçmiş başarıydı; Pazarlar bu yüzden ona göre sıralanır. Bu tür oyun 10'dan azsa: söylemek için çok az.",
   "The Markets view and the sentences under a search's title describe a whole tag. In a backtest of 357 tags (2019-2022, 72,000 games), new games did better where the tag's games of 2-4 years before had more often become hits: the track record measured after each search, which also ranks the Markets view. Well-served games and market size did not predict it. The unmet share shows that players keep buying though few games please them; it was not shown to predict success (new games there reached 500 reviews more often, 18% vs 12%, but not 500 reviews at 80%+ positive, 11% vs 10%).": "Pazarlar görünümü ve bir aramanın başlığı altındaki cümleler bütün bir etiketi anlatır. 357 etiketlik geriye dönük bir testte (2019-2022, 72.000 oyun) yeni oyunlar, etiketin 2-4 yıl önceki oyunlarının daha sık hit olduğu yerlerde daha iyi iş çıkardı: her aramadan sonra ölçülen geçmiş başarı; Pazarlar görünümü de buna göre sıralanır. İyi karşılanmış oyun sayısı ve pazar büyüklüğü bunu öngörmedi. Karşılanmama oranı, az oyun memnun etse de oyuncuların almaya devam ettiğini gösterir; başarıyı öngördüğü gösterilmedi (oradaki yeni oyunlar 500 incelemeye daha sık ulaştı, %18'e karşı %12, ama %80+ olumluyla 500 incelemeye değil, %11'e karşı %10).",
   "not counted": "puana katılmaz",
+  "0 to 100: how often the game's similar games became hits. Similar games share 2 of its first 3 Steam tags; counted are those released 4 to 2 years ago, and a hit has 500+ reviews at 80%+ positive. 25% hits or more scores 100. Risks such as an abandoned or fading game subtract points. In a backtest over 12,000 games, games whose similar games had often become hits were followed by new hits in the same niche (13.6% vs 5.6% for the lowest fifth); how many reviews a game had, or how unhappy its players were, added nothing, so those are shown but not counted. The score needs the list of every rated Steam game: about 36 minutes the first time, read in the background, then a week from the cache. Hover over any score to see how it was reached.": "0 ile 100 arası: oyunun benzer oyunlarının ne sıklıkla hit olduğu. Benzer oyunlar, oyunun ilk 3 Steam etiketinden 2'sini paylaşır; 4 ile 2 yıl önce çıkanlar sayılır ve hit, %80+ olumluyla 500+ incelemesi olan oyundur. %25 veya daha fazla hit 100 puan eder. Terk edilmiş ya da ilgisi azalan bir oyun gibi riskler puan düşürür. 12.000 oyunluk geriye dönük bir testte benzer oyunları sık hit olmuş oyunların nişinde sonra da yeni hitler çıktı (en alttaki beşte birin %5,6'sına karşı %13,6); bir oyunun inceleme sayısı ya da oyuncularının ne kadar memnuniyetsiz olduğu bir şey katmadı, bu yüzden gösterilir ama puana katılmaz. Puan için Steam'deki tüm puanlı oyunların listesi gerekir: ilk seferde yaklaşık 36 dakika, arka planda okunur, sonra bir hafta önbellekten gelir. Nasıl hesaplandığını görmek için herhangi bir puanın üzerine gelin.",
+  "Further right means more demand, higher up means unhappier players, a bigger bubble means more estimated revenue, and the color is the score (how often similar games became hits).": "Sağa gittikçe talep artar, yukarı çıktıkça oyuncular daha memnuniyetsizdir, büyük baloncuk daha fazla tahmini gelir demektir ve renk puandır (benzer oyunların ne sıklıkla hit olduğu).",
+  "How many people bought this game, judged by the number of reviews (log scale). Shown, but not counted in the score: once the similar games are known, it adds nothing.": "Bu oyunu kaç kişinin satın aldığı, inceleme sayısına göre (logaritmik ölçek). Gösterilir ama puana katılmaz: benzer oyunlar bilindiğinde bir şey katmıyor.",
+  "How often similar games became hits. Only this part counts; the others are shown for context:": "Benzer oyunların ne sıklıkla hit olduğu. Yalnızca bu parça sayılır; diğerleri bilgi için gösterilir:",
+  "How unhappy the players are: how far the game's % positive is below 70%. Shown, but not counted in the score: in the backtest, how unhappy or happy a game's players were said nothing about how new games did. The complaints still show what a new game should do better.": "Oyuncuların ne kadar memnuniyetsiz olduğu: oyunun olumlu yüzdesinin %70'in ne kadar altında olduğu. Gösterilir ama puana katılmaz: geriye dönük testte bir oyunun oyuncularının ne kadar memnuniyetsiz ya da memnun olduğu, yeni oyunların nasıl iş çıkaracağı hakkında bir şey söylemedi. Şikayetler yine de yeni bir oyunun neyi daha iyi yapması gerektiğini gösterir.",
+  "In a backtest, this predicted how new games in the niche did; demand and dissatisfaction added nothing.": "Geriye dönük testte bu, nişteki yeni oyunların nasıl iş çıkaracağını öngördü; talep ve memnuniyetsizlik bir şey katmadı.",
+  "No score yet, or too few similar games": "Henüz puan yok ya da benzer oyun çok az",
+  "No score yet: the list of every rated Steam game is being read (about 36 minutes the first time).": "Henüz puan yok: Steam'deki tüm puanlı oyunların listesi okunuyor (ilk seferde yaklaşık 36 dakika).",
+  "No score: too few similar games to tell.": "Puan yok: bir şey söylemek için benzer oyun çok az.",
+  "Reading every rated Steam game for the scores · {done} / {total} pages": "Puanlar için Steam'deki tüm puanlı oyunlar okunuyor · {done} / {total} sayfa",
+  "Reading every rated Steam game for the scores...": "Puanlar için Steam'deki tüm puanlı oyunlar okunuyor...",
+  "Similar games' hits": "Benzer oyunların hitleri",
+  "The scores couldn't be measured: {why}": "Puanlar ölçülemedi: {why}",
+  "What the score counts: of the games sharing 2 of this game's first 3 Steam tags and released 4 to 2 years ago, how many now have 500+ reviews at 80%+ positive. In a backtest over 12,000 games it was the one thing about a game that predicted how new games in its niche did. Reading it needs the list of every rated Steam game: about 36 minutes the first time, then a week from the cache.": "Puanın saydığı şey: bu oyunun ilk 3 Steam etiketinden 2'sini paylaşan ve 4 ile 2 yıl önce çıkan oyunlardan kaçının şu an %80+ olumluyla 500+ incelemesi var. 12.000 oyunluk geriye dönük bir testte bir oyun hakkında, nişindeki yeni oyunların nasıl iş çıkaracağını öngören tek şey buydu. Okumak için Steam'deki tüm puanlı oyunların listesi gerekir: ilk seferde yaklaşık 36 dakika, sonra bir hafta önbellekten.",
+  "counted": "puana katılır",
 };
 
 let lang = "en";

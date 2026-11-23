@@ -110,16 +110,13 @@ RECOVERED_MIN_RECENT = 50  # reviews in the last 12 months needed to judge the r
 RECOVERED_DELTA = 15  # ...which must beat the all-time rating by this many points (or reach MAX_RATING)
 HARD_TAGS = {"Physics", "Open World", "MMORPG", "Massively Multiplayer"}
 
-# Opportunity score: weighted geometric mean of [0,1] parts, x100, minus risk penalties. Fixability was a
-# third part (0.25) until Nov 2026; it is ~100% for almost every game, so it only raised every score.
-# It is still computed and shown, but not counted.
-SCORE_WEIGHTS = {"demand": 0.40, "dissatisfaction": 0.35}
-# The score counts dissatisfaction rescaled to [this, 1] (scoring.counted), so games above MAX_RATING % positive
-# aren't zeroed:
-# a well-liked game with big demand still ranks (up to ~52 before penalties), below the unhappy-audience games
-# with the same demand. The user's choice (Nov 23 2026), untested: game_backtest.py can check it.
-DISSATISFACTION_FLOOR = 0.25
-SCORE_VERSION = 4  # in runs.compare_key: runs scored by the old formula aren't compared with new ones
+# Opportunity score (#12): the hit rate of the game's similar games released 48-24 months ago (peers.py), x100 /
+# PEER_RATE_FULL, minus risk penalties. Demand, dissatisfaction and fixability are shown but not counted: in the
+# game-level backtest none of them added to it. Until Nov 23 2026 it was demand x dissatisfaction.
+PEER_RATE_FULL = 0.25  # this hit rate or more scores 100 (~p98 of games with 100+ reviews; the median, 9%, scores ~37)
+MIN_PEERS = 10  # fewer similar games: "too few to tell", no score
+TTL_PEERS = 24 * 3600  # the server rebuilds its similar-games index this often (the list itself is cached a week)
+SCORE_VERSION = 5  # in runs.compare_key: runs scored by the old formula aren't compared with new ones
 DEMAND_LOG_MIN = 1.5  # log10(reviews) mapped to 0 (~32 reviews)
 DEMAND_LOG_MAX = 4.0  # ...and to 1 (10,000 reviews)
 DEFAULT_FIXABILITY = 0.5  # when reviews couldn't be mined

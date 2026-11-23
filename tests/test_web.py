@@ -21,6 +21,8 @@ def run_store(tmp_path, monkeypatch):
     store = RunStore(tmp_path / "runs.sqlite")
     monkeypatch.setattr(server, "_runs", store)
     monkeypatch.setattr(server, "_jobs", {})
+    monkeypatch.setattr(server, "_peers", {"index": None, "loading": False, "done": 0, "total": 0, "step_start": 0.0,
+                                           "step_done": 0, "error": None, "failed_at": 0.0})
     # the shared HTTP client gets a temp cache too: tests never open the user's real cache
     monkeypatch.setattr(server, "_http_client", HttpClient(cache=Cache(tmp_path / "cache.sqlite")))
     return store
@@ -74,7 +76,8 @@ def test_tag_run_ranks_and_serializes(client, monkeypatch):
     g = res["games"][0]
     assert g["store_url"].endswith("/app/1/") and g["box"]["gross_mid"] > 0
     assert g["mining"]["categories"][0]["code"] == "bugs" and g["has_histogram"] is True
-    assert [p["label"] for p in g["score_explained"]["parts"]] == ["Demand", "Dissatisfaction", "Fixability"]
+    assert [p["label"] for p in g["score_explained"]["parts"]] == ["Similar games' hits", "Demand", "Dissatisfaction",
+                                                                   "Fixability"]
     assert res["not_games"] == ["Soundtrack (music)"] and res["n_tag_games"] == 50
     assert any(n["level"] == "success" and "Best Sim" in n["message"] for n in res["notices"])
     assert calls[0][0] == ["Job Simulator"] and calls[0][1][1:3] == (10, 60)
@@ -386,12 +389,12 @@ def test_turkish_results_follow_the_request_language(client, monkeypatch):
         job = client.get(f"/api/tag-runs/{run_id}", headers=tr).json()
     assert seen == ["Oyunlar analiz ediliyor"]
     parts = job["result"]["games"][0]["score_explained"]["parts"]
-    assert [p["label"] for p in parts] == ["Talep", "Memnuniyetsizlik", "Düzeltilebilirlik"]
+    assert [p["label"] for p in parts] == ["Benzer oyunların hitleri", "Talep", "Memnuniyetsizlik", "Düzeltilebilirlik"]
     assert any(n["title"] == "Analiz tamamlandı" for n in job["result"]["notices"])
     # the same saved result, asked for in English (or an unknown language), comes back in English
     for headers in ({}, {"X-Lang": "xx"}):
         en = client.get(f"/api/tag-runs/{run_id}", headers=headers).json()["result"]
-        assert en["games"][0]["score_explained"]["parts"][0]["label"] == "Demand"
+        assert en["games"][0]["score_explained"]["parts"][1]["label"] == "Demand"
 
 
 def test_turkish_validation_and_game_not_found(client, monkeypatch):
@@ -574,7 +577,7 @@ def test_running_search_lists_its_games_and_warns_once_when_reviews_stall(client
 
 def test_game_json_has_verdict_why_and_checks():
     data = server.game_json(fake_result().analyses[1])
-    assert data["verdict"] == "Solid demand, many unhappy" and data["why"].endswith(".")
+    assert data["verdict"] == "Similar games sometimes became hits" and data["why"].endswith(".")  # 60
     assert any(c["code"] == "netcode" for c in data["checks"])
 
 
@@ -741,3 +744,66 @@ def test_rewrite_writes_a_run_games_summary_again(client, monkeypatch, run_store
     assert client.post(url).json()["summary"]["why"] == "Take 1"  # saved: not written again
     assert client.post(url + "?fresh=1").json()["summary"]["why"] == "Take 2"  # Rewrite
     assert client.post(url).json()["summary"]["why"] == "Take 2"  # and the new one is saved
+
+
+def similar_games(n=10, hits=4):
+    """Rated games for peers.build: n released 3 years ago with tags 1 and 2, `hits` of them hits; the analyzed
+    games 1 and 2 have tags 1, 2, 3."""
+    import datetime as dt
+
+    from market_researcher.models import Game
+
+    old = dt.date.today() - dt.timedelta(days=3 * 365)
+    rows = [Game(appid=100 + i, name=f"P{i}", positive=900 if i < hits else 10, negative=10, tag_ids=[1, 2],
+                 release_date=old) for i in range(n)]
+    return rows + [Game(appid=k, name=f"G{k}", positive=400, negative=600, tag_ids=[1, 2, 3]) for k in (1, 2)]
+
+
+def test_scores_fill_in_once_every_game_is_read(client, monkeypatch, run_store):
+    """#12: a run finishes unscored; the server reads every rated game once in the background, then scores the
+    run when it is next asked for and saves it."""
+    import threading
+
+    from market_researcher import peers
+
+    unscored = [analysis(None, "Late", appid=1), analysis(None, "Later", appid=2)]
+    unscored[1].game.positive = 5000  # more reviews: first among equal scores
+    monkeypatch.setattr(pipeline, "run_tag", lambda http, tag, *a: TagResult(
+        n_tag_games=2, candidates=[x.game for x in unscored], analyses=unscored))
+    gate, reads = threading.Event(), []
+
+    def read(http, on_step=None):
+        reads.append(1)
+        on_step("Reading", 3, 10)
+        assert gate.wait(5)
+        return peers.build(similar_games(), {1: "Sim", 2: "Casual", 3: "Indie"})
+
+    monkeypatch.setattr(pipeline, "read_peers", read)
+    run_id = client.post("/api/tag-runs", json={"tags": ["Sim"]}).json()["id"]
+    job = wait(client, run_id)
+    res = job["result"]
+    assert [g["opportunity"]["score"] for g in res["games"]] == [None, None]
+    assert res["games"][0]["score_explained"]["pending"] and res["peers"]["loading"]
+    assert "Scores not measured yet" in [n["title"] for n in res["notices"]]
+    gate.set()
+    for _ in range(100):
+        res = client.get(f"/api/tag-runs/{run_id}").json()["result"]
+        if res["games"][0]["opportunity"]["score"] is not None:
+            break
+        time.sleep(0.02)
+    assert [g["game"]["name"] for g in res["games"]] == ["Later", "Late"]  # same niche, same score: by reviews
+    assert [g["opportunity"]["score"] for g in res["games"]] == [100, 100]  # 4 of 10: 40%, over the 25% cap
+    assert res["games"][0]["opportunity"]["peers"]["tags"] == ["Sim", "Casual", "Indie"]
+    assert len(reads) == 1  # read once, shared
+    assert run_store.load(run_id)["result"].analyses[0].opportunity.peers is not None  # saved with the scores
+
+
+def test_a_game_by_appid_is_scored_when_the_list_is_ready(client, monkeypatch):
+    from market_researcher import peers
+
+    monkeypatch.setattr(pipeline, "analyze_game", lambda http, appid, n: analysis(None, "Solo", appid=1))
+    monkeypatch.setattr(server, "_peers", {**server._peers, "index": peers.build(
+        similar_games(hits=2), {1: "Sim", 2: "Casual", 3: "Indie"})})
+    data = client.get("/api/games/1").json()
+    assert data["opportunity"]["score"] == pytest.approx(80) and data["peers"]["ready"]  # 2 of 10: 20% / 25%
+    assert data["verdict"] == "Similar games often became hits"

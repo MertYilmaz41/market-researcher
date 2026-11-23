@@ -107,15 +107,16 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 
 **Parallel analysis:** `run_tag` analyzes games in a thread pool (`config.ANALYZE_WORKERS`); each starts as soon as it passes the store-type check. `run_tag` records per-game failures in `TagResult.failed` and keeps going. A failed review fetch sets `review_error` instead of dropping the game; a failed positive-review fetch keeps the negative sample.
 
-### Scoring (`scoring.py`)
+### Scoring (`scoring.py`, `peers.py`)
 
-100 × the weighted geometric mean of demand (log of review count) and dissatisfaction (how far below 70% positive), minus fixed penalties per risk flag (`RISK_PENALTIES` in `config.py`).
-- Dissatisfaction is counted rescaled to [`config.DISSATISFACTION_FLOOR` (0.25), 1] (`scoring.counted`, inside `combine`), so games above 70% aren't zeroed: they score on demand alone (at most ~52 before penalties), below disappointed games with the same demand. Rescaled, not clipped: clipping tied every game from ~54% to 100%. The part's own value (map, score card) stays unfloored. The user's choice (Nov 23 2026, #6); the game-level backtest found the floored score predicts niche hits only through demand, the old one not at all (below). If demand is 0, the score is 0. Flags in `EXCLUDE_FLAGS` (`not_game`) drop a game from the ranking.
-- Review bombs aren't penalized; `risk.rating_without_bombs` replaces the rating, so a review-bombed game that's otherwise fine scores 0.
-- Fixability is shown but not counted: it is ~100% for almost every game. Color steps are 67/42 (`palette.scoreLevel`; the map adds 30), `notices.WEAK_SCORE` is 25: moved with the dissatisfaction floor so games keep their band (#7). Move them again whenever the formula changes.
-- `config.SCORE_VERSION` is in `runs.compare_key`: bump it when the formula changes, so old runs aren't compared with new ones.
-- The words beside the score (`scoring.verdict`, e.g. "Many buyers, most unhappy") describe the evidence, never a judgement or forecast: the score was never shown to predict success. `scoring.why` is one sentence from the same bands.
-- `scoring.explain(analysis)` fills the score card (each part, its weight and basis, `scoring.combine`, each penalty with its `config.RISK_LABELS` name, the part that zeroed it). Change wording there, not in JS.
+Since Nov 23 2026 (#12): 100 x the hit rate of the game's similar games / `config.PEER_RATE_FULL` (25%, capped), minus fixed penalties per risk flag (`RISK_PENALTIES`). Similar games ("peers") share 2 of its first 3 store tags; counted are those the store dates 48-24 months ago, a hit has 500+ reviews at 80%+ positive today (`peers.build`, like `pipeline.earlier_hits`). Chosen by the game-level backtest with a rule fixed before the run (below); demand x dissatisfaction, the formula before, predicted nothing beyond its demand part.
+- Needs every rated game on the store (`pipeline.read_peers`, the Markets read: ~36 min the first time, cached a week). A tag search's own games weren't enough (+0.62 vs +0.94). The web reads it once in the background into a shared index (`server._peer_index`, rebuilt after `TTL_PEERS`); a finished run is scored when it's next asked for (`_score_run`) and saved; the page polls until then (`waitScores`, `#peers-line`; a game opened by AppID: `waitGameScore`, `GET /api/peers`). The CLI reads it itself. Tests never read it (`conftest.no_peer_read`).
+- `Opportunity.score` is None until then (`peers` None), or with fewer than `MIN_PEERS` (10) similar games, or for games the store search doesn't list. Ranked last; ties (a niche shares a score) by review count (`report.rank`). Runs saved before #12 load with score None (`Opportunity._old_formula`) and are rescored on view.
+- Demand, dissatisfaction and fixability are computed and shown (score card, map axes), not counted. Review bombs: `risk.rating_without_bombs` still sets `effective_rating` for display. Flags in `EXCLUDE_FLAGS` (`not_game`) drop a game from the ranking.
+- Color steps are 67/42 (`palette.scoreLevel`, hit rates ~17%/10.5%; the map adds 30), `notices.WEAK_SCORE` is 25 (6.25%). Move them whenever the formula changes.
+- `config.SCORE_VERSION` (5) is in `runs.compare_key`: bump it when the formula changes, so old runs aren't compared with new ones.
+- The words beside the score (`scoring.verdict`: "Similar games often/sometimes/rarely became hits") describe the evidence; `scoring.why` adds the similar games, demand and rating in sentences. `scoring.explain(analysis)` fills the score card (each part, counted or not, its basis, each penalty, `pending`). Change wording there, not in JS.
+- The name `niche` is taken by a risk flag (VR, NSFW...): the score's concept is `peers` in code, "similar games" in the UI.
 
 ### Risk checks (`risk.py`)
 
@@ -241,7 +242,7 @@ Checks the market claim: did tags with a high unmet share at a past date T later
 ## Game-level backtest (`game_backtest.py`)
 
 Tests what `backtest.py` doesn't: the per-game score. For each game X with 100+ reviews at T, X's niche is the games sharing 2+ of X's first 3 tags (`NicheIndex`: pair and triple counts, inclusion-exclusion); the outcome is the hit rate of the niche's entrants after T. Measures in `MEASURES` (the score without penalties, dissatisfaction, % positive, demand, demand x satisfaction, the niche's earlier entrants' hit rate), judged by `backtest.candidate()` unchanged; `GameRow` has the field names it reads. Fixed on Nov 23 2026 before any result was seen: don't change the design or the rule after looking. Histograms only for games with 100+ reviews today; smaller entrants are dated by the store date.
-- **Result (Nov 23 2026, 35,875 rows):** satisfaction and dissatisfaction predict nothing (rho about 0 both ways). The current score passes (+0.32) only through demand (alone +0.33); the floor-less old score failed. The niche's earlier entrants' hit rate is far stronger (+0.75). Numbers in `docs/measurements.md`. The score itself hasn't been changed on this result yet.
+- **Result (Nov 23 2026, 35,875 rows):** satisfaction and dissatisfaction predict nothing (rho about 0 both ways). The demand x dissatisfaction score passed (+0.32) only through demand (alone +0.33); the floor-less one failed. The niche's earlier entrants' hit rate is far stronger (+0.75). Score candidates added afterwards with a rule written first (module docstring): demand x niche rate +0.65, Wilson +0.72, so the plain rate became the score (#12). Numbers in `docs/measurements.md`.
 
 ## Box Method check (`boxcheck.py`)
 

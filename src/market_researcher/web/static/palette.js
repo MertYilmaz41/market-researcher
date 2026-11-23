@@ -5,12 +5,12 @@
 const root = getComputedStyle(document.documentElement);
 export const cssVar = (name) => root.getPropertyValue(name).trim();
 
-// The score's three steps, as in the pills: violet 67+, near-white 42+, gray under. They were 65/45 (map 30) while
-// fixability was in the score, then 56/35 (map 20) until the dissatisfaction floor (#6, #7) lifted every score
-// under 70% positive; each was moved to keep the most games in their band (100-100k reviews x 5-70%: 88-95%).
-// Liked games (70%+) reach ~52 at most: near-white, never violet.
-export const scoreLevel = (score) => (score >= 67 ? "hi" : score >= 42 ? "mid" : "lo");
+// The score's three steps, as in the pills: violet 67+, near-white 42+, gray under ("none": no score yet, or too
+// few similar games). Since #12 the score is the similar games' hit rate / 25%, so 67 and 42 are hit rates of
+// ~17% and ~10.5%: about the top tenth and top two-fifths of games with 100+ reviews (scoring.verdict uses them).
+// Before: 65/45 (map 30) with fixability, 56/35 (map 20), 67/42 with the dissatisfaction floor (#6, #7).
+export const scoreLevel = (score) => (score == null ? "none" : score >= 67 ? "hi" : score >= 42 ? "mid" : "lo");
 export const scoreColor = (score) => cssVar(`--score-${scoreLevel(score)}`);
 
-// The map's bubbles: four steps from gray to violet.
-export const mapColor = (score) => cssVar(`--map-${score >= 67 ? 3 : score >= 42 ? 2 : score >= 30 ? 1 : 0}`);
+// The map's bubbles: four steps from gray to violet (30 is a ~7.5% hit rate, about the bottom third).
+export const mapColor = (score) => cssVar(`--map-${score == null ? 0 : score >= 67 ? 3 : score >= 42 ? 2 : score >= 30 ? 1 : 0}`);

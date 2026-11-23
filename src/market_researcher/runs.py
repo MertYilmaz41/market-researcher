@@ -76,7 +76,7 @@ class RunStore:
         return run_id
 
     def update_result(self, run_id: str, result: TagResult | MarketsResult) -> bool:
-        """Replace a saved run's result (e.g. a summary was added), keeping its time and comparisons."""
+        """Replace a saved run's result (e.g. a summary was added, scores filled in), keeping its time."""
         with self._lock:
             db = self._db()
             row = db.execute("SELECT kind FROM runs WHERE id = ?", (run_id,)).fetchone()
@@ -84,6 +84,9 @@ class RunStore:
                 return False
             db.execute("UPDATE runs SET result = ? WHERE id = ?",
                        (ADAPTERS[row[0]].dump_json(result).decode(), run_id))
+            if row[0] == "tag":  # scores fill in after the run (similar games read in the background)
+                db.execute("UPDATE runs SET scores = ? WHERE id = ?", (json.dumps(
+                    {a.game.appid: a.opportunity.score for a in rank(result.analyses)}), run_id))
             db.commit()
         return True
 
@@ -184,11 +187,17 @@ class RunStore:
         return {int(k): v for k, v in json.loads(prev[0]).items()} if prev else None
 
 
-def changes(scores: dict[int, float], previous: dict[int, float] | None) -> dict[int, float | None]:
+def changes(scores: dict[int, float | None], previous: dict[int, float | None] | None) -> dict[int, float | None]:
     """appid -> score change since the previous run, None for a game that is new in the ranking.
 
     Empty when there is no previous run, so nothing is marked.
     """
     if previous is None:
         return {}
-    return {appid: (s - previous[appid] if appid in previous else None) for appid, s in scores.items()}
+    out: dict[int, float | None] = {}
+    for appid, s in scores.items():
+        if appid not in previous:
+            out[appid] = None
+        elif s is not None and previous[appid] is not None:  # a score not measured (yet) has no change
+            out[appid] = s - previous[appid]
+    return out

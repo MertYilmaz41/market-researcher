@@ -111,11 +111,11 @@
       </section>
       <section>
         <h3 data-i18n>The score</h3>
-        <p data-i18n>0 to 100, from two parts: demand (how many reviews) and dissatisfaction (how far below 70% positive; games above 70% still count a little, so well-liked games with big demand aren't zeroed). Risks such as an abandoned or fading game subtract points. Hover over any score to see how it was reached. The words beside it ("Many buyers, most unhappy") say what the score rests on. Neither was shown to predict how a new game would do, so use them to choose which games to read about.</p>
+        <p data-i18n>0 to 100: how often the game's similar games became hits. Similar games share 2 of its first 3 Steam tags; counted are those released 4 to 2 years ago, and a hit has 500+ reviews at 80%+ positive. 25% hits or more scores 100. Risks such as an abandoned or fading game subtract points. In a backtest over 12,000 games, games whose similar games had often become hits were followed by new hits in the same niche (13.6% vs 5.6% for the lowest fifth); how many reviews a game had, or how unhappy its players were, added nothing, so those are shown but not counted. The score needs the list of every rated Steam game: about 36 minutes the first time, read in the background, then a week from the cache. Hover over any score to see how it was reached.</p>
       </section>
       <section>
         <h3 data-i18n>The map</h3>
-        <p data-i18n>Further right means more demand, higher up means unhappier players, a bigger bubble means more estimated revenue, and the color is the score. The best opportunities sit at the top right.</p>
+        <p data-i18n>Further right means more demand, higher up means unhappier players, a bigger bubble means more estimated revenue, and the color is the score (how often similar games became hits).</p>
       </section>
       <section>
         <h3 data-i18n>Markets and the unmet share</h3>
@@ -155,6 +155,7 @@
           <h1 id="table-title">Find underserved audiences</h1>
           <p id="market-line" class="lead"></p>
           <p id="track-line" class="track-line"></p>
+          <p id="peers-line" class="peers-line" aria-live="polite"></p>
           <p id="narrow-line" class="narrow-line"></p>
           <div class="chip-row">
             <div class="filters-wrap">

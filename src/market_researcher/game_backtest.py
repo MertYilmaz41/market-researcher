@@ -31,7 +31,6 @@ import math
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from itertools import combinations
 from pathlib import Path
 
 from . import backtest, config, scoring
@@ -40,9 +39,8 @@ from .backtest import (CHECK_CUTOFFS, CUTOFFS, HORIZON, MIN_ENTRANTS, OUTCOME, R
                        SUCCESS_RATING, SUCCESS_REVIEWS, TUNE_CUTOFFS, Outcomes, as_of, month_text, parse_month,
                        quintiles, release_month, window)
 from .models import Game, HistPoint
+from .peers import NICHE_SHARED, NICHE_TAGS, NicheIndex
 
-NICHE_TAGS = 3  # X's first tags that define its niche...
-NICHE_SHARED = 2  # ...of which a game must share at least this many
 REPORT = Path("reports") / "game-backtest.md"
 
 
@@ -71,37 +69,6 @@ class Entry:
 def entry(game: Game, hist: Sequence[HistPoint]) -> Entry:
     d = game.release_date
     return Entry(game.appid, tuple(game.tag_ids), hist, d.year * 12 + d.month - 1 if d else None)
-
-
-# --- niche counts: "shares >= 2 of X's 3 tags" by inclusion-exclusion over pair and triple counts ----------
-
-class NicheIndex:
-    """Sums of (games, hits, sold) per tag pair and tag triple, so a niche's totals cost O(1) per X."""
-
-    def __init__(self) -> None:
-        self.pairs: dict[tuple[int, ...], list[int]] = {}
-        self.triples: dict[tuple[int, ...], list[int]] = {}
-
-    def add(self, tags: Iterable[int], hit: bool = False, sold: bool = False) -> None:
-        tags = sorted(set(tags))
-        for key in combinations(tags, 2):
-            c = self.pairs.setdefault(key, [0, 0, 0])
-            c[0] += 1; c[1] += hit; c[2] += sold  # noqa: E702
-        for key in combinations(tags, 3):
-            c = self.triples.setdefault(key, [0, 0, 0])
-            c[0] += 1; c[1] += hit; c[2] += sold  # noqa: E702
-
-    def niche(self, tags: Sequence[int]) -> Outcomes:
-        """Games sharing at least 2 of `tags` (2 or 3 tags): each pair counted, minus 2x those with all three."""
-        tags = sorted(set(tags))
-        if len(tags) < 2:
-            return Outcomes()
-        total = [0, 0, 0]
-        for key in combinations(tags, 2):
-            total = [a + b for a, b in zip(total, self.pairs.get(key, (0, 0, 0)))]
-        if len(tags) == 3:
-            total = [a - 2 * b for a, b in zip(total, self.triples.get(tuple(tags), (0, 0, 0)))]
-        return Outcomes(entrants=total[0], hits=total[1], sold=total[2])
 
 
 def entrant_index(entries: Iterable[Entry], start: int, months: int, outcome: int) -> NicheIndex:
@@ -162,9 +129,15 @@ def game_rows(entries: Sequence[Entry], t: int, horizon: int = HORIZON, outcome:
 
 # --- measures (each known at T), fixed before the results were seen ------------------------------------------
 
+# The score's formula until #12: a weighted geometric mean of demand and dissatisfaction, which from #6 on counted
+# dissatisfaction rescaled to [OLD_FLOOR, 1].
+OLD_WEIGHTS = {"demand": 0.40, "dissatisfaction": 0.35}
+OLD_FLOOR = 0.25
+
+
 def _geo(demand: float, other: float) -> float:
-    """The score's weighted geometric mean (config.SCORE_WEIGHTS) of demand and one other part."""
-    w = config.SCORE_WEIGHTS
+    """The old score's weighted geometric mean (OLD_WEIGHTS) of demand and one other part."""
+    w = OLD_WEIGHTS
     if demand <= 0 or other <= 0:
         return 0.0
     return 100 * math.exp((w["demand"] * math.log(demand) + w["dissatisfaction"] * math.log(other)) / sum(w.values()))
@@ -181,8 +154,8 @@ def _niche_low(r: GameRow) -> float | None:
 
 MEASURES: dict[str, Callable[[GameRow], float | None]] = {
     # The score changed before this ran (#6, Nov 23 2026: dissatisfaction floor), so both formulas are measured.
-    "current score (no penalties)": lambda r: scoring.combine(
-        {"demand": scoring.demand(r.reviews), "dissatisfaction": scoring.dissatisfaction(r.rating)}),
+    "score Nov 23 2026 (soft floor, no penalties)": lambda r: _geo(
+        scoring.demand(r.reviews), OLD_FLOOR + (1 - OLD_FLOOR) * scoring.dissatisfaction(r.rating)),
     "score before Nov 23 2026 (no floor, no penalties)": lambda r: _geo(scoring.demand(r.reviews),
                                                                          scoring.dissatisfaction(r.rating)),
     "dissatisfaction": lambda r: scoring.dissatisfaction(r.rating),

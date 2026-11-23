@@ -99,12 +99,18 @@ def test_failed_and_missing_reviews():
 
 def test_zero_and_weak_scores():
     assert "No real opportunity found" in titles(post(tag_result(analyses=[analysis(0, "Meh")])))
-    liked = analysis(30, "Liked")
-    liked.opportunity.effective_rating = 85
-    assert "No disappointed audience found" in titles(post(tag_result(analyses=[liked])))
-    assert "No disappointed audience found" not in titles(post(tag_result(analyses=[analysis(30, "Meh")])))
     weak = titles(post(tag_result(analyses=[analysis(20, "Meh")])))  # under WEAK_SCORE (25)
     assert "Only weak opportunities" in weak and "Analysis complete" in weak
+
+
+def test_scores_not_measured_or_too_few_similar_games():
+    from test_m4 import peers
+
+    pending = titles(post(tag_result(analyses=[analysis(None, "Meh")])))
+    assert "Scores not measured yet" in pending and "Analysis complete" not in pending
+    few = analysis(None, "Odd")
+    few.opportunity.peers = peers(1, entrants=4)
+    assert "Too few similar games" in titles(post(tag_result(analyses=[few])))
 
 
 # ---------- single game ----------
