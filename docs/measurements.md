@@ -72,6 +72,16 @@ Method and rules are in `CLAUDE.md`; the report is `reports/backtest.md`.
   - underserved games: +0.25 but -0.04 with size fixed (a size proxy). Rejected. Releases in the 24 months before T: +0.07. Rejected.
   - So new games do well where earlier games did well, and in big markets with many well-liked games: the opposite of the method's "unhappy audience" idea.
 
+## Game-level backtest (Nov 23 2026)
+
+Method in `CLAUDE.md`; report `reports/game-backtest.md`. 72,957 rated games, 27,228 histograms, 35,875 usable rows (X x T) from 12,034 games; recent 30,504. Tuning / check / recent rho, check with niche size fixed, check fifths (favored vs other end):
+- current score (soft floor, no penalties): +0.34 / +0.32 / +0.24, +0.25, 10.0% vs 6.8%: passes.
+- score before Nov 23 2026 (no floor): -0.02 / -0.02 / -0.03, +0.01, 7.8% vs 7.6%: fails.
+- dissatisfaction: -0.03 / -0.03 / -0.04: fails. % positive: +0.04 / +0.05 / +0.04, fifths 7.8% vs 7.6%: fails.
+- demand: +0.36 / +0.33 / +0.26, +0.25, 10.2% vs 6.9%: passes. demand x satisfaction: +0.32 / +0.30 / +0.24, 9.9% vs 7.0%: passes.
+- niche's earlier entrants' hit rate: +0.78 / +0.75 / +0.63, +0.69, 13.6% vs 5.6%: passes, by far the strongest.
+- Reading: how satisfied X's players are predicts nothing either way (neither the method's "unhappy audience" nor the user's "satisfied audience"). The current score passes only through its demand part: it is no better than demand alone. What predicts a niche is whether its earlier entrants became hits, as at tag level.
+
 ## Box Method check
 
 `uv run python -m market_researcher.boxcheck` (report: `reports/box-check.md`).

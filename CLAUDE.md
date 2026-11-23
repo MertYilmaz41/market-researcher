@@ -110,7 +110,7 @@ The pipeline is `sources/*` (fetch) → `models.Game` (normalize) → `discover.
 ### Scoring (`scoring.py`)
 
 100 × the weighted geometric mean of demand (log of review count) and dissatisfaction (how far below 70% positive), minus fixed penalties per risk flag (`RISK_PENALTIES` in `config.py`).
-- Dissatisfaction is counted rescaled to [`config.DISSATISFACTION_FLOOR` (0.25), 1] (`scoring.counted`, inside `combine`), so games above 70% aren't zeroed: they score on demand alone (at most ~52 before penalties), below disappointed games with the same demand. Rescaled, not clipped: clipping tied every game from ~54% to 100%. The part's own value (map, score card) stays unfloored. The user's choice (Nov 23 2026, #6), untested; `game_backtest.py` measures both formulas. If demand is 0, the score is 0. Flags in `EXCLUDE_FLAGS` (`not_game`) drop a game from the ranking.
+- Dissatisfaction is counted rescaled to [`config.DISSATISFACTION_FLOOR` (0.25), 1] (`scoring.counted`, inside `combine`), so games above 70% aren't zeroed: they score on demand alone (at most ~52 before penalties), below disappointed games with the same demand. Rescaled, not clipped: clipping tied every game from ~54% to 100%. The part's own value (map, score card) stays unfloored. The user's choice (Nov 23 2026, #6); the game-level backtest found the floored score predicts niche hits only through demand, the old one not at all (below). If demand is 0, the score is 0. Flags in `EXCLUDE_FLAGS` (`not_game`) drop a game from the ranking.
 - Review bombs aren't penalized; `risk.rating_without_bombs` replaces the rating, so a review-bombed game that's otherwise fine scores 0.
 - Fixability is shown but not counted: it is ~100% for almost every game. Color steps are 67/42 (`palette.scoreLevel`; the map adds 30), `notices.WEAK_SCORE` is 25: moved with the dissatisfaction floor so games keep their band (#7). Move them again whenever the formula changes.
 - `config.SCORE_VERSION` is in `runs.compare_key`: bump it when the formula changes, so old runs aren't compared with new ones.
@@ -241,6 +241,7 @@ Checks the market claim: did tags with a high unmet share at a past date T later
 ## Game-level backtest (`game_backtest.py`)
 
 Tests what `backtest.py` doesn't: the per-game score. For each game X with 100+ reviews at T, X's niche is the games sharing 2+ of X's first 3 tags (`NicheIndex`: pair and triple counts, inclusion-exclusion); the outcome is the hit rate of the niche's entrants after T. Measures in `MEASURES` (the score without penalties, dissatisfaction, % positive, demand, demand x satisfaction, the niche's earlier entrants' hit rate), judged by `backtest.candidate()` unchanged; `GameRow` has the field names it reads. Fixed on Nov 23 2026 before any result was seen: don't change the design or the rule after looking. Histograms only for games with 100+ reviews today; smaller entrants are dated by the store date.
+- **Result (Nov 23 2026, 35,875 rows):** satisfaction and dissatisfaction predict nothing (rho about 0 both ways). The current score passes (+0.32) only through demand (alone +0.33); the floor-less old score failed. The niche's earlier entrants' hit rate is far stronger (+0.75). Numbers in `docs/measurements.md`. The score itself hasn't been changed on this result yet.
 
 ## Box Method check (`boxcheck.py`)
 
