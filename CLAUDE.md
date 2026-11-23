@@ -92,6 +92,7 @@ uv run python -m market_researcher.mining.evaluate [--games]   # miner accuracy 
 uv run python -m market_researcher.summary_eval --models gemma3:12b gemma4:12b   # compare summary models (--lang en, --recheck)
 uv run python -m market_researcher.backtest --all   # does the unmet share predict later success? (~50 h first time, every tag; --dry-run counts it)
 uv run python -m market_researcher.boxcheck         # reviews x45 vs disclosed sales (reports/box-check.md)
+uv run python -m market_researcher.game_backtest    # does the score (or anything known about a game) predict hits in its niche? (reports/game-backtest.md; --dry-run counts it)
 MR_LIVE=1 uv run pytest tests/test_live.py -v       # do Steam/SteamSpy still answer as we parse? (~20 s; CI weekly)
 uv run --with playwright pytest tests/test_ui.py    # browser smoke test, if .venv lacks Playwright
 ```
@@ -235,6 +236,10 @@ Checks the market claim: did tags with a high unmet share at a past date T later
 - **Tuning on it:** use only the 2019-01 and 2020-01 cutoffs; adopt a change only if it also wins on 2021-01 and 2022-01. Never tune on the recent cutoffs.
 - Histograms are cached 30 days (`HIST_TTL`); `--all --dry-run` counts the fetches. Biases (survivorship, today's tags, review bombs in the histogram, games with < 10 reviews left out) are listed in the report.
 - **Result (Nov 2026, 357 tags, 72k games):** the unmet share does not predict hits (it predicts sales somewhat). Only the earlier entrants' hit rate does (rho +0.47, recent +0.51): the app uses it (Markets ranking, track record). Well-served games and market size, adopted on SteamSpy's incomplete lists, failed the adoption rule on complete data. So the app presents the unmet share as a filter for exploring, never a forecast; the help dialog and the `unmet_share` ⓘ say so.
+
+## Game-level backtest (`game_backtest.py`)
+
+Tests what `backtest.py` doesn't: the per-game score. For each game X with 100+ reviews at T, X's niche is the games sharing 2+ of X's first 3 tags (`NicheIndex`: pair and triple counts, inclusion-exclusion); the outcome is the hit rate of the niche's entrants after T. Measures in `MEASURES` (the score without penalties, dissatisfaction, % positive, demand, demand x satisfaction, the niche's earlier entrants' hit rate), judged by `backtest.candidate()` unchanged; `GameRow` has the field names it reads. Fixed on Nov 23 2026 before any result was seen: don't change the design or the rule after looking. Histograms only for games with 100+ reviews today; smaller entrants are dated by the store date.
 
 ## Box Method check (`boxcheck.py`)
 
