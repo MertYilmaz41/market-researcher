@@ -357,5 +357,6 @@ def test_steady_or_thin_recent_rating_is_not_flagged():
     assert risk.check_recovered(_rated((40, 60), (5, 5)), NOW) == []  # 50% lately: +6 points, under 70
     assert risk.check_recovered(_rated((40, 60), (3, 0)), NOW) == []  # 36 recent reviews: too few to judge
     assert risk.check_recovered([], NOW) == []
+    assert risk.check_recovered(_rated((77, 23), (77, 23)), NOW) == []  # always liked: nothing to recover from
     # reaching 70%+ lately is enough even when the all-time rating is close
     assert risk.check_recovered(_rated((60, 40), (6, 2)), NOW)[0].code == "recovered"

@@ -137,7 +137,9 @@ def check_recovered(hist: list[HistPoint], now: float | None = None) -> list[Ris
     if lately is None or recent < config.RECOVERED_MIN_RECENT:
         return []
     overall = 100 * sum(p.up for p in hist) / total
-    if lately < overall + config.RECOVERED_DELTA and lately < config.MAX_RATING:
+    # Reaching MAX_RATING counts only for a game rated under it all time: one that was always liked hasn't
+    # recovered from anything (it mattered once such games could score, #6).
+    if lately < overall + config.RECOVERED_DELTA and (lately < config.MAX_RATING or overall >= config.MAX_RATING):
         return []
     return [RiskFlag.make(
         "recovered", "warn",

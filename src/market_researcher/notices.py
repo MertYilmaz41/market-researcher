@@ -59,7 +59,8 @@ def for_filters(min_reviews: int, lo: float, hi: float, max_games: int, reviews:
     if hi > config.MAX_RATING:
         out.append(Notice(
             level="info", title=_("Above 70% isn't underserved"),
-            message=_("Games above {max:g}% positive satisfied their players, so they score 0.", max=config.MAX_RATING),
+            message=_("Games above {max:g}% positive satisfied their players: they score on demand alone, "
+                      "below disappointed audiences with the same demand.", max=config.MAX_RATING),
             hint=_("Keep '% positive to' at {max:g} or lower to focus on disappointed audiences.", max=config.MAX_RATING),
         ))
     if lo < config.MIN_RATING:
@@ -182,11 +183,17 @@ def for_tag_result(tag: str, min_reviews: int, lo: float, hi: float, max_games: 
 
     if ranked:
         best = ranked[0]
+        if all(a.opportunity.effective_rating > config.MAX_RATING for a in ranked):
+            out.append(Notice(
+                level="warning", title=_("No disappointed audience found"),
+                message=_("Every analyzed game is above 70% positive once review bombs are removed, "
+                          "so they rank on demand alone."),
+                hint=_("Try another tag, e.g. {examples}.", examples=TAG_EXAMPLES),
+            ))
         if best.opportunity.score <= 0:
             out.append(Notice(
                 level="warning", title=_("No real opportunity found"),
-                message=_("Every analyzed game is above 70% positive once review bombs are removed, "
-                          "so none shows a disappointed audience."),
+                message=_("Every analyzed game scored 0: too few reviews, or risk penalties as big as the score."),
                 hint=_("Try another tag, e.g. {examples}.", examples=TAG_EXAMPLES),
             ))
         else:
@@ -238,7 +245,8 @@ def for_game(a: Analysis) -> list[Notice]:
                   if bombed else _("{rating:.0f}% positive", rating=g.rating))
         out.append(Notice(
             level="info", title=_("Players are satisfied"),
-            message=_("This game is {detail}, so it isn't an underserved audience (score 0).", detail=detail),
+            message=_("This game is {detail}, so it isn't an underserved audience: it scores on demand alone.",
+                      detail=detail),
             hint=_("Look for games under 70% positive."),
         ))
     if not g.base_price:

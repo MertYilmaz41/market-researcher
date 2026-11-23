@@ -23,9 +23,17 @@ def dissatisfaction(rating: float) -> float:
     return _clamp((config.MAX_RATING - rating) / (config.MAX_RATING - config.MIN_RATING))
 
 
+def counted(parts: dict[str, float]) -> dict[str, float]:
+    """The parts as the score counts them: dissatisfaction rescaled from [0, 1] to [FLOOR, 1]. Rescaled, not
+    clipped: clipping would give every game from ~54% to 100% positive the same value."""
+    floor = config.DISSATISFACTION_FLOOR
+    return {**parts, "dissatisfaction": floor + (1 - floor) * parts["dissatisfaction"]}
+
+
 def combine(parts: dict[str, float]) -> float:
-    """100 x the weighted geometric mean of the [0,1] parts; 0 if any part is 0."""
+    """100 x the weighted geometric mean of the [0,1] parts (dissatisfaction floored); 0 if demand is 0."""
     w = config.SCORE_WEIGHTS
+    parts = counted(parts)
     if any(parts[k] == 0 for k in w):
         return 0.0
     return 100 * math.exp(sum(w[k] * math.log(parts[k]) for k in w) / sum(w.values()))
@@ -68,8 +76,10 @@ def explain(a: Analysis) -> dict:
     basis = {
         "demand": _("{n:,} reviews. Log scale: {lo} reviews = 0%, {hi:,}+ = 100%.",
                     n=g.reviews, lo=lo_reviews, hi=hi_reviews),
-        "dissatisfaction": _("{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%.",
-                             rating=rating, max=config.MAX_RATING, min=config.MIN_RATING),
+        "dissatisfaction": _("{rating}. {max:g}%+ positive = 0%, {min:g}% = 100%. The score counts it as at least "
+                             "{floor:.0%}, so well-liked games aren't zeroed.",
+                             rating=rating, max=config.MAX_RATING, min=config.MIN_RATING,
+                             floor=config.DISSATISFACTION_FLOOR),
         "fixability": (_("{fix:.0%} of complaint mentions are things a small team can fix "
                          "(bugs, UI, performance...), not scope or genre. Not counted in the score: "
                          "it is close to 100% for almost every game.", fix=o.fixability) if mined else
@@ -87,7 +97,8 @@ def explain(a: Analysis) -> dict:
         "combined": combine({p["key"]: p["value"] for p in parts}),
         "penalties": [{"code": c, "label": _(config.RISK_LABELS.get(c, c)), "points": config.RISK_PENALTIES[c],
                        "reason": reasons.get(c, "")} for c in o.penalized],
-        "zero_part": next((p["label"] for p in parts if p["weight"] and p["value"] == 0), None),
+        "zero_part": next((p["label"] for p in parts
+                           if p["weight"] and counted({x["key"]: x["value"] for x in parts})[p["key"]] == 0), None),
     }
 
 

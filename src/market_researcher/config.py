@@ -114,7 +114,12 @@ HARD_TAGS = {"Physics", "Open World", "MMORPG", "Massively Multiplayer"}
 # third part (0.25) until Nov 2026; it is ~100% for almost every game, so it only raised every score.
 # It is still computed and shown, but not counted.
 SCORE_WEIGHTS = {"demand": 0.40, "dissatisfaction": 0.35}
-SCORE_VERSION = 3  # in runs.compare_key: runs scored by the old formula aren't compared with new ones
+# The score counts dissatisfaction rescaled to [this, 1] (scoring.counted), so games above MAX_RATING % positive
+# aren't zeroed:
+# a well-liked game with big demand still ranks (up to ~52 before penalties), below the unhappy-audience games
+# with the same demand. The user's choice (Nov 23 2026), untested: game_backtest.py can check it.
+DISSATISFACTION_FLOOR = 0.25
+SCORE_VERSION = 4  # in runs.compare_key: runs scored by the old formula aren't compared with new ones
 DEMAND_LOG_MIN = 1.5  # log10(reviews) mapped to 0 (~32 reviews)
 DEMAND_LOG_MAX = 4.0  # ...and to 1 (10,000 reviews)
 DEFAULT_FIXABILITY = 0.5  # when reviews couldn't be mined
