@@ -176,7 +176,7 @@ def satisfaction(rating: float) -> float:
 
 
 def _niche_low(r: GameRow) -> float | None:
-    return wilson_low(r.past.hits, r.past.entrants) if r.past.entrants >= MIN_ENTRANTS else None
+    return max(0.0, wilson_low(r.past.hits, r.past.entrants)) if r.past.entrants >= MIN_ENTRANTS else None  # float error: -1e-17
 
 
 MEASURES: dict[str, Callable[[GameRow], float | None]] = {
