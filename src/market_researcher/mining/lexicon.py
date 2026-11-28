@@ -18,6 +18,18 @@ class Category:
     patterns: tuple[str, ...]
 
 
+# A vehicle crashing is not the game crashing (#14): "crashed my car", "i crashed the airplane", "crash site". Its
+# subject before the word ("my plane crashed", "planes randomly crashing") is checked by CRASH_SUBJECT in
+# keywords._hits, since a lookbehind can't vary in length. Not "rig" (a PC) nor "ai"/"drivers" ("frequent crashes"
+# after "ai dialog", "video drivers"). Across the fixtures and 7,830 cached negative reviews (Nov 2026) the two drop
+# 21 of 741 "crash" matches, all vehicle crashes (a few complain of a flight sim wrongly saying "you crashed").
+VEHICLES = (r"(?:cars?|trucks?|lorr(?:y|ies)|bus(?:es)?|vans?|vehicles?|(?:air)?planes?|aircraft|jets?|helicopters?"
+            r"|ships?|boats?|(?:motor)?bikes?|motorcycles?|trains?|tractors?|karts?|drones?)")
+CRASH = (r"crash(?:es|ed|ing)?(?! into| (?:site|land\w*)\b)"
+         r"(?! (?:(?:my|the|a|an|all|your|his|her|their|our|its|another|other|every|this|that) (?:\w+ )?)?" + VEHICLES + r"\b)")
+CRASH_SUBJECT = r"\b" + VEHICLES + r"(?:\W+(?!game\b|it\b|pc\b|computer\b|steam\b|everything\b)\w+){0,2}\W+$"
+
+
 CATEGORIES: tuple[Category, ...] = (
     Category(
         "controls", "Bad controls / clunky feel",
@@ -35,7 +47,7 @@ CATEGORIES: tuple[Category, ...] = (
     Category(
         "bugs", "Game-breaking bugs",
         "Flawless execution and polish", True, True,
-        (r"bugs?", r"bugged", r"buggy", r"glitch(?:es|ed|y)?", r"crash(?:es|ed|ing)?(?! into)", r"broken(?! promises?)",
+        (r"bugs?", r"bugged", r"buggy", r"glitch(?:es|ed|y)?", CRASH,r"broken(?! promises?)",
          r"freez(?:e|es|ing)|froze", r"soft ?(?:lock|block)(?:ed)?", r"clip(?:s|ping)? through",
          r"(?:get|gets|got|getting) stuck(?! in (?:the )?mud)", r"stuck (?:in|on|at|inside) (?:the |a |an )?(?:walls?|floor|doors?|terrain|ground|loading|menus?|tutorial|place|objects?)",
          r"(?:does not|doesn'?t|won'?t|wont|will not) (?:even )?(?:run|launch|start|open)",

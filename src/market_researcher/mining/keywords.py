@@ -6,7 +6,7 @@ from collections import Counter
 
 from .. import config
 from ..models import CategoryResult, MiningResult, Review
-from .lexicon import CATEGORIES, FIX_DONE, FIX_UNLESS, IDEA_PRAISE, NEGATED_FIX, NEGATION, NEGATION_ANY
+from .lexicon import CATEGORIES, CRASH_SUBJECT, FIX_DONE, FIX_UNLESS, IDEA_PRAISE, NEGATED_FIX, NEGATION, NEGATION_ANY
 
 _BBCODE = re.compile(r"\[/?[a-z0-9*]+(?:=[^\]]*)?\]", re.I)
 _URL = re.compile(r"https?://\S+|www\.\S+")
@@ -17,6 +17,7 @@ _NEGATION_ANY = re.compile(NEGATION_ANY)
 _NEGATED_FIX = re.compile(NEGATED_FIX)
 _FIX_DONE = re.compile(FIX_DONE)
 _FIX_UNLESS = re.compile(FIX_UNLESS)
+_CRASH_SUBJECT = re.compile(CRASH_SUBJECT)
 _COMPILED = {c.code: re.compile(r"\b(?:" + "|".join(c.patterns) + r")\b") for c in CATEGORIES}
 _IDEA = re.compile(r"\b(?:" + "|".join(IDEA_PRAISE) + r")\b")
 _LIKED = re.compile(
@@ -71,6 +72,8 @@ def _hits(text: str) -> dict[str, re.Match]:
         for m in _COMPILED[cat.code].finditer(text):
             if cat.negatable and (_negated(text, m.start()) or _fixed(text, m.start())):
                 continue
+            if m.group().startswith("crash") and _CRASH_SUBJECT.search(text[max(0, m.start() - 60):m.start()]):
+                continue  # "my plane crashed": a vehicle, not the game
             found[cat.code] = m
             break
     return found
