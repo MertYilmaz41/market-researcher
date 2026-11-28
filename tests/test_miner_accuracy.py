@@ -39,6 +39,13 @@ def test_driving_crash_is_not_a_bug():
 
     assert "bugs" not in detect("I turned too far and crashed into a tree.")
     assert "bugs" in detect("The game crashed twice in an hour.")
+    for text in ("I just crashed my car.", "I crashed the car into a tree.", "I keep crashing my plane.",
+                 "My truck crashed off the road.", "Planes randomly crash on takeoff.", "I had to crash all AI cars.",
+                 "We crash landed on the planet."):
+        assert "bugs" not in detect(text), text
+    for text in ("The game crashes when I enter the car.", "I got in the car, the game crashed.",
+                 "It crashes all the time.", "Terrible AI dialog, frequent crashes.", "Crashes my PC every time."):
+        assert "bugs" in detect(text), text
     assert "performance" in detect("There is next to no optimization at all.")
 
 
